@@ -1,0 +1,431 @@
+/* FormForge popup. Plain CSS, no build step — same as the rest of the
+   extension. Light and dark are both first-class: QA people live in both. */
+
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --panel: #f7f8fa;
+  --fg: #12151a;
+  --muted: #626b78;
+  --faint: #8a93a0;
+  --line: #e3e6ec;
+  --line-soft: #eef0f4;
+  --field: #ffffff;
+  --accent: #1f6f4f;
+  --accent-soft: #e7f3ed;
+  --accent-fg: #ffffff;
+  --warn: #b1741a;
+  --warn-soft: #fdf3e3;
+  --danger: #b3402f;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 4px 12px rgba(16, 24, 40, .06);
+  --radius: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171c;
+    --panel: #1a1e24;
+    --fg: #e9ebef;
+    --muted: #9aa3ad;
+    --faint: #78828e;
+    --line: #2a2f37;
+    --line-soft: #23272e;
+    --field: #1b1f25;
+    --accent: #35a377;
+    --accent-soft: #16281f;
+    --accent-fg: #07130d;
+    --warn: #d9a344;
+    --warn-soft: #2a2115;
+    --danger: #e0705c;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 18px rgba(0, 0, 0, .35);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  width: 360px;
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ------------------------------------------------------------- header -- */
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand { display: flex; align-items: center; gap: 7px; min-width: 0; }
+
+.mark {
+  width: 20px; height: 20px;
+  font-size: 9px;
+  display: grid; place-items: center;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 10px; font-weight: 700; letter-spacing: .02em;
+}
+
+.brand-name { font-weight: 620; font-size: 13px; letter-spacing: -.01em; }
+
+/* Model state, at a glance: the dot carries the meaning, the text explains. */
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); flex: none; }
+.pill.ok { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); background: var(--accent-soft); }
+.pill.ok .dot { background: var(--accent); }
+.pill.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 30%, var(--line)); background: var(--warn-soft); }
+.pill.warn .dot { background: var(--warn); }
+
+/* --------------------------------------------------------------- tabs -- */
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 6px 8px 7px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+}
+.tab:hover { color: var(--fg); background: var(--line-soft); }
+.tab.is-active { color: var(--fg); font-weight: 600; border-bottom-color: var(--accent); background: none; }
+
+.pane { padding: 12px; }
+.pane > .btn.big { margin-top: 2px; }
+
+/* The locale sits with the actions: it changes the data, not the layout. */
+.actions select {
+  flex: 0 0 auto;
+  background: var(--field);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 4px;
+  font: inherit; font-size: 12px;
+  max-width: 104px;
+}
+
+.icon {
+  flex: none;
+  display: grid; place-items: center;
+  width: 30px; height: 30px;
+  background: var(--field);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  cursor: pointer;
+}
+.icon:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.icon:active svg { transform: rotate(-90deg); }
+.icon svg { transition: transform .18s ease; }
+
+/* ------------------------------------------------------------ buttons -- */
+.btn {
+  appearance: none;
+  background: var(--field);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit; font-size: 12px;
+  cursor: pointer;
+  transition: background .12s ease, border-color .12s ease, color .12s ease;
+}
+.btn:hover { border-color: var(--faint); }
+.btn:active { transform: translateY(.5px); }
+
+.btn.primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: transparent;
+  font-weight: 620;
+  box-shadow: var(--shadow);
+}
+.btn.primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); border-color: transparent; }
+.btn.big { display: block; width: 100%; padding: 9px; font-size: 13px; }
+.btn.subtle { color: var(--muted); }
+.btn.subtle:hover { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--line)); }
+.btn[disabled] { opacity: .55; cursor: default; }
+
+.actions { display: flex; gap: 5px; margin-top: 6px; }
+.actions .btn { flex: 1; }
+
+.btn.wide { display: block; width: 100%; margin-top: 10px; }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 6px; }
+
+/* ------------------------------------------------------------- result -- */
+.result {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.result-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.result-title { font-weight: 620; font-size: 12.5px; }
+.result-note { color: var(--muted); font-size: 11px; }
+
+/* Long forms are the normal case, so the list scrolls rather than making the
+   popup grow past what Chrome will show. */
+.rows { max-height: 188px; overflow-y: auto; }
+
+.row {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.row:last-child { border-bottom: 0; }
+.row .k {
+  flex: 0 0 38%;
+  color: var(--muted); font-size: 11.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.row .v {
+  flex: 1; min-width: 0;
+  font: 11.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Where a value came from — the thing you actually want to know when a field
+   looks wrong: a rule, the field's type, the model, or a blind fallback. */
+.tag {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 9.5px; letter-spacing: .03em; text-transform: uppercase;
+  background: var(--line-soft); color: var(--faint);
+  border: 1px solid transparent;
+}
+.tag.rule { background: var(--accent-soft); color: var(--accent); }
+.tag.ai { background: var(--warn-soft); color: var(--warn); }
+.tag.widget { background: transparent; color: var(--faint); border-color: var(--line); }
+
+.empty { padding: 14px 11px; color: var(--muted); font-size: 12px; text-align: center; }
+
+.result-foot {
+  padding: 7px 11px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  background: var(--bg);
+}
+.result-foot b { color: var(--warn); font-weight: 600; }
+
+/* ----------------------------------------------------------- settings -- */
+.field { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+.field label { flex: 0 0 96px; color: var(--muted); font-size: 12px; }
+.field input, .field select {
+  flex: 1; min-width: 0;
+  background: var(--field);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 6px 8px;
+  font: inherit; font-size: 12.5px;
+}
+
+.opts { display: grid; gap: 2px; margin: 4px 0 12px; }
+.opt {
+  display: flex; gap: 9px; align-items: flex-start;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.opt:hover { background: var(--panel); }
+.opt input { margin: 1px 0 0; flex: none; accent-color: var(--accent); }
+.opt b { display: block; font-weight: 550; font-size: 12.5px; }
+.opt i { display: block; font-style: normal; color: var(--muted); font-size: 11px; margin-top: 1px; }
+
+details {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 9px 11px;
+  background: var(--panel);
+}
+summary {
+  cursor: pointer; color: var(--fg); font-size: 12.5px; font-weight: 550;
+  display: flex; align-items: center; gap: 7px;
+}
+details[open] summary { margin-bottom: 9px; }
+.opt-tag {
+  font-weight: 400; font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--faint); border: 1px solid var(--line); border-radius: 999px; padding: 0 6px;
+}
+.hint { color: var(--muted); font-size: 11px; margin: 0 0 10px; }
+
+/* -------------------------------------------------------------- debug -- */
+/* Dense on purpose: this is a reading surface, not a control panel. */
+.dbg-sec { margin-bottom: 12px; }
+.dbg-h {
+  font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--faint); margin-bottom: 5px;
+}
+.dbg-kv { font-size: 12px; line-height: 1.5; }
+.dbg-kv .dim, .dim { color: var(--muted); }
+.dbg-pre {
+  margin: 4px 0 0;
+  padding: 7px 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font: 10.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 190px;
+  overflow: auto;
+}
+.dbg-det { margin-top: 6px; }
+.dbg-det > summary {
+  font-size: 11.5px; font-weight: 500; color: var(--muted);
+  cursor: pointer; padding: 3px 0;
+}
+.dbg-det[open] > summary { color: var(--fg); }
+
+.dbg-row { padding: 5px 0; border-bottom: 1px solid var(--line-soft); }
+.dbg-row:last-child { border-bottom: 0; }
+.dbg-row-h { display: flex; align-items: baseline; gap: 8px; }
+.dbg-row-h .k { flex: 0 0 42%; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dbg-row-h .v {
+  flex: 1; min-width: 0;
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.why { font-size: 10.5px; margin-top: 1px; }
+
+.result-foot a { color: var(--accent); text-decoration: none; }
+.result-foot a:hover { text-decoration: underline; }
+
+/* ------------------------------------------------------------- footer -- */
+.foot {
+  display: flex; gap: 10px; justify-content: center;
+  padding: 6px 12px 8px;
+  border-top: 1px solid var(--line);
+  color: var(--faint);
+  font-size: 10px;
+}
+kbd {
+  font: 9.5px/1 ui-sans-serif, system-ui, sans-serif;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 1px 3px;
+  margin-right: 1px;
+  color: var(--muted);
+  background: var(--field);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+
+/* ------------------------------------------------------- timing bar ---- */
+/* Where the fill's time went, drawn to scale. A list of raw counts under the
+   names they are stored as makes a nine-millisecond contribution and a
+   nine-second one look alike; the width is the whole point. */
+.tm-bar {
+  display: flex;
+  height: 8px;
+  margin: 2px 0 9px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--line-soft);
+}
+.tm-bar span { display: block; height: 100%; min-width: 2px; }
+
+.p-read   { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+.p-model  { background: var(--accent); }
+.p-fill   { background: color-mix(in srgb, var(--accent) 62%, transparent); }
+.p-repair { background: var(--warn); }
+
+.tm-legend { display: grid; gap: 3px; }
+.tm-row { display: flex; align-items: center; gap: 7px; }
+.tm-key { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.tm-name { flex: 1 1 auto; min-width: 0; color: var(--muted); }
+.tm-ms { font-variant-numeric: tabular-nums; color: var(--fg); }
+.tm-sub .tm-name, .tm-sub .tm-ms { color: var(--faint); font-size: 11px; }
+.tm-sub { padding-left: 11px; }
+
+/* ---------------------------------------------------- live activity ---- */
+/* One row per stage of the fill, appearing as it happens. The current row
+   breathes; the ones behind it are settled and quiet. Every line is something
+   that actually took place — there is no pool of plausible phrases to draw
+   from, because a made-up one would cost the window its only honest signal. */
+.result.is-live { padding: 4px 0; }
+
+.act-list { display: grid; gap: 1px; }
+
+.act {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px;
+  font-size: 12px;
+}
+.act-dot {
+  width: 6px; height: 6px; flex: none;
+  border-radius: 50%;
+  background: var(--line);
+}
+.act-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-num { flex: none; font-variant-numeric: tabular-nums; color: var(--faint); font-size: 11px; }
+
+.act.is-done .act-text { color: var(--muted); }
+.act.is-done .act-dot { background: var(--accent); }
+
+.act.is-now .act-text { color: var(--fg); font-weight: 560; }
+.act.is-now .act-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
+  animation: ff-pulse 1.4s ease-out infinite;
+}
+
+/* The field being written right now, under the row it belongs to. */
+.act-sub {
+  padding: 0 11px 6px 25px;
+  font-size: 11px;
+  color: var(--faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+@keyframes ff-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .act.is-now .act-dot { animation: none; }
+}

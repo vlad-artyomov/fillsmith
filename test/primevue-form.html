@@ -1,0 +1,1202 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Standort anlegen — Fixture</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 24px; max-width: 680px; }
+  .field { margin-bottom: 14px; display: grid; gap: 4px; }
+  label { color: #444; font-size: 13px; }
+  .p-select, .p-multiselect, .p-autocomplete, .p-datepicker, .p-inputnumber {
+    display: inline-flex; align-items: center; border: 1px solid #cbd5e1; border-radius: 6px;
+    background: #fff; min-height: 36px; padding: 0 8px; min-width: 280px; cursor: pointer;
+  }
+  .p-select-label, .p-multiselect-label { flex: 1; padding: 6px 0; color: #111; }
+  .p-select-label-empty, .p-multiselect-label-empty { color: #94a3b8; }
+  .p-select-dropdown, .p-multiselect-dropdown { width: 18px; text-align: center; color: #64748b; }
+  .p-inputtext, .p-autocomplete-input, .p-datepicker-input, .p-inputnumber-input {
+    border: 0; outline: 0; flex: 1; padding: 7px 0; font: inherit; background: transparent;
+  }
+  input.p-inputtext.standalone { border: 1px solid #cbd5e1; border-radius: 6px; padding: 7px 9px; min-width: 280px; }
+  .p-hidden-accessible { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }
+  .p-select-overlay, .p-multiselect-overlay, .p-autocomplete-overlay {
+    position: absolute; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px;
+    box-shadow: 0 8px 20px rgba(0,0,0,.12); z-index: 1000; max-height: 240px; overflow: auto; min-width: 280px;
+  }
+  .p-select-list, .p-multiselect-list, .p-autocomplete-list { list-style: none; margin: 0; padding: 4px; }
+  .p-select-option, .p-multiselect-option, .p-autocomplete-option { padding: 7px 10px; border-radius: 4px; cursor: pointer; }
+  .p-select-option:hover, .p-multiselect-option:hover { background: #f1f5f9; }
+  .p-select-option-selected, .p-multiselect-option-selected { background: #dcfce7; }
+  .p-disabled { opacity: .5; pointer-events: none; }
+  .p-checkbox, .p-radiobutton { position: relative; display: inline-flex; width: 20px; height: 20px; vertical-align: middle; }
+  .p-checkbox-input, .p-radiobutton-input, .p-toggleswitch-input {
+    position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .p-checkbox-box { width: 20px; height: 20px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; }
+  .p-checkbox-checked .p-checkbox-box { background: #16a34a; border-color: #16a34a; }
+  /* An author `display` beats the UA's [hidden] rule, so .field would keep a
+     hidden block visible. Say it explicitly or the reveal never happens. */
+  [hidden] { display: none !important; }
+  .p-radiobutton-box { width: 20px; height: 20px; border: 1px solid #cbd5e1; border-radius: 50%; background: #fff; }
+  .p-radiobutton-checked .p-radiobutton-box { background: #16a34a; border-color: #16a34a; }
+  .p-toggleswitch { position: relative; display: inline-block; width: 42px; height: 24px; }
+  .p-toggleswitch-slider { position: absolute; inset: 0; background: #cbd5e1; border-radius: 999px; }
+  .p-toggleswitch-checked .p-toggleswitch-slider { background: #16a34a; }
+  .p-selectbutton { display: inline-flex; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; }
+  .p-togglebutton { padding: 7px 14px; cursor: pointer; background: #fff; border-right: 1px solid #e2e8f0; }
+  .p-togglebutton-checked { background: #16a34a; color: #fff; }
+  .p-datepicker-panel {
+    position: absolute; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px;
+    box-shadow: 0 8px 20px rgba(0,0,0,.12); z-index: 1000; padding: 8px;
+  }
+  .p-datepicker-calendar { border-collapse: collapse; }
+  .p-datepicker-day-cell { padding: 0; }
+  .p-datepicker-day { display: block; width: 30px; height: 30px; line-height: 30px; text-align: center; border-radius: 50%; cursor: pointer; }
+  .p-datepicker-day:hover { background: #f1f5f9; }
+  .p-datepicker-other-month { opacity: .35; }
+  .p-datepicker-today .p-datepicker-day { outline: 1px solid #16a34a; }
+  .inline { display: flex; align-items: center; gap: 8px; }
+</style>
+</head>
+<body>
+<h1>Standort anlegen</h1>
+<form id="form">
+  <div class="field">
+    <label for="name">Standortname</label>
+    <input id="name" name="name" class="p-inputtext standalone" autocomplete="off">
+  </div>
+
+  <div class="field">
+    <label for="strasse">Straße und Hausnummer</label>
+    <input id="strasse" name="street" class="p-inputtext standalone" autocomplete="off">
+  </div>
+
+  <div class="field">
+    <!-- Marked required with an asterisk and nothing else, which is how most
+         applications do it. Reading only `required`/`aria-required` called
+         this optional, and "a wrong country is worse than none" then left it
+         blank on a form that cannot be submitted without one. -->
+    <label id="lbl-land">Land <span class="req" aria-hidden="true">*</span></label>
+    <!-- Required, like the real one, and with a city select depending on it.
+         "A wrong country is worse than none" is right for an optional field
+         and inverts here: leaving it empty leaves the form unsubmittable and
+         the city list with nothing to offer. -->
+    <div class="p-select p-component" data-pc-name="select" id="land" aria-labelledby="lbl-land">
+      <span class="p-select-label p-select-label-empty">Bitte wählen</span>
+      <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
+      <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false" readonly>
+    </div>
+  </div>
+
+  <!-- The one the real app has and this fixture did not: 240 entries behind a
+       virtual scroller, with a filter input. Only a dozen rows are ever in the
+       DOM, so a match has to be hunted for — and that hunt has a budget, which
+       is where a required Country came to be left empty "often, but not every
+       time". -->
+  <!-- A select whose list lives on a server: it shows nothing until you type,
+       says "No results found" for a query it cannot match, and needs a moment
+       to come back when the box is cleared. The account form's
+       Organization/Location picker is one, and a value that matched nothing —
+       the model's answer for a field with no rule — left it empty with the
+       query still sitting in the box. -->
+  <div class="field">
+    <label id="lbl-org">Organization/Location</label>
+    <div class="p-select p-component" data-pc-name="select" id="orga" aria-labelledby="lbl-org"
+         aria-required="true">
+      <span class="p-select-label p-placeholder">Choose organization or location</span>
+      <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
+      <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox"
+             aria-controls="orga_list" aria-expanded="false" readonly>
+    </div>
+  </div>
+
+  <!-- The control the organization above unlocks. Disabled until something is
+       chosen there, which is the shape every dependent field has: it exists in
+       the page from the start, it is required, and it cannot be filled until
+       the fill itself has made it fillable. Three fills in a row were needed on
+       the real form because of this one — the first left the organization
+       empty, the second filled it and left this empty, the third found it
+       already enabled and worked. -->
+  <div class="field">
+    <label id="lbl-rolle">Selected role template</label>
+    <div class="p-select p-component p-disabled" data-pc-name="select" id="rolle"
+         aria-labelledby="lbl-rolle" aria-required="true" aria-disabled="true">
+      <span class="p-select-label p-placeholder">Choose role template</span>
+      <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
+      <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox"
+             aria-controls="rolle_list" aria-expanded="false" disabled readonly>
+    </div>
+  </div>
+
+  <!-- A picker from no library in particular: no class we recognise, no
+       component name, nothing but the ARIA a combobox is supposed to carry.
+       Its popup is the point — a floating box holding a search field, which is
+       the widget's own furniture, and a listbox, which is the control. A scan
+       that can only skip the search boxes of libraries it has heard of is no
+       use pointed at an application nobody here has seen. -->
+  <div class="field">
+    <span id="lbl-team">Team</span>
+    <button type="button" id="team" role="combobox" aria-haspopup="listbox"
+            aria-expanded="false" aria-controls="team-list" aria-labelledby="lbl-team">
+      Choose a team
+    </button>
+  </div>
+
+  <!-- A phone number and the country picker beside it, the pair the real app
+       has. The picker shows a flag and no text, its list is long, and — the
+       part that matters here — it sets aria-expanded="false" whenever it loses
+       focus while leaving the panel itself mounted. A close check that trusts
+       that attribute therefore reports success over a list still on screen. -->
+  <div class="field">
+    <label id="lbl-tel">Telefonnummer</label>
+    <div style="display:flex;gap:6px">
+      <div class="p-select p-component" data-pc-name="select" id="telland" aria-labelledby="lbl-tel"
+           style="width:92px">
+        <span class="p-select-label">🇩🇪</span>
+        <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
+        <input class="p-hidden-accessible" role="combobox" name="phoneCountryList"
+               aria-haspopup="listbox" aria-expanded="false" readonly>
+      </div>
+      <input id="tel" name="phone" type="tel" aria-labelledby="lbl-tel" style="flex:1">
+    </div>
+  </div>
+
+  <!-- Categories the vendored vocabulary unlocked: each of these went to the
+       model before, because nothing local could answer them. -->
+  <div class="field">
+    <label for="farbe">Farbe</label>
+    <input id="farbe" name="farbe" type="text">
+  </div>
+  <div class="field">
+    <label for="geraet">Gerätebezeichnung</label>
+    <input id="geraet" name="geraet" type="text">
+  </div>
+  <div class="field">
+    <label for="funktion">Funktion</label>
+    <input id="funktion" name="funktion" type="text">
+  </div>
+
+  <!-- Uploads. The one control a tester always had to fill by hand, and on a
+       form that requires one, the whole form blocked. -->
+  <div class="field">
+    <label for="foto">Foto</label>
+    <input id="foto" name="foto" type="file" accept="image/png,image/jpeg" required>
+  </div>
+  <div class="field">
+    <label for="vertrag">Vertrag (PDF)</label>
+    <input id="vertrag" name="vertrag" type="file" accept=".pdf">
+  </div>
+  <!-- A dropzone, the way real ones behave: it takes the files out of the
+       input, keeps its own list, and clears the input so the same file can be
+       chosen again. An empty file input is therefore what *success* looks like
+       here — which is the opposite of what it means for every other control,
+       and is why this field was uploaded three times. -->
+  <div class="field">
+    <label for="anhaenge">Anhänge</label>
+    <input id="anhaenge" name="anhaenge" type="file" multiple>
+    <ul id="anhaenge-liste"></ul>
+  </div>
+
+  <div class="field">
+    <label id="lbl-staat">Country</label>
+    <div class="p-select p-component" data-pc-name="select" id="staat" aria-labelledby="lbl-staat"
+         aria-required="true">
+      <span class="p-select-label p-select-label-empty">Bitte wählen</span>
+      <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
+      <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false" readonly>
+    </div>
+  </div>
+
+  <div class="field">
+    <label id="lbl-stadt">Stadt</label>
+    <div class="p-select p-component" data-pc-name="select" id="stadt" aria-labelledby="lbl-stadt">
+      <span class="p-select-label p-select-label-empty">Bitte wählen</span>
+      <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
+      <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false" readonly>
+    </div>
+  </div>
+
+  <div class="field">
+    <label id="lbl-typ">Standorttyp</label>
+    <div class="p-select p-component" data-pc-name="select" id="typ" aria-labelledby="lbl-typ">
+      <span class="p-select-label p-select-label-empty">Bitte wählen</span>
+      <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
+      <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false" readonly>
+    </div>
+  </div>
+
+  <div class="field">
+    <label id="lbl-regionen">Regionen</label>
+    <div class="p-multiselect p-component" data-pc-name="multiselect" id="regionen" aria-labelledby="lbl-regionen">
+      <span class="p-multiselect-label p-multiselect-label-empty">Regionen wählen</span>
+      <div class="p-multiselect-dropdown" data-pc-section="dropdown">▾</div>
+      <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false" readonly>
+    </div>
+  </div>
+
+  <div class="field">
+    <label id="lbl-ap">Ansprechpartner</label>
+    <div class="p-autocomplete p-component" data-pc-name="autocomplete" id="ansprechpartner">
+      <input class="p-autocomplete-input p-inputtext" role="combobox" aria-haspopup="listbox"
+             aria-expanded="false" aria-labelledby="lbl-ap" autocomplete="off">
+    </div>
+  </div>
+
+  <!-- The other kind of autocomplete: one that always drops a panel, empty
+       when its backend has nothing. Most real ones do, and a panel that is up
+       and empty is an answer — waiting out the rest of the search budget for
+       it to change its mind was the dearest thing the filler did. -->
+  <div class="field">
+    <label id="lbl-lief">Lieferant</label>
+    <div class="p-autocomplete p-component" data-pc-name="autocomplete" id="lieferant">
+      <input class="p-autocomplete-input p-inputtext" role="combobox" aria-haspopup="listbox"
+             aria-expanded="false" aria-labelledby="lbl-lief" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="field">
+    <label id="lbl-datum">Eröffnungsdatum</label>
+    <div class="p-datepicker p-component" data-pc-name="datepicker" id="datum">
+      <input class="p-datepicker-input p-inputtext" aria-labelledby="lbl-datum" readonly placeholder="TT.MM.JJJJ">
+    </div>
+  </div>
+
+  <div class="field">
+    <label id="lbl-kap">Kapazität (Stellplätze)</label>
+    <div class="p-inputnumber p-component" data-pc-name="inputnumber" id="kapazitaet">
+      <input class="p-inputnumber-input p-inputtext" aria-labelledby="lbl-kap" inputmode="numeric" autocomplete="off">
+    </div>
+  </div>
+
+  <!-- An InputNumber with limits. A widget's constraints live on the inner
+       input, not the wrapper; ignoring them writes a value the control
+       refuses, which reverts silently and looks like nothing was written. -->
+  <div class="field">
+    <label id="lbl-dauer">Mindestdauer (Tage)</label>
+    <div class="p-inputnumber p-component" data-pc-name="inputnumber" id="mindestdauer">
+      <input class="p-inputnumber-input p-inputtext" aria-labelledby="lbl-dauer"
+             inputmode="numeric" min="12" max="18" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="field inline">
+    <div class="p-toggleswitch p-component" data-pc-name="toggleswitch" id="aktiv" aria-labelledby="lbl-aktiv">
+      <input class="p-toggleswitch-input" type="checkbox" role="switch" aria-checked="false">
+      <div class="p-toggleswitch-slider"></div>
+    </div>
+    <label id="lbl-aktiv">Standort aktiv</label>
+  </div>
+
+  <div class="field inline">
+    <div class="p-checkbox p-component" data-pc-name="checkbox" id="agb">
+      <input class="p-checkbox-input" type="checkbox" required aria-labelledby="lbl-agb">
+      <div class="p-checkbox-box"></div>
+    </div>
+    <label id="lbl-agb">Nutzungsbedingungen akzeptiert</label>
+  </div>
+
+  <!-- A field that re-renders itself shortly after being written, replacing
+       its own DOM node — what a framework does when its model updates. The
+       replacement carries no marker, so a later pass mistakes it for a newly
+       revealed field and writes a fallback over whatever was chosen first. -->
+  <div class="field" id="rerender-host">
+    <label for="rerendered">Vorgabe</label>
+    <input id="rerendered" type="text" name="prerequisite" spellcheck="false">
+  </div>
+
+  <!-- A modal. What the page is called matters far less than what the dialog
+       is called: "New booking prerequisite" is the only thing on screen that
+       says what its one text box wants.
+
+       It is opened by a button that names it, and it floats — which is every
+       signal a dropdown's popup gives off. The difference is that a dialog is
+       a form, and a fill that skips it as somebody's furniture leaves the one
+       field the tester opened it for empty. -->
+  <button type="button" id="dlg-open" aria-haspopup="dialog" aria-controls="dlg"
+          aria-expanded="false">Neue Voraussetzung</button>
+  <div role="dialog" class="p-dialog" id="dlg" style="position:fixed;left:40px;top:40px;background:#fff;border:1px solid #ccc;padding:12px" hidden>
+    <h2 class="p-dialog-title">Neue Buchungsvoraussetzung</h2>
+    <label for="dlg-input">Voraussetzung</label>
+    <input id="dlg-input" type="text" name="prerequisite">
+  </div>
+
+  <!-- A time-only DatePicker: spinners, no text entry, and an input the
+       component writes itself and refuses focus on. Typing into it silently
+       does nothing — which is how every opening-hours field on the real form
+       stayed empty while the filler reported success. -->
+  <div class="field">
+    <label id="lbl-oeffnet">Start time</label>
+    <div class="p-datepicker p-component" data-pc-name="datepicker" id="oeffnet">
+      <input class="p-inputtext p-datepicker-input" aria-labelledby="lbl-oeffnet" readonly>
+    </div>
+  </div>
+
+  <!-- An inline calendar: a month view bound to the date field above, with no
+       input of its own. The booking form renders one beside its date inputs.
+       It must not be treated as a field. -->
+  <div class="p-datepicker p-datepicker-inline p-component" data-pc-name="datepicker" id="kalenderansicht">
+    <div class="p-datepicker-panel" data-pc-section="panel">
+      <table><tbody><tr>
+        <td><span class="p-datepicker-day">1</span></td>
+        <td><span class="p-datepicker-day">2</span></td>
+      </tr></tbody></table>
+    </div>
+  </div>
+
+  <!-- A switch that CREATES fields when it is turned on, as a real opening
+       hours do: flip a day to open and the app renders that day's start and
+       end time. Those inputs do not exist when the page is first collected,
+       so a single pass leaves them empty and required — worse than before the
+       fill. `required` on the switch makes the reveal deterministic here. -->
+  <div class="field inline">
+    <div class="p-toggleswitch p-component" data-pc-name="toggleswitch" id="saopen" aria-labelledby="lbl-saopen">
+      <input class="p-toggleswitch-input" type="checkbox" role="switch" aria-checked="false" required>
+      <div class="p-toggleswitch-slider"></div>
+    </div>
+    <label id="lbl-saopen">Samstag geöffnet</label>
+  </div>
+  <div class="field" id="satimes" hidden>
+    <label for="sa_start">Start time</label>
+    <input id="sa_start" type="text" name="schedules.saturday.startTime" spellcheck="false">
+    <label for="sa_end">End time</label>
+    <input id="sa_end" type="text" name="schedules.saturday.endTime" spellcheck="false">
+    <!-- Revealed with the times, and matched by no rule: the case where a
+         later pass used to reach straight for the fallback. -->
+    <label for="sa_extra">Besonderheit</label>
+    <input id="sa_extra" type="text" name="schedules.saturday.besonderheit" spellcheck="false">
+  </div>
+
+  <!-- RadioButton group. PrimeVue gives every button its own root and no group
+       wrapper of its own, and the caption is a sibling label[for] rather than
+       anything inside the control — this is how a real PrimeVue create form
+       renders bookingSettings.bookingConfirmation. Filling these as separate
+       fields clicks each in turn and always lands on the last one. -->
+  <!-- Read-only Select. A real create form ships one of these, bound to
+       another field: PrimeVue marks it aria-readonly on the root and
+       aria-disabled on the inner combobox. Writing to it fights the app. -->
+  <div class="field">
+    <label id="lbl-zeit">Zeiteinheit</label>
+    <div class="p-select p-component" data-pc-name="select" id="zeiteinheit"
+         aria-readonly="true" aria-label="Zeiteinheit">
+      <span class="p-select-label" role="combobox" aria-haspopup="listbox"
+            aria-expanded="false" aria-disabled="true">Tage</span>
+    </div>
+  </div>
+
+  <!-- Page chrome, not a form field: filling it swaps the UI language and
+       invalidates every label already scanned. The root's aria-label is
+       present but empty, so the only name is on the inner combobox. -->
+  <div class="p-select p-component" data-pc-name="select" id="sprachwahl" aria-label="">
+    <span name="localeSwitcher" id="localeSwitcher" class="p-select-label" role="combobox"
+          aria-label="Switch language" aria-haspopup="listbox" aria-expanded="false">Deutsch</span>
+  </div>
+
+  <!-- Editor (Quill behind a PrimeVue shell). The writable surface is a
+       contenteditable and the caption arrives only as a `label` attribute. -->
+  <div class="p-editor" data-pc-name="editor" id="hinweise"
+       label="Hinweise zur Ausleihe" required="false">
+    <div class="p-editor-toolbar ql-toolbar"><button class="ql-bold" type="button">B</button></div>
+    <div class="p-editor-content ql-container">
+      <div class="ql-editor" contenteditable="true"></div>
+    </div>
+  </div>
+
+  <div class="field" id="bestaetigung">
+    <label id="lbl-best">Buchungsbestätigung</label>
+    <div class="p-radiobutton p-component" data-pc-name="radiobutton" data-pc-section="root">
+      <input class="p-radiobutton-input" type="radio" name="bookingConfirmation" value="AUTOMATIC" id="bc-auto">
+      <div class="p-radiobutton-box"></div>
+    </div>
+    <label for="bc-auto">Automatisch</label>
+    <div class="p-radiobutton p-component" data-pc-name="radiobutton" data-pc-section="root">
+      <input class="p-radiobutton-input" type="radio" name="bookingConfirmation" value="MANUAL" id="bc-man">
+      <div class="p-radiobutton-box"></div>
+    </div>
+    <label for="bc-man">Manuell</label>
+    <div class="p-radiobutton p-component" data-pc-name="radiobutton" data-pc-section="root">
+      <input class="p-radiobutton-input" type="radio" name="bookingConfirmation" value="HYBRID" id="bc-hyb">
+      <div class="p-radiobutton-box"></div>
+    </div>
+    <label for="bc-hyb">Teilautomatisch</label>
+  </div>
+
+  <div class="field">
+    <label id="lbl-prio">Priorität</label>
+    <div class="p-selectbutton p-component" data-pc-name="selectbutton" id="prio" role="group" aria-labelledby="lbl-prio">
+      <div class="p-togglebutton" role="option" data-value="niedrig">Niedrig</div>
+      <div class="p-togglebutton" role="option" data-value="mittel">Mittel</div>
+      <div class="p-togglebutton" role="option" data-value="hoch">Hoch</div>
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="notiz">Interne Notiz</label>
+    <textarea id="notiz" name="note" class="p-inputtext standalone" rows="3"></textarea>
+  </div>
+</form>
+
+<script>
+/* A faithful stand-in for PrimeVue v4: same DOM contract (verified against the
+ * real bundle), same interaction rules — container click opens, clicks whose
+ * target is an INPUT are ignored, overlays are teleported to <body>, options
+ * are li[role=option]. The model object is only ever updated by real events,
+ * so a filler that assigns .value without dispatching is caught. */
+const model = {};
+const DATA = {
+  land: ['Deutschland', 'Österreich', 'Schweiz', 'Niederlande'],
+  stadt: { Deutschland: ['Berlin', 'Hamburg', 'München', 'Köln'], 'Österreich': ['Wien', 'Graz'],
+           Schweiz: ['Zürich', 'Bern'], Niederlande: ['Amsterdam', 'Rotterdam'] },
+  typ: ['Filiale', 'Lager', 'Werkstatt', 'Bürostandort', 'Abholstation'],
+  regionen: ['Nord', 'Süd', 'Ost', 'West', 'Zentral'],
+  ansprechpartner: ['Anna Becker', 'Petra Schmidt', 'Thomas Fischer', 'Lukas Weber', 'Marie Wagner'],
+  lieferant: ['Kontor Nord GmbH', 'Rheinlogistik AG', 'Südwerk Handel KG'],
+  /* Alphabetical and long, with the entries a persona actually asks for well
+     past the rendered window: "United States" is 230-odd rows down. */
+  staaten: (() => {
+    const real = ['Afghanistan', 'Ägypten', 'Albanien', 'Argentinien', 'Australien', 'Belgien',
+      'Brasilien', 'Bulgarien', 'Chile', 'China', 'Dänemark', 'Deutschland', 'Estland',
+      'Finnland', 'Frankreich', 'Griechenland', 'Indien', 'Irland', 'Island', 'Israel',
+      'Italien', 'Japan', 'Kanada', 'Kroatien', 'Lettland', 'Litauen', 'Luxemburg',
+      'Malta', 'Mexiko', 'Neuseeland', 'Niederlande', 'Norwegen', 'Österreich', 'Polen',
+      'Portugal', 'Rumänien', 'Schweden', 'Schweiz', 'Slowakei', 'Slowenien', 'Spanien',
+      'Tschechien', 'Türkei', 'Ungarn', 'United Kingdom', 'United States', 'Zypern'];
+    const filler = [];
+    for (let i = 0; i < 200; i++) filler.push('Staat ' + String(i + 1).padStart(3, '0'));
+    return real.concat(filler).sort((a, b) => a.localeCompare(b, 'de'));
+  })()
+};
+
+function closeOverlays(except) {
+  document.querySelectorAll('.p-select-overlay, .p-multiselect-overlay, .p-autocomplete-overlay, .p-datepicker-panel')
+    .forEach(o => {
+      if (o === except || o.dataset.leaving) return;
+      /* An inline calendar is part of the page, not a popup: PrimeVue never
+         takes it down and neither does this. Removing it here quietly deleted
+         the one control that proves a permanent panel must not be mistaken for
+         an overlay somebody left open. */
+      if (o.closest('.p-datepicker-inline')) return;
+      /* PrimeVue keeps a closing overlay in the DOM, visible and still full of
+       * options, for the whole of its leave transition. Filling one control
+       * after another means the previous overlay is always mid-leave when the
+       * next opens. Removing it instantly here hid a real bug, in which every
+       * dropdown read the options of the one before it. */
+      o.dataset.leaving = '1';
+      o.classList.add('p-anchored-overlay-leave-active', 'p-anchored-overlay-leave-to');
+      setTimeout(() => o.remove(), 400);
+    });
+  document.querySelectorAll('[aria-expanded="true"]').forEach(i => i.setAttribute('aria-expanded', 'false'));
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOverlays(); });
+document.addEventListener('mousedown', e => {
+  if (!e.target.closest('.p-select, .p-multiselect, .p-autocomplete, .p-datepicker, .p-select-overlay, .p-multiselect-overlay, .p-autocomplete-overlay, .p-datepicker-panel')) closeOverlays();
+});
+
+/* How many times each control has been opened. A fill should open a dropdown
+   once, choose, and move on; opening it again means something reconsidered a
+   field it had already settled — which the user sees as the value changing
+   under them, and pays for in time. */
+window.__opens = {};
+function countOpen(root) {
+  const id = root.id || root.className;
+  window.__opens[id] = (window.__opens[id] || 0) + 1;
+}
+
+function buildOverlay(root, cls, items, onPick, selected) {
+  const ov = document.createElement('div');
+  ov.className = cls + '-overlay';
+  ov.setAttribute('data-pc-section', 'overlay');
+  const ul = document.createElement('ul');
+  ul.className = cls + '-list';
+  ul.setAttribute('role', 'listbox');
+  items.forEach((it, i) => {
+    const li = document.createElement('li');
+    li.className = cls + '-option' + ((selected || []).includes(it) ? ' ' + cls + '-option-selected' : '');
+    li.setAttribute('role', 'option');
+    li.setAttribute('aria-selected', String((selected || []).includes(it)));
+    li.dataset.value = it;
+    li.innerHTML = '<span class="' + cls + '-option-label">' + it + '</span>';
+    li.addEventListener('click', () => onPick(it, li));
+    ul.appendChild(li);
+  });
+  ov.appendChild(ul);
+  countOpen(root);
+  /* Vue teleports an overlay to <body> a tick later and transitions it in, so
+   * it is not in the DOM to be found the instant the trigger is pressed. That
+   * gap is what lets a previous, still-closing overlay win the race — mount it
+   * synchronously and the race never happens. */
+  ov.style.visibility = 'hidden';
+  document.body.appendChild(ov);
+  setTimeout(() => { ov.style.visibility = ''; }, 130);
+  const r = root.getBoundingClientRect();
+  ov.style.left = (r.left + scrollX) + 'px';
+  ov.style.top = (r.bottom + scrollY + 2) + 'px';
+  ov.style.minWidth = r.width + 'px';
+  return ov;
+}
+
+// ---- Select (single) -------------------------------------------------------
+['land', 'stadt', 'typ'].forEach(id => {
+  const root = document.getElementById(id);
+  const label = root.querySelector('.p-select-label');
+  const combo = root.querySelector('[role="combobox"]');
+  root.addEventListener('click', (e) => {
+    // PrimeVue's onContainerClick: ignore clicks that land on an input.
+    if (e.target.tagName === 'INPUT') return;
+    const open = document.querySelector('.p-select-overlay[data-owner="' + id + '"]');
+    closeOverlays();
+    if (open) return;
+    const items = id === 'stadt' ? (DATA.stadt[model.land] || []) : DATA[id];
+    if (!items.length) return;
+    const ov = buildOverlay(root, 'p-select', items, (val) => {
+      model[id] = val;
+      label.textContent = val;
+      label.classList.remove('p-select-label-empty');
+      combo.setAttribute('aria-expanded', 'false');
+      if (id === 'land') { model.stadt = null; const sl = document.querySelector('#stadt .p-select-label');
+        sl.textContent = 'Bitte wählen'; sl.classList.add('p-select-label-empty'); }
+      closeOverlays();
+      root.dispatchEvent(new CustomEvent('change', { bubbles: true }));
+    }, [model[id]]);
+    ov.dataset.owner = id;
+    combo.setAttribute('aria-expanded', 'true');
+  });
+});
+
+// ---- MultiSelect -----------------------------------------------------------
+(() => {
+  const root = document.getElementById('regionen');
+  const label = root.querySelector('.p-multiselect-label');
+  const combo = root.querySelector('[role="combobox"]');
+  model.regionen = [];
+  const render = () => {
+    if (model.regionen.length) { label.textContent = model.regionen.join(', '); label.classList.remove('p-multiselect-label-empty'); }
+    else { label.textContent = 'Regionen wählen'; label.classList.add('p-multiselect-label-empty'); }
+  };
+  root.addEventListener('click', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    if (document.querySelector('.p-multiselect-overlay')) { closeOverlays(); return; }
+    closeOverlays();
+    const ov = buildOverlay(root, 'p-multiselect', DATA.regionen, (val, li) => {
+      const i = model.regionen.indexOf(val);
+      if (i >= 0) model.regionen.splice(i, 1); else model.regionen.push(val);
+      li.classList.toggle('p-multiselect-option-selected');
+      li.setAttribute('aria-selected', String(model.regionen.includes(val)));
+      render();                       // overlay deliberately stays open
+    }, model.regionen);
+    ov.dataset.owner = 'regionen';
+    combo.setAttribute('aria-expanded', 'true');
+  });
+  render();
+})();
+
+/* Dropzone: keeps its own list and empties the input after each change. */
+(() => {
+  const input = document.getElementById('anhaenge');
+  const list = document.getElementById('anhaenge-liste');
+  model.anhaenge = [];
+  input.addEventListener('change', () => {
+    for (const f of input.files) {
+      model.anhaenge.push(f.name);
+      const li = document.createElement('li');
+      li.textContent = `${f.name} (${f.size} B)`;
+      list.appendChild(li);
+    }
+    input.value = '';                 // the file is ours now; let it be picked again
+  });
+})();
+
+/* The dependent select. Disabled until the organization above holds a value,
+   and its options belong to whatever was chosen there. */
+function enableRole() {
+  const root = document.getElementById('rolle');
+  root.classList.remove('p-disabled');
+  root.removeAttribute('aria-disabled');
+  root.querySelector('[role="combobox"]').disabled = false;
+}
+(() => {
+  const root = document.getElementById('rolle');
+  const label = root.querySelector('.p-select-label');
+  const combo = root.querySelector('[role="combobox"]');
+  /* And its own options are fetched too, once the organization is known — so
+     the panel this opens is empty for a moment even though the control is now
+     enabled. A dependent control is the one place where "the list is still
+     loading" is the normal case rather than bad luck. */
+  const ROLES = ['Admin MZ', 'Super Teacher', 'Teacher'];
+  let loaded = [];
+  window.__loadRoles = () => setTimeout(() => {
+    loaded = ROLES;
+    const ov = document.querySelector('.p-select-overlay[data-owner="rolle"]');
+    if (ov) render(ov);
+  }, 700);
+  let render = () => {};
+  root.addEventListener('mousedown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    if (root.classList.contains('p-disabled')) return;
+    if (document.querySelector('.p-select-overlay[data-owner="rolle"]')) return;
+    closeOverlays();
+    const ov = document.createElement('div');
+    ov.className = 'p-select-overlay';
+    ov.setAttribute('data-pc-section', 'overlay');
+    ov.dataset.owner = 'rolle';
+    ov.innerHTML = '<ul class="p-select-list" id="rolle_list" role="listbox"></ul>';
+    render = (panel) => {
+      const ul = panel.querySelector('ul');
+      ul.textContent = '';
+      for (const name of loaded) {
+        const li = document.createElement('li');
+        li.className = 'p-select-option';
+        li.setAttribute('role', 'option');
+        li.innerHTML = '<span class="p-select-option-label">' + name + '</span>';
+        li.addEventListener('click', () => {
+          model.rolle = name;
+          label.textContent = name;
+          label.classList.remove('p-placeholder');
+          combo.setAttribute('aria-expanded', 'false');
+          closeOverlays();
+        });
+        ul.appendChild(li);
+      }
+    };
+    render(ov);
+    document.body.appendChild(ov);
+    const r = root.getBoundingClientRect();
+    ov.style.cssText = 'position:absolute;left:' + r.left + 'px;top:' + (r.bottom + 2) +
+      'px;width:' + r.width + 'px';
+    combo.setAttribute('aria-expanded', 'true');
+  });
+})();
+
+/* A picker built out of nothing but ARIA — no library, no classes anyone here
+   has a selector for. Its popup floats and its owner names it, which is all
+   there is to go on and all there needs to be. */
+(() => {
+  const btn = document.getElementById('team');
+  const TEAMS = ['Platform', 'Infrastructure', 'Design system', 'Support'];
+  btn.addEventListener('click', () => {
+    if (document.getElementById('team-pop')) return;
+    const pop = document.createElement('div');
+    pop.id = 'team-pop';
+    const r = btn.getBoundingClientRect();
+    pop.style.cssText = 'position:fixed;left:' + r.left + 'px;top:' + (r.bottom + 2) +
+      'px;width:220px;background:#fff;border:1px solid #ccc;z-index:50';
+    pop.innerHTML = '<input type="text" id="team-search" placeholder="Filter teams">' +
+      '<ul id="team-list" role="listbox"></ul>';
+    const ul = pop.querySelector('ul');
+    for (const name of TEAMS) {
+      const li = document.createElement('li');
+      li.setAttribute('role', 'option');
+      li.textContent = name;
+      li.addEventListener('click', () => {
+        model.team = name;
+        btn.textContent = name;
+        btn.setAttribute('aria-expanded', 'false');
+        pop.remove();
+      });
+      ul.appendChild(li);
+    }
+    document.body.appendChild(pop);
+    btn.setAttribute('aria-expanded', 'true');
+  });
+})();
+
+/* Remote-backed select: nothing is listed until a query arrives, the answer
+   takes a moment to come back — and the list itself is not in the page when the
+   page loads, because the application asks its backend for it. Open the picker
+   before that answer lands and there is nothing to choose, which is exactly the
+   state the first fill of a freshly-loaded page meets. */
+(() => {
+  const root = document.getElementById('orga');
+  const label = root.querySelector('.p-select-label');
+  const combo = root.querySelector('[role="combobox"]');
+  const NAMES = ['NRW KMZ', 'Medienzentrum Köln', 'Medienzentrum Bonn', 'Kreis Düren',
+    'Stadt Aachen', 'Schulamt Essen', 'Sonnenfeld Systeme GmbH'];
+  let ALL = [];
+  let rerun = null;                 // the open panel, if there is one
+  /* When the answer lands the component re-renders, panel and all — that is
+     what any reactive framework does, and it is why waiting for a list that
+     has not arrived yet is worth doing rather than closing and trying again. */
+  setTimeout(() => { ALL = NAMES; if (rerun) rerun(); }, 1200);
+  root.addEventListener('mousedown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    if (document.querySelector('.p-select-overlay[data-owner="orga"]')) return;
+    closeOverlays();
+    const ov = document.createElement('div');
+    ov.className = 'p-select-overlay';
+    ov.setAttribute('data-pc-section', 'overlay');
+    ov.dataset.owner = 'orga';
+    ov.innerHTML = '<div class="p-select-header">' +
+      '<input class="p-select-filter p-inputtext" type="text" role="searchbox"' +
+      ' aria-owns="orga_list" placeholder="Search"></div>' +
+      '<ul class="p-select-list" id="orga_list" role="listbox"></ul>' +
+      '<div class="p-select-empty-message" style="display:none">No results found</div>';
+    const ul = ov.querySelector('ul');
+    const empty = ov.querySelector('.p-select-empty-message');
+    let timer;
+    const search = (q) => {
+      clearTimeout(timer);
+      ul.textContent = '';
+      empty.style.display = 'none';
+      timer = setTimeout(() => {               // a round trip, not an array filter
+        const hits = ALL.filter(x => x.toLowerCase().includes(q.toLowerCase()));
+        if (!hits.length) { empty.style.display = ''; return; }
+        for (const name of hits) {
+          const li = document.createElement('li');
+          li.className = 'p-select-option';
+          li.setAttribute('role', 'option');
+          li.innerHTML = '<span class="p-select-option-label">' + name + '</span>';
+          li.addEventListener('click', () => {
+            model.orga = name;
+            label.textContent = name;
+            label.classList.remove('p-placeholder');
+            combo.setAttribute('aria-expanded', 'false');
+            closeOverlays();
+            enableRole();                      // the dependent control, unlocked
+            window.__loadRoles();              // and its own list, requested now
+          });
+          ul.appendChild(li);
+        }
+        /* Slow on purpose, and slower than any incidental delay in the filler:
+           a round trip this picker makes is the whole point of it being here,
+           and a list that happens to arrive in time proves nothing. */
+      }, 600);
+    };
+    const box = ov.querySelector('.p-select-filter');
+    ov.querySelector('.p-select-filter').addEventListener('input', (ev) => search(ev.target.value));
+    rerun = () => { if (document.body.contains(ov)) search(box.value); };
+    document.body.appendChild(ov);
+    const r = root.getBoundingClientRect();
+    ov.style.cssText = 'position:absolute;left:' + r.left + 'px;top:' + (r.bottom + 2) +
+      'px;width:' + r.width + 'px';
+    combo.setAttribute('aria-expanded', 'true');
+    search('');                                 // the full list, after a beat
+  });
+})();
+
+/* The phone country picker. Flag only, long list, and it drops aria-expanded
+   to "false" on blur while leaving the overlay mounted — a component that
+   tidies its attributes on one tick and its DOM on another, which is common
+   enough and is exactly what a close check must not take on trust. */
+(() => {
+  const root = document.getElementById('telland');
+  const label = root.querySelector('.p-select-label');
+  const combo = root.querySelector('[role="combobox"]');
+  const FLAGS = [['Deutschland', '🇩🇪', '+49'], ['Österreich', '🇦🇹', '+43'],
+    ['Schweiz', '🇨🇭', '+41'], ['United States', '🇺🇸', '+1'],
+    ['United Kingdom', '🇬🇧', '+44'], ['Frankreich', '🇫🇷', '+33'],
+    ['Niederlande', '🇳🇱', '+31'], ['Polen', '🇵🇱', '+48'], ['Tokelau', '🇹🇰', '+690']];
+  root.addEventListener('mousedown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    if (document.querySelector('.p-select-overlay[data-owner="telland"]')) return;
+    closeOverlays();
+    const ov = buildOverlay(root, 'p-select', FLAGS.map(f => `${f[2]} ${f[0]} ${f[1]}`), (val) => {
+      const hit = FLAGS.find(f => val.includes(f[0]));
+      model.telland = hit ? hit[0] : val;
+      label.textContent = hit ? hit[1] : val;
+      combo.setAttribute('aria-expanded', 'false');
+      closeOverlays();
+    });
+    ov.dataset.owner = 'telland';
+    combo.setAttribute('aria-expanded', 'true');
+  });
+  /* The attribute goes on blur; the panel does not. */
+  document.addEventListener('focusin', (e) => {
+    if (!root.contains(e.target)) combo.setAttribute('aria-expanded', 'false');
+  }, true);
+})();
+
+/* Select over a virtual scroller. Only the rows in view exist in the DOM, so
+   scrolling is the only way to reach an option that is not already rendered —
+   and the list extends itself lazily as you approach the bottom, exactly as
+   PrimeVue's VirtualScroller does. */
+(() => {
+  const root = document.getElementById('staat');
+  const label = root.querySelector('.p-select-label');
+  const combo = root.querySelector('[role="combobox"]');
+  const ROW = 28, VIEW = 196;
+  root.addEventListener('mousedown', (e) => {
+    if (e.target.tagName === 'INPUT') return;      // PrimeVue ignores these
+    if (root.dataset.open) return;
+    root.dataset.open = '1';
+    countOpen(root);
+    const ov = document.createElement('div');
+    ov.className = 'p-select-overlay';
+    ov.setAttribute('data-pc-section', 'overlay');
+    ov.dataset.owner = 'staat';
+    ov.innerHTML = '<div class="p-select-header">' +
+      '<input class="p-select-filter p-inputtext" type="text" placeholder="Suchen"></input></div>' +
+      '<div class="p-virtualscroller" style="height:' + VIEW + 'px;overflow:auto;position:relative">' +
+      '<ul class="p-select-list" role="listbox" style="position:relative;margin:0;padding:0"></ul></div>';
+    const scroller = ov.querySelector('.p-virtualscroller');
+    const ul = ov.querySelector('ul');
+    let items = DATA.staaten.slice();
+    const render = () => {
+      ul.style.height = items.length * ROW + 'px';
+      const first = Math.max(0, Math.floor(scroller.scrollTop / ROW) - 2);
+      const last = Math.min(items.length, first + Math.ceil(VIEW / ROW) + 4);
+      ul.textContent = '';
+      for (let i = first; i < last; i++) {
+        const li = document.createElement('li');
+        li.className = 'p-select-option';
+        li.setAttribute('role', 'option');
+        li.setAttribute('aria-selected', 'false');
+        li.style.cssText = 'position:absolute;left:0;right:0;height:' + ROW + 'px;top:' + (i * ROW) + 'px';
+        li.innerHTML = '<span class="p-select-option-label">' + items[i] + '</span>';
+        li.addEventListener('click', () => {
+          model.staat = items[i];
+          label.textContent = items[i];
+          label.classList.remove('p-select-label-empty');
+          li.setAttribute('aria-selected', 'true');
+          closeOverlays();
+          delete root.dataset.open;
+        });
+        ul.appendChild(li);
+      }
+    };
+    scroller.addEventListener('scroll', render);
+    ov.querySelector('.p-select-filter').addEventListener('input', (ev) => {
+      const q = ev.target.value.toLowerCase();
+      items = DATA.staaten.filter(x => !q || x.toLowerCase().includes(q));
+      scroller.scrollTop = 0;
+      render();
+    });
+    document.body.appendChild(ov);
+    const r = root.getBoundingClientRect();
+    ov.style.cssText += ';position:absolute;left:' + r.left + 'px;top:' + (r.bottom + 2) + 'px;width:' + r.width + 'px';
+    combo.setAttribute('aria-expanded', 'true');
+    render();
+  });
+  const shut = new MutationObserver(() => {
+    if (!document.querySelector('.p-select-overlay[data-owner="staat"]:not([data-leaving])')) {
+      delete root.dataset.open;
+    }
+  });
+  shut.observe(document.body, { childList: true, subtree: true, attributes: true });
+})();
+
+/* An autocomplete that answers "nothing found" rather than staying silent —
+   a panel appears either way. */
+(() => {
+  const root = document.getElementById('lieferant');
+  const input = root.querySelector('input');
+  let timer;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      closeOverlays();
+      const q = input.value.toLowerCase();
+      const items = DATA.lieferant.filter(x => !q || x.toLowerCase().includes(q));
+      const ov = buildOverlay(root, 'p-autocomplete', items, (val) => {
+        model.lieferant = val;
+        input.value = val;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        closeOverlays();
+      });
+      if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'p-autocomplete-empty-message';
+        empty.textContent = 'Keine Ergebnisse gefunden';
+        ov.appendChild(empty);
+      }
+      ov.dataset.owner = 'lieferant';
+      input.setAttribute('aria-expanded', 'true');
+    }, 200);
+  });
+})();
+
+// ---- AutoComplete (async suggestions) --------------------------------------
+(() => {
+  const root = document.getElementById('ansprechpartner');
+  const input = root.querySelector('input');
+  let timer;
+  input.addEventListener('input', () => {
+    model.ansprechpartner_typed = input.value;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      closeOverlays();
+      const q = input.value.toLowerCase();
+      const items = DATA.ansprechpartner.filter(x => !q || x.toLowerCase().includes(q));
+      if (!items.length) return;
+      const ov = buildOverlay(root, 'p-autocomplete', items, (val) => {
+        model.ansprechpartner = val;
+        input.value = val;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        closeOverlays();
+      });
+      ov.dataset.owner = 'ansprechpartner';
+      input.setAttribute('aria-expanded', 'true');
+    }, 280);                          // async, like a real remote lookup
+  });
+})();
+
+// ---- DatePicker ------------------------------------------------------------
+(() => {
+  const root = document.getElementById('datum');
+  const input = root.querySelector('input');
+  root.addEventListener('click', () => {
+    /* Its own panel, not any panel. The inline calendar below contains one too
+       and is always present, so asking the document at large meant this
+       control refused to open at all — the same failure to scope an overlay
+       question to its owner that this fixture exists to catch. */
+    if (document.querySelector('.p-datepicker-panel[data-owner="datum"]')) { closeOverlays(); return; }
+    closeOverlays();
+    const panel = document.createElement('div');
+    panel.className = 'p-datepicker-panel';
+    panel.setAttribute('data-pc-section', 'panel');
+    panel.dataset.owner = 'datum';
+    const now = new Date();
+    const year = now.getFullYear(), month = now.getMonth();
+    const firstDow = (new Date(year, month, 1).getDay() + 6) % 7;
+    const days = new Date(year, month + 1, 0).getDate();
+    let html = '<div class="p-datepicker-header">' +
+      now.toLocaleString('de-DE', { month: 'long' }) + ' ' + year + '</div>' +
+      '<table class="p-datepicker-calendar"><tbody><tr>';
+    for (let i = 0; i < firstDow; i++) html += '<td class="p-datepicker-day-cell p-datepicker-other-month"><span class="p-datepicker-day">' + (25 + i) + '</span></td>';
+    for (let d = 1; d <= days; d++) {
+      if ((firstDow + d - 1) % 7 === 0 && d !== 1) html += '</tr><tr>';
+      const today = d === now.getDate() ? ' p-datepicker-today' : '';
+      html += '<td class="p-datepicker-day-cell' + today + '" data-day="' + d + '"><span class="p-datepicker-day">' + d + '</span></td>';
+    }
+    html += '</tr></tbody></table>';
+    panel.innerHTML = html;
+    document.body.appendChild(panel);
+    const r = root.getBoundingClientRect();
+    panel.style.left = (r.left + scrollX) + 'px';
+    panel.style.top = (r.bottom + scrollY + 2) + 'px';
+    panel.querySelectorAll('.p-datepicker-day-cell:not(.p-datepicker-other-month)').forEach(td => {
+      td.addEventListener('click', () => {
+        const d = Number(td.dataset.day);
+        const v = String(d).padStart(2, '0') + '.' + String(month + 1).padStart(2, '0') + '.' + year;
+        input.value = v;
+        model.datum = v;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        closeOverlays();
+      });
+    });
+  });
+})();
+
+// ---- InputNumber: a controlled input -------------------------------------
+/* Only an actual input event moves the model. Anything that writes .value
+ * without dispatching gets reverted on the next tick, exactly like a
+ * framework-controlled input. */
+(() => {
+  const input = document.querySelector('#kapazitaet input');
+  model.kapazitaet = '';
+  input.addEventListener('input', () => {
+    model.kapazitaet = input.value.replace(/[^\d]/g, '');
+    window.__acceptedInputEvents = (window.__acceptedInputEvents || 0) + 1;
+  });
+  setInterval(() => { if (input.value !== model.kapazitaet) input.value = model.kapazitaet; }, 40);
+})();
+
+// ---- A field that replaces its own node after being written ----------------
+(() => {
+  /* Every distinct value this field is ever given. One write is correct; a
+   * second, different one means something overwrote a value already chosen —
+   * which is what replaced a model's answer with a fallback on the real app. */
+  model.rerenderedWrites = [];
+  let swapped = false;
+  const watch = () => {
+    const input = document.getElementById('rerendered');
+    input.addEventListener('input', () => {
+      const v = input.value;
+      if (!v) return;
+      if (!model.rerenderedWrites.includes(v)) model.rerenderedWrites.push(v);
+      if (swapped) return;
+      swapped = true;
+      // The framework rebuilds the field: a brand-new, empty node in its place.
+      setTimeout(() => {
+        /* A genuinely new element, as a framework builds — not a clone, which
+         * would carry the filler's own marker attribute across and make the
+         * replacement look like a node it had already dealt with. */
+        const fresh = document.createElement('input');
+        fresh.type = 'text';
+        fresh.id = 'rerendered';
+        fresh.name = 'prerequisite';
+        fresh.spellcheck = false;
+        input.replaceWith(fresh);
+        watch();
+      }, 0);   // next tick: during the fill, the way a framework re-renders
+    });
+  };
+  watch();
+})();
+
+// ---- Time-only DatePicker (spinners) ---------------------------------------
+(() => {
+  const root = document.getElementById('oeffnet');
+  const input = root.querySelector('input');
+  let h = 0, m = 0, panel = null;
+  const render = () => {
+    if (!panel) return;
+    panel.querySelector('.hr').textContent = String(h).padStart(2, '0');
+    panel.querySelector('.mi').textContent = String(m).padStart(2, '0');
+  };
+  const commit = () => {
+    input.value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    model.oeffnet = input.value;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  const open = () => {
+    if (panel) return;
+    panel = document.createElement('div');
+    panel.className = 'p-datepicker-panel p-component p-datepicker-timeonly';
+    panel.innerHTML =
+      '<div class="p-datepicker-time-picker" data-pc-section="timepicker">' +
+      '<div class="p-datepicker-hour-picker"><button class="up">+</button><span class="hr">00</span><button class="dn">-</button></div>' +
+      '<div class="p-datepicker-minute-picker"><button class="up">+</button><span class="mi">00</span><button class="dn">-</button></div>' +
+      '</div>';
+    document.body.appendChild(panel);
+    const r = root.getBoundingClientRect();
+    panel.style.cssText = `position:absolute;left:${r.left + scrollX}px;top:${r.bottom + scrollY}px;background:#fff;border:1px solid #cbd5e1;padding:6px;z-index:1000`;
+    const hp = panel.querySelector('.p-datepicker-hour-picker');
+    const mp = panel.querySelector('.p-datepicker-minute-picker');
+    hp.querySelector('.up').addEventListener('click', () => { h = (h + 1) % 24; render(); commit(); });
+    hp.querySelector('.dn').addEventListener('click', () => { h = (h + 23) % 24; render(); commit(); });
+    mp.querySelector('.up').addEventListener('click', () => { m = (m + 1) % 60; render(); commit(); });
+    mp.querySelector('.dn').addEventListener('click', () => { m = (m + 59) % 60; render(); commit(); });
+    render();
+  };
+  const close = () => { if (panel) { panel.remove(); panel = null; } };
+  // Focus is refused and the panel opens from a press, as PrimeVue's does.
+  input.addEventListener('focus', () => input.blur());
+  root.addEventListener('click', open);
+  // Escape cancels outright, the behaviour that discarded every typed value.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !panel) return;
+    input.value = ''; model.oeffnet = ''; close();
+  });
+  document.addEventListener('mousedown', (e) => {
+    if (panel && !e.target.closest('#oeffnet, .p-datepicker-timeonly')) close();
+  });
+})();
+
+// ---- A switch that reveals fields ------------------------------------------
+(() => {
+  const root = document.getElementById('saopen');
+  const input = root.querySelector('input');
+  const times = document.getElementById('satimes');
+  const sync = () => {
+    root.classList.toggle('p-toggleswitch-checked', input.checked);
+    input.setAttribute('aria-checked', String(input.checked));
+    model.saopen = input.checked;
+    times.hidden = !input.checked;
+  };
+  root.addEventListener('click', (e) => {
+    if (e.target !== input) { input.checked = !input.checked; input.dispatchEvent(new Event('change', { bubbles: true })); }
+    sync();
+  });
+  input.addEventListener('change', sync);
+  sync();
+})();
+
+// ---- Editor (Quill-shaped) -------------------------------------------------
+// Quill only ever updates from real input events, never from assignment.
+(() => {
+  const ed = document.querySelector('.ql-editor');
+  if (!ed) return;
+  ed.addEventListener('input', () => {
+    model.hinweise = (ed.innerText || '').trim();
+    model.hinweiseHtml = ed.innerHTML;
+  });
+})();
+
+// ---- RadioButton group -----------------------------------------------------
+// Only one of a name can be on, and pressing the root drives the hidden input.
+(() => {
+  const roots = [...document.querySelectorAll('.p-radiobutton')];
+  const sync = () => {
+    roots.forEach(r => r.classList.toggle('p-radiobutton-checked', r.querySelector('input').checked));
+    const on = document.querySelector('.p-radiobutton input:checked');
+    model.bookingConfirmation = on ? on.value : null;
+  };
+  roots.forEach(root => {
+    const input = root.querySelector('input');
+    root.addEventListener('click', (e) => {
+      if (e.target !== input) { input.checked = true; input.dispatchEvent(new Event('change', { bubbles: true })); }
+      sync();
+    });
+    input.addEventListener('change', sync);
+  });
+  sync();
+})();
+
+// ---- ToggleSwitch / Checkbox ----------------------------------------------
+[['aktiv', 'p-toggleswitch'], ['agb', 'p-checkbox']].forEach(([id, cls]) => {
+  const root = document.getElementById(id);
+  const input = root.querySelector('input');
+  const sync = () => {
+    root.classList.toggle(cls + '-checked', input.checked);
+    input.setAttribute('aria-checked', String(input.checked));
+    model[id] = input.checked;
+  };
+  root.addEventListener('click', (e) => {
+    if (e.target !== input) { input.checked = !input.checked; input.dispatchEvent(new Event('change', { bubbles: true })); }
+    sync();
+  });
+  input.addEventListener('change', sync);
+  sync();
+});
+
+// ---- SelectButton ----------------------------------------------------------
+(() => {
+  const root = document.getElementById('prio');
+  root.querySelectorAll('.p-togglebutton').forEach(btn => {
+    btn.addEventListener('click', () => {
+      root.querySelectorAll('.p-togglebutton').forEach(b => { b.classList.remove('p-togglebutton-checked'); b.setAttribute('aria-selected', 'false'); });
+      btn.classList.add('p-togglebutton-checked');
+      btn.setAttribute('aria-selected', 'true');
+      model.prio = btn.dataset.value;
+    });
+  });
+})();
+
+window.__model = model;
+window.__snapshot = () => ({
+  name: document.getElementById('name').value,
+  strasse: document.getElementById('strasse').value,
+  notiz: document.getElementById('notiz').value,
+  land: model.land || null,
+  stadt: model.stadt || null,
+  typ: model.typ || null,
+  regionen: (model.regionen || []).slice(),
+  anhaenge: (model.anhaenge || []).slice(),
+  orga: model.orga || null,
+  rolle: model.rolle || null,
+  team: model.team || null,
+  telland: model.telland || null,
+  staat: model.staat || null,
+  ansprechpartner: model.ansprechpartner || null,
+  ansprechpartnerTyped: model.ansprechpartner_typed || null,
+  datum: model.datum || null,
+  kapazitaet: model.kapazitaet || '',
+  mindestdauer: document.querySelector('#mindestdauer input').value,
+  aktiv: !!model.aktiv,
+  bookingConfirmation: model.bookingConfirmation || null,
+  hinweise: model.hinweise || '',
+  rerenderedWrites: (model.rerenderedWrites || []).slice(),
+  rerenderedNow: (document.getElementById('rerendered') || {}).value || '',
+  hinweiseHtml: model.hinweiseHtml || '',
+  saOpen: !!model.saopen,
+  oeffnet: document.getElementById('oeffnet').querySelector('input').value,
+  saStart: document.getElementById('sa_start').value,
+  saExtra: document.getElementById('sa_extra').value,
+  saEnd: document.getElementById('sa_end').value,
+  zeiteinheitText: (document.querySelector('#zeiteinheit .p-select-label').textContent || '').trim(),
+  spracheText: (document.querySelector('#sprachwahl .p-select-label').textContent || '').trim(),
+  radiosChecked: document.querySelectorAll('.p-radiobutton input:checked').length,
+  opens: Object.assign({}, window.__opens),
+  agb: !!model.agb,
+  prio: model.prio || null,
+  // Overlays on their way out are not "left open"; only ones still live are.
+  /* Popups only. The inline calendar is a permanent part of this page and
+     contains a .p-datepicker-panel of its own, so counting it here blames the
+     filler for the page's own furniture — which is exactly the mistake the
+     filler itself used to make about it. */
+  openOverlays: [...document.querySelectorAll('.p-select-overlay, .p-multiselect-overlay, .p-autocomplete-overlay, .p-datepicker-panel')]
+    .filter(o => !o.dataset.leaving && !o.closest('.p-datepicker-inline')).length,
+  acceptedInputEvents: window.__acceptedInputEvents || 0
+});
+</script>
+</body>
+</html>
