@@ -62,7 +62,12 @@ function showTab(which) {
 /* The shortcuts as Chrome actually has them. A suggested key is bound only when
  * the extension is installed, so a command added later sits unassigned until the
  * user sets it — and pressing it then types a character into the page. */
-const COMMAND_LABELS = {'fill-form': 'fill', 'fill-field': 'this field', 'refill-form': 'new data', 'clear-form': 'clear'};
+const COMMAND_LABELS = {
+    'fill-form': 'fill',
+    'fill-field': 'this field',
+    'refill-form': 'new data',
+    'clear-form': 'clear'
+};
 
 function renderShortcuts() {
     const box = $('shortcuts');
@@ -73,7 +78,10 @@ function renderShortcuts() {
         for (const [name, label] of Object.entries(COMMAND_LABELS)) {
             const c = commands.find(x => x.name === name);
             if (!c) continue;
-            if (!c.shortcut) { unbound++; continue; }
+            if (!c.shortcut) {
+                unbound++;
+                continue;
+            }
             // One quiet token per command: the combination as Chrome spells it, then what it does.
             parts.push(`<span class="key"><b>${esc(c.shortcut)}</b> ${esc(label)}</span>`);
         }
@@ -281,9 +289,9 @@ function report(res) {
      * was asked and did not answer — which looks identical from the outside. */
     const note = res.aiUsed ? `${res.aiUsed} from model`
         : res.modelError ? 'model error — rules used'
-        : res.modelWarming ? 'model still loading — rules used'
-            : res.modelTimedOut ? 'model too slow — rules used'
-                : 'rules only';
+            : res.modelWarming ? 'model still loading — rules used'
+                : res.modelTimedOut ? 'model too slow — rules used'
+                    : 'rules only';
     let foot = `${p.fullName} · seed <b style="color:var(--accent)">${esc(p.seed)}</b>`;
     if (res.widgets) foot += ` · ${res.widgets} widget${res.widgets === 1 ? '' : 's'}`;
     foot += whyLink();
@@ -596,6 +604,7 @@ $('checkSetup').addEventListener('click', () => runSetupCheck($('setupCheck')));
 
 /* ------------------------------------------------------------ wiring ---- */
 document.addEventListener('DOMContentLoaded', load);
+
 /* Only what applies: an on-device-only backend has no provider, and the check
    cannot say anything useful until there is a provider and a key to check. */
 function syncBackendUi() {

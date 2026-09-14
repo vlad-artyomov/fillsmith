@@ -778,8 +778,8 @@
                     : modelWarming ? 'no rule matched; the model was still loading'
                         : modelTimedOut ? 'no rule matched; the model ran out of time'
                             : modelError ? `no rule matched; the model answered with an error: ${modelError.slice(0, 120)}`
-                    : modelAsked ? 'no rule matched; the model had no answer for it'
-                                : 'no rule matched; the model was not available';
+                                : modelAsked ? 'no rule matched; the model had no answer for it'
+                                    : 'no rule matched; the model was not available';
             plan.set(f.idx, {value: picksItsOwn(f) ? null : G.fallbackText(f, persona), source: 'fallback'});
         }
 

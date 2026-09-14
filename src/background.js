@@ -452,7 +452,13 @@ async function generate(payload, tabId) {
     }
     if (cfg.apiKey && cfg.provider) {
         const remote = await generateRemote(cfg, persona, pageTitle, fields, context, examples);
-        return {ok: true, values: remote.values, via: cfg.provider, error: remote.error || undefined, debug: lastExchange};
+        return {
+            ok: true,
+            values: remote.values,
+            via: cfg.provider,
+            error: remote.error || undefined,
+            debug: lastExchange
+        };
     }
     return {ok: true, values: {}, via: 'none', warming: !!lastExchange.warming, debug: lastExchange};
 }
@@ -761,7 +767,10 @@ async function setupCheck() {
         await stage('asking the on-device model');
         out.ondevice = await keptAlive(Promise.race([
             nanoCheck(stage),
-            new Promise(r => setTimeout(() => r({ok: false, note: 'no answer within 20s — the model may still be loading'}), 20000))
+            new Promise(r => setTimeout(() => r({
+                ok: false,
+                note: 'no answer within 20s — the model may still be loading'
+            }), 20000))
         ]));
     } else out.ondevice = {ok: false, availability: await nanoStatus(), note: 'not used with this backend'};
 

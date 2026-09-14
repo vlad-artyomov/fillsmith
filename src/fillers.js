@@ -10,7 +10,8 @@
 
     const {
         note, takeNotes, sleep, visible, textOf, norm, press, key, typeInto, setNativeValue,
-        commit, settle, waitFor, safeQuery, PLACEHOLDER, neutralSpot} = globalThis.FormForgeDom;
+        commit, settle, waitFor, safeQuery, PLACEHOLDER, neutralSpot
+    } = globalThis.FormForgeDom;
     const {detect, claimed, labelFor, displayedValue, radioLabel} = globalThis.FormForgeAdapters;
     const O = globalThis.FormForgeOverlays;
     const {

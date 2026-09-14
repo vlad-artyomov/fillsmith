@@ -12,8 +12,12 @@ const results = await Promise.all(SUITES.map(name => new Promise(done => {
     const t0 = Date.now();
     let out = '';
     const child = spawn(process.execPath, [resolve(here, `${name}.mjs`)], {stdio: ['ignore', 'pipe', 'pipe']});
-    child.stdout.on('data', d => { out += d; });
-    child.stderr.on('data', d => { out += d; });
+    child.stdout.on('data', d => {
+        out += d;
+    });
+    child.stderr.on('data', d => {
+        out += d;
+    });
     child.on('close', code => done({name, code, out, ms: Date.now() - t0}));
 })));
 

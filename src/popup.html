@@ -108,26 +108,28 @@
         </div>
         <!-- Meaningless with an on-device-only backend, so hidden then. -->
         <div id="remoteFields">
-        <div class="field">
-            <label for="provider">Provider</label>
-            <select id="provider">
-                <option value="">— none —</option>
-                <option value="anthropic">Anthropic</option>
-                <option value="openai">OpenAI</option>
-                <option value="gemini">Google Gemini</option>
-            </select>
-        </div>
-        <div class="field">
-            <label for="apiKey">API key</label>
-            <input id="apiKey" type="password" spellcheck="false" autocomplete="off">
-        </div>
-        <div class="field">
-            <label for="model">Model</label>
-            <input id="model" type="text" spellcheck="false" placeholder="provider default">
-        </div>
-        <!-- A real round trip through the configured backend, with the API's own error text. -->
-        <button id="checkSetup" class="btn wide" disabled title="Choose a provider and enter a key first">Test this setup</button>
-        <div id="setupCheck"></div>
+            <div class="field">
+                <label for="provider">Provider</label>
+                <select id="provider">
+                    <option value="">— none —</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="gemini">Google Gemini</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="apiKey">API key</label>
+                <input id="apiKey" type="password" spellcheck="false" autocomplete="off">
+            </div>
+            <div class="field">
+                <label for="model">Model</label>
+                <input id="model" type="text" spellcheck="false" placeholder="provider default">
+            </div>
+            <!-- A real round trip through the configured backend, with the API's own error text. -->
+            <button id="checkSetup" class="btn wide" disabled title="Choose a provider and enter a key first">Test this
+                setup
+            </button>
+            <div id="setupCheck"></div>
         </div>
     </details>
 </section>

@@ -108,7 +108,10 @@
         g.font = '18px ui-sans-serif, system-ui, -apple-system, sans-serif';
         g.fillText(`${w} × ${h} · ${kind.ext.toUpperCase()} · ${new Date().toISOString().slice(0, 10)}`, 72, h - 72);
         g.globalAlpha = 1;
-        const blob = await c.convertToBlob(kind.mime === 'image/jpeg' ? {type: kind.mime, quality: 0.9} : {type: kind.mime});
+        const blob = await c.convertToBlob(kind.mime === 'image/jpeg' ? {
+            type: kind.mime,
+            quality: 0.9
+        } : {type: kind.mime});
         return new File([blob], name, {type: kind.mime});
     }
 

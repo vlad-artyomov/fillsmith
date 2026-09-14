@@ -20,7 +20,8 @@
         settle,
         waitFor,
         safeQuery,
-        PLACEHOLDER, dialogOf, neutralSpot} = globalThis.FormForgeDom;
+        PLACEHOLDER, dialogOf, neutralSpot
+    } = globalThis.FormForgeDom;
 
     /* Roles and classes only: attribute-substring selectors walk every node and
      * these lists are evaluated inside 25ms polling loops. */

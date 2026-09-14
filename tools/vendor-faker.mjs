@@ -37,108 +37,115 @@
  *                             come in.
  *   lorem.*                   Latin in every locale, including de.
  */
-import { fakerDE, fakerEN } from '@faker-js/faker';
-import { writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve, join } from 'node:path';
+import {fakerDE, fakerEN} from '@faker-js/faker';
+import {writeFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {dirname, join, resolve} from 'node:path';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /* Drawn until the pool stops yielding new values, so the count is what faker
  * can actually produce rather than a number picked in advance. */
 function draw(fn, want) {
-  const seen = new Set();
-  for (let i = 0; seen.size < want && i < want * 60; i++) {
-    try { seen.add(String(fn()).trim()); } catch (_) { break; }
-  }
-  return [...seen].filter(Boolean).sort((a, b) => a.localeCompare(b));
+    const seen = new Set();
+    for (let i = 0; seen.size < want && i < want * 60; i++) {
+        try {
+            seen.add(String(fn()).trim());
+        } catch (_) {
+            break;
+        }
+    }
+    return [...seen].filter(Boolean).sort((a, b) => a.localeCompare(b));
 }
 
 /* Hand-written, because faker has no German for these and English words under
  * a German locale label are worse than a short list of real ones. Chosen for
  * the kind of application this gets pointed at — rental, logistics, admin. */
 const GERMAN = {
-  jobTitle: ['Softwareentwickler', 'Softwareentwicklerin', 'Projektmanager', 'Projektmanagerin',
-    'Vertriebsleiter', 'Vertriebsleiterin', 'Sachbearbeiter', 'Sachbearbeiterin',
-    'Personalreferent', 'Personalreferentin', 'Buchhalter', 'Buchhalterin',
-    'Produktmanager', 'Produktmanagerin', 'Qualitätsmanager', 'Qualitätsmanagerin',
-    'Disponent', 'Disponentin', 'Fuhrparkleiter', 'Fuhrparkleiterin',
-    'Lagerleiter', 'Lagerleiterin', 'Kundenberater', 'Kundenberaterin',
-    'Systemadministrator', 'Systemadministratorin', 'Techniker', 'Technikerin',
-    'Controller', 'Controllerin', 'Einkäufer', 'Einkäuferin',
-    'Werkstattleiter', 'Werkstattleiterin', 'Teamleiter', 'Teamleiterin',
-    'Abteilungsleiter', 'Abteilungsleiterin', 'Geschäftsführer', 'Geschäftsführerin',
-    'Auszubildender', 'Auszubildende', 'Praktikant', 'Praktikantin',
-    'Servicetechniker', 'Servicetechnikerin', 'Ausbilder', 'Ausbilderin',
-    'Verwaltungsangestellter', 'Verwaltungsangestellte'],
-  department: ['Einkauf', 'Vertrieb', 'Buchhaltung', 'Personalwesen', 'Logistik', 'IT',
-    'Marketing', 'Qualitätssicherung', 'Fuhrpark', 'Lager', 'Kundendienst', 'Technik',
-    'Recht', 'Controlling', 'Produktion', 'Entwicklung', 'Verwaltung', 'Ausbildung',
-    'Instandhaltung', 'Disposition', 'Empfang', 'Datenschutz'],
-  product: ['Notebook', 'Beamer', 'Tablet', 'Dokumentenkamera', 'Kopfhörer', 'Mikrofon',
-    'Ladestation', 'Whiteboard', 'Drucker', 'Scanner', 'Router', 'Messgerät',
-    'Werkzeugkoffer', 'Transportwagen', 'Leiter', 'Lastenrad', 'Anhänger',
-    'Bohrmaschine', 'Kamera', 'Stativ', 'Funkgerät', 'Erste-Hilfe-Koffer',
-    'Schutzhelm', 'Warnweste', 'Verlängerungskabel', 'Akkuschrauber']
+    jobTitle: ['Softwareentwickler', 'Softwareentwicklerin', 'Projektmanager', 'Projektmanagerin',
+        'Vertriebsleiter', 'Vertriebsleiterin', 'Sachbearbeiter', 'Sachbearbeiterin',
+        'Personalreferent', 'Personalreferentin', 'Buchhalter', 'Buchhalterin',
+        'Produktmanager', 'Produktmanagerin', 'Qualitätsmanager', 'Qualitätsmanagerin',
+        'Disponent', 'Disponentin', 'Fuhrparkleiter', 'Fuhrparkleiterin',
+        'Lagerleiter', 'Lagerleiterin', 'Kundenberater', 'Kundenberaterin',
+        'Systemadministrator', 'Systemadministratorin', 'Techniker', 'Technikerin',
+        'Controller', 'Controllerin', 'Einkäufer', 'Einkäuferin',
+        'Werkstattleiter', 'Werkstattleiterin', 'Teamleiter', 'Teamleiterin',
+        'Abteilungsleiter', 'Abteilungsleiterin', 'Geschäftsführer', 'Geschäftsführerin',
+        'Auszubildender', 'Auszubildende', 'Praktikant', 'Praktikantin',
+        'Servicetechniker', 'Servicetechnikerin', 'Ausbilder', 'Ausbilderin',
+        'Verwaltungsangestellter', 'Verwaltungsangestellte'],
+    department: ['Einkauf', 'Vertrieb', 'Buchhaltung', 'Personalwesen', 'Logistik', 'IT',
+        'Marketing', 'Qualitätssicherung', 'Fuhrpark', 'Lager', 'Kundendienst', 'Technik',
+        'Recht', 'Controlling', 'Produktion', 'Entwicklung', 'Verwaltung', 'Ausbildung',
+        'Instandhaltung', 'Disposition', 'Empfang', 'Datenschutz'],
+    product: ['Notebook', 'Beamer', 'Tablet', 'Dokumentenkamera', 'Kopfhörer', 'Mikrofon',
+        'Ladestation', 'Whiteboard', 'Drucker', 'Scanner', 'Router', 'Messgerät',
+        'Werkzeugkoffer', 'Transportwagen', 'Leiter', 'Lastenrad', 'Anhänger',
+        'Bohrmaschine', 'Kamera', 'Stativ', 'Funkgerät', 'Erste-Hilfe-Koffer',
+        'Schutzhelm', 'Warnweste', 'Verlängerungskabel', 'Akkuschrauber']
 };
 
 const PLAN = {
-  de: {
-    faker: fakerDE,
-    take: {
-      first: [f => f.person.firstName(), 400],
-      last: [f => f.person.lastName(), 400],
-      color: [f => f.color.human(), 30],
-      state: [f => f.location.state(), 20],
-      noun: [f => f.word.noun(), 200]
+    de: {
+        faker: fakerDE,
+        take: {
+            first: [f => f.person.firstName(), 400],
+            last: [f => f.person.lastName(), 400],
+            color: [f => f.color.human(), 30],
+            state: [f => f.location.state(), 20],
+            noun: [f => f.word.noun(), 200]
+        },
+        hand: GERMAN
     },
-    hand: GERMAN
-  },
-  en: {
-    faker: fakerEN,
-    take: {
-      first: [f => f.person.firstName(), 400],
-      last: [f => f.person.lastName(), 400],
-      color: [f => f.color.human(), 30],
-      state: [f => f.location.state(), 60],
-      noun: [f => f.word.noun(), 200],
-      jobTitle: [f => f.person.jobTitle(), 300],
-      department: [f => f.commerce.department(), 30],
-      product: [f => f.commerce.product(), 60]
-    },
-    hand: {}
-  }
+    en: {
+        faker: fakerEN,
+        take: {
+            first: [f => f.person.firstName(), 400],
+            last: [f => f.person.lastName(), 400],
+            color: [f => f.color.human(), 30],
+            state: [f => f.location.state(), 60],
+            noun: [f => f.word.noun(), 200],
+            jobTitle: [f => f.person.jobTitle(), 300],
+            department: [f => f.commerce.department(), 30],
+            product: [f => f.commerce.product(), 60]
+        },
+        hand: {}
+    }
 };
 
 const out = {};
 for (const [loc, spec] of Object.entries(PLAN)) {
-  out[loc] = {};
-  for (const [key, [fn, want]] of Object.entries(spec.take)) {
-    out[loc][key] = draw(() => fn(spec.faker), want);
-  }
-  for (const [key, list] of Object.entries(spec.hand)) {
-    out[loc][key] = [...list].sort((a, b) => a.localeCompare(b, loc));
-  }
+    out[loc] = {};
+    for (const [key, [fn, want]] of Object.entries(spec.take)) {
+        out[loc][key] = draw(() => fn(spec.faker), want);
+    }
+    for (const [key, list] of Object.entries(spec.hand)) {
+        out[loc][key] = [...list].sort((a, b) => a.localeCompare(b, loc));
+    }
 }
 
 const counts = Object.entries(out)
-  .map(([l, v]) => `${l}: ` + Object.entries(v).map(([k, a]) => `${k} ${a.length}`).join(', '))
-  .join('\n *   ');
+    .map(([l, v]) => `${l}: ` + Object.entries(v).map(([k, a]) => `${k} ${a.length}`).join(', '))
+    .join('\n *   ');
 
 const body = Object.entries(out).map(([loc, groups]) =>
-  `    ${loc}: {\n` + Object.entries(groups).map(([k, list]) => {
-    // Wrapped by hand rather than by JSON.stringify, which puts it all on one
-    // line and makes the diff of a regeneration unreadable.
-    const lines = [];
-    let line = '';
-    for (const v of list) {
-      const item = JSON.stringify(v) + ', ';
-      if (line.length + item.length > 92) { lines.push(line.trimEnd()); line = ''; }
-      line += item;
-    }
-    if (line.trim()) lines.push(line.trimEnd().replace(/,$/, ''));
-    return `      ${k}: [\n        ${lines.join('\n        ')}\n      ]`;
-  }).join(',\n') + '\n    }'
+        `    ${loc}: {\n` + Object.entries(groups).map(([k, list]) => {
+            // Wrapped by hand rather than by JSON.stringify, which puts it all on one
+            // line and makes the diff of a regeneration unreadable.
+            const lines = [];
+            let line = '';
+            for (const v of list) {
+                const item = JSON.stringify(v) + ', ';
+                if (line.length + item.length > 92) {
+                    lines.push(line.trimEnd());
+                    line = '';
+                }
+                line += item;
+            }
+            if (line.trim()) lines.push(line.trimEnd().replace(/,$/, ''));
+            return `      ${k}: [\n        ${lines.join('\n        ')}\n      ]`;
+        }).join(',\n') + '\n    }'
 ).join(',\n');
 
 const file = `/* FormForge — vocabulary. GENERATED FILE, do not edit by hand.
