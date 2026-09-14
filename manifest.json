@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "FormForge — AI QA Form Filler",
-  "version": "1.39.0",
+  "version": "1.45.0",
   "description": "Fills forms with coherent, locale-correct test data — including custom dropdowns, date pickers and switches from PrimeVue, MUI, Ant, react-select and friends. On-device AI, no SaaS.",
   "permissions": [
     "storage",
@@ -17,7 +17,7 @@
   },
   "action": {
     "default_popup": "src/popup.html",
-    "default_title": "FormForge (Alt+Shift+F to fill)"
+    "default_title": "FormForge (Alt+Shift+F fills the form, Alt+Shift+D the focused field)"
   },
   "commands": {
     "fill-form": {
@@ -25,6 +25,12 @@
         "default": "Alt+Shift+F"
       },
       "description": "Fill the page with test data"
+    },
+    "fill-field": {
+      "suggested_key": {
+        "default": "Alt+Shift+D"
+      },
+      "description": "Fill the focused field"
     },
     "refill-form": {
       "suggested_key": {

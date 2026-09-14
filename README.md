@@ -36,11 +36,16 @@ Chrome 128 or later. The on-device model needs a Chrome build that ships it; wit
 | Popup → **Dry run**                                         | Lists every control it would fill and which adapter claimed it; writes nothing |
 | Popup → **Clear**                                           | Empties what FormForge filled                                                  |
 | `Alt+Shift+F` / `R` / `C`                                   | Fill · fill with new data · clear                                              |
+| `Alt+Shift+D`                                               | Fill only the field the cursor is in; press again for another value            |
 | Right-click → **Fill this page** / **Fill just this field** | Whole form, or the one control under the cursor                                |
 
+Chrome binds these keys when the extension is installed. If one does not work (on a Mac, `Alt+Shift+D` then types
+`Î` into the page), the popup footer says which shortcut is not set and links to `chrome://extensions/shortcuts`.
+
 A small card in the corner of the page shows progress and then the result: how many fields, how many came from rules,
-from the model, or were left empty. Click it for the persona and a *Copy for bug report* button. The popup's **Debug**
-tab has the full trail — the rule behind each value, what the model was asked and answered, and where the time went.
+from the model, or were left empty. Click it for the persona and a *Copy for bug report* button. Turn on **Show the
+Debug tab** in Settings for the full trail — the rule behind each value, what the model was asked and answered, and
+where the time went — reachable from the *why?* link under every result.
 
 ## How a value is chosen
 
@@ -65,7 +70,8 @@ person twice.
 - **Model patience** — how long to wait for the model. *Automatic* is patient once per browser session and brisk after.
 - **Use the model**, **Overwrite filled fields**, **Tag the email with the seed** (`name+ab12cd@example.com`).
 - **Fallback API key** — Anthropic, OpenAI or Gemini, used only when the on-device model cannot answer. *On-device only*
-  keeps everything offline.
+  keeps everything offline; *API key only* skips the on-device model. **Test this setup** makes one real request through
+  the configured backend and shows the provider's own answer or error.
 
 ## Privacy
 

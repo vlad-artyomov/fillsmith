@@ -13,9 +13,9 @@
  * Light DOM, not shadow: the test suites read the card through innerText.
  */
 (function () {
-  'use strict';
+    'use strict';
 
-  const STYLE = `
+    const STYLE = `
 #formforge-hud, #formforge-hud *{ all: initial!important; }
 #formforge-hud *{
   box-sizing:border-box!important; display:block!important; color:inherit!important;
@@ -138,262 +138,273 @@
   #formforge-hud.ff-busy .ff-bar i::after{ display:none!important; }
 }`;
 
-  /* One bar for the whole job, and it only moves forward: each stage owns a
-   * band of it. A stage with nothing to count creeps towards the end of its
-   * band without arriving. */
-  const BANDS = {
-    read:   [0.01, 0.06],
-    model:  [0.06, 0.22],
-    fill:   [0.22, 0.88],
-    repair: [0.88, 0.97],
-    done:   [1.00, 1.00]
-  };
-
-  let hudTimer = null;
-  let trickle = null;
-  let barAt = 0;
-  let lastStage = '';
-  let lastPing = 0;
-  let dismissed = false;
-
-  function reset() {
-    clearTimeout(hudTimer);
-    clearInterval(trickle);
-    barAt = 0;
-    lastStage = '';
-    lastPing = 0;
-    dismissed = false;
-  }
-
-  /* The box. The service worker may already have put up a stub with the same
-   * id before the filler was injected; adopting it means no blink and never
-   * two of them. */
-  function box() {
-    let st = document.getElementById('formforge-spin-style');
-    if (!st || st.getAttribute('data-formforge-full') == null) {
-      if (st) st.remove();
-      st = document.createElement('style');
-      st.id = 'formforge-spin-style';
-      st.setAttribute('data-formforge-full', '');
-      st.textContent = STYLE;
-      document.documentElement.appendChild(st);
-    }
-
-    let el = document.getElementById('formforge-hud');
-    if (el && document.contains(el) && el.querySelector('.ff-top')) return el;
-    const adopted = el && document.contains(el);
-    if (!adopted) {
-      el = document.createElement('div');
-      el.id = 'formforge-hud';
-      document.documentElement.appendChild(el);
-    }
-    el.removeAttribute('style');
-    el.removeAttribute('data-formforge-boot');
-    el.setAttribute('data-formforge-hud', '');
-    el.setAttribute('role', 'status');
-    el.setAttribute('aria-live', 'polite');
-    el.innerHTML =
-      '<div class="ff-top"><span class="ff-spin"></span>' +
-      '<span class="ff-title"></span><span class="ff-count"></span>' +
-      '<button class="ff-x" type="button" aria-label="Close">×</button></div>' +
-      '<div class="ff-bar"><i></i></div>' +
-      '<div class="ff-now"></div><div class="ff-tags"></div><div class="ff-more"></div>';
-    if (adopted) el.classList.add('ff-in');
-    else requestAnimationFrame(() => el.classList.add('ff-in'));
-    return el;
-  }
-
-  function setBar(el, frac) {
-    barAt = Math.max(barAt, Math.min(1, frac));
-    el.querySelector('.ff-bar i').style.setProperty('--ff-fill', (barAt * 100).toFixed(1) + '%');
-  }
-
-  function creep(el, band) {
-    clearInterval(trickle);
-    const [from, to] = band;
-    setBar(el, from);
-    trickle = setInterval(() => {
-      if (!document.contains(el)) return clearInterval(trickle);
-      setBar(el, barAt + (to - barAt) * 0.06);
-    }, 120);
-  }
-
-  // Closed means closed: the fill goes on, but the card must not come back.
-  function closable(el) {
-    const x = el.querySelector('.ff-x');
-    if (!x || x.dataset.wired) return;
-    x.dataset.wired = '1';
-    x.addEventListener('click', (e) => {
-      e.stopPropagation();
-      clearTimeout(hudTimer);
-      dismissed = true;
-      el.classList.remove('ff-in');
-      setTimeout(() => el.remove(), 220);
-    });
-  }
-
-  function ping(step) {
-    try { chrome.runtime.sendMessage({ kind: 'fill-progress', step }, () => void chrome.runtime.lastError); }
-    catch (_) { }
-  }
-
-  // Every stage change reaches the popup; movement within a stage is rate-limited.
-  function relay(stage, text, at) {
-    const t = Date.now();
-    if (stage === lastStage && t - lastPing <= 120) return;
-    lastStage = stage;
-    lastPing = t;
-    ping({ stage, text, done: at && at.done, total: at && at.total, label: at && at.label });
-  }
-
-  /* Report a stage. `at` = { done, total, label } when there is something to
-   * count; otherwise the bar creeps. `stage` is an identity the popup keys on. */
-  function progress(stage, text, at) {
-    if (dismissed) return relay(stage, text, at);
-    const el = box();
-    clearTimeout(hudTimer);
-    el.classList.remove('ff-open', 'ff-clickable');
-    el.classList.add('ff-busy');
-    closable(el);
-    el.querySelector('.ff-top').firstChild.className = 'ff-spin';
-    const now = el.querySelector('.ff-now');
-    if (at && at.total) {
-      clearInterval(trickle);
-      const [from, to] = BANDS[stage] || BANDS.fill;
-      setBar(el, from + (to - from) * (at.done / at.total));
-      el.querySelector('.ff-count').textContent = `${at.done}/${at.total}`;
-      if (now.textContent !== (at.label || '')) {
-        now.textContent = at.label || '';
-        now.classList.remove('ff-rise');
-        void now.offsetWidth;                  // restart the arrival animation
-        now.classList.add('ff-rise');
-      }
-      now.classList.toggle('ff-off', !at.label);
-    } else {
-      creep(el, BANDS[stage] || BANDS.repair);
-      el.querySelector('.ff-count').textContent = '';
-      now.textContent = '';
-      now.classList.add('ff-off');
-    }
-    el.querySelector('.ff-title').textContent = text;
-    el.querySelector('.ff-tags').textContent = '';
-    relay(stage, text, at);
-  }
-
-  const fmtMs = (ms) => ms < 950 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
-
-  function bugReport(p, d) {
-    return [
-      `Test persona (FormForge, seed ${p.seed}, locale ${p.locale})`,
-      `Name:    ${p.fullName}`,
-      `Email:   ${p.email}`,
-      `Phone:   ${p.phone}`,
-      `Company: ${p.company}`,
-      `Address: ${p.street}, ${p.postal} ${p.city}, ${p.country}`,
-      `Page:    ${location.href}`,
-      '',
-      'Fields filled:',
-      ...(d.filled || []).map(f => `  ${f.label}: ${f.value}  [${f.source}]`),
-      ...((d.skipped || []).length
-        ? ['', 'Planned but wrote nothing:', ...d.skipped.map(s => `  ${s.label}  [${s.type}]`)]
-        : [])
-    ].join('\n');
-  }
-
-  /* The result, in the same box. It names what did not work — a fill that
-   * left required fields empty must not read as a success — and stays up
-   * longer when there is bad news to read. */
-  function toast(title, detail) {
-    if (dismissed) return;
-    const el = box();
-    const d = detail || {};
-    const p = d.persona;
-    clearTimeout(hudTimer);
-    el.classList.remove('ff-busy');
-    closable(el);
-
-    el.querySelector('.ff-top').firstChild.className =
-      'ff-tick' + (d.hint || (d.skipped && d.skipped.length) ? ' ff-warn' : '');
-    el.querySelector('.ff-title').textContent = title;
-    el.querySelector('.ff-count').textContent = d.ms != null ? fmtMs(d.ms) : '';
-
-    clearInterval(trickle);
-    setBar(el, 1);
-    el.querySelector('.ff-bar').classList.toggle('ff-off', !(d.persona || d.ms != null));
-
-    const now = el.querySelector('.ff-now');
-    now.classList.add('ff-off');
-
-    const tags = el.querySelector('.ff-tags');
-    tags.textContent = '';
-    const tag = (text, cls) => {
-      const s = document.createElement('span');
-      s.className = 'ff-tag' + (cls ? ' ' + cls : '');
-      s.textContent = text;
-      tags.appendChild(s);
+    /* One bar for the whole job, and it only moves forward: each stage owns a
+     * band of it. A stage with nothing to count creeps towards the end of its
+     * band without arriving. */
+    const BANDS = {
+        read: [0.01, 0.06],
+        model: [0.06, 0.22],
+        fill: [0.22, 0.88],
+        repair: [0.88, 0.97],
+        done: [1.00, 1.00]
     };
-    const by = {};
-    for (const f of (d.filled || [])) {
-      const how = String(f.source || '').split('/')[0];
-      by[how] = (by[how] || 0) + 1;
-    }
-    if (by.rule || by.type) tag(`${(by.rule || 0) + (by.type || 0)} from rules`);
-    if (by.ai) tag(`${by.ai} from the model`, 'ff-ai');
-    if (by.fallback) tag(`${by.fallback} filler`);
-    if (d.widgets) tag(`${d.widgets} widget${d.widgets === 1 ? '' : 's'}`);
-    if (d.skipped && d.skipped.length) {
-      tag(`${d.skipped.length} left empty`, 'ff-miss');
-      const names = d.skipped.slice(0, 2).map(s => s.label).filter(Boolean).join(', ');
-      if (names) {
-        now.textContent = names + (d.skipped.length > 2 ? ` +${d.skipped.length - 2} more` : '');
-        now.classList.remove('ff-off');
-      }
-    }
 
-    const more = el.querySelector('.ff-more');
-    more.textContent = '';
-    if (p) {
-      el.classList.add('ff-clickable');
-      const line = (t) => { const n = document.createElement('div'); n.textContent = t; more.appendChild(n); };
-      line(p.email);
-      line(`${p.street}, ${p.postal} ${p.city}`);
-      const seed = document.createElement('div');
-      seed.append('seed ');
-      const s = document.createElement('b');
-      s.className = 'ff-seed';
-      s.textContent = p.seed;
-      seed.append(s);
-      more.appendChild(seed);
-      const btn = document.createElement('button');
-      btn.className = 'ff-btn';
-      btn.textContent = 'Copy for bug report';
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        navigator.clipboard.writeText(bugReport(p, d));
-        btn.textContent = 'Copied';
-      });
-      more.appendChild(btn);
-      const hint = document.createElement('div');
-      hint.className = 'ff-hint';
-      hint.textContent = 'Click to hide';
-      more.appendChild(hint);
+    let hudTimer = null;
+    let trickle = null;
+    let barAt = 0;
+    let lastStage = '';
+    let lastPing = 0;
+    let dismissed = false;
+
+    function reset() {
+        clearTimeout(hudTimer);
+        clearInterval(trickle);
+        barAt = 0;
+        lastStage = '';
+        lastPing = 0;
+        dismissed = false;
     }
 
-    const dismiss = () => {
-      el.classList.remove('ff-in');
-      setTimeout(() => el.remove(), 220);
-    };
-    const arm = (ms) => { clearTimeout(hudTimer); hudTimer = setTimeout(dismiss, ms); };
-    arm(d.skipped && d.skipped.length ? 6000 : 3200);
-    el.onmouseenter = () => clearTimeout(hudTimer);
-    el.onmouseleave = () => { if (!el.classList.contains('ff-open')) arm(1200); };
-    el.onclick = (e) => {
-      if (e.target && e.target.classList && e.target.classList.contains('ff-btn')) return;
-      if (!p) return dismiss();
-      el.classList.toggle('ff-open');
-      if (el.classList.contains('ff-open')) clearTimeout(hudTimer); else arm(1600);
-    };
-  }
+    /* The box. The service worker may already have put up a stub with the same
+     * id before the filler was injected; adopting it means no blink and never
+     * two of them. */
+    function box() {
+        let st = document.getElementById('formforge-spin-style');
+        if (!st || st.getAttribute('data-formforge-full') == null) {
+            if (st) st.remove();
+            st = document.createElement('style');
+            st.id = 'formforge-spin-style';
+            st.setAttribute('data-formforge-full', '');
+            st.textContent = STYLE;
+            document.documentElement.appendChild(st);
+        }
 
-  globalThis.FormForgeHud = { reset, progress, toast, ping };
+        let el = document.getElementById('formforge-hud');
+        if (el && document.contains(el) && el.querySelector('.ff-top')) return el;
+        const adopted = el && document.contains(el);
+        if (!adopted) {
+            el = document.createElement('div');
+            el.id = 'formforge-hud';
+            document.documentElement.appendChild(el);
+        }
+        el.removeAttribute('style');
+        el.removeAttribute('data-formforge-boot');
+        el.setAttribute('data-formforge-hud', '');
+        el.setAttribute('role', 'status');
+        el.setAttribute('aria-live', 'polite');
+        el.innerHTML =
+            '<div class="ff-top"><span class="ff-spin"></span>' +
+            '<span class="ff-title"></span><span class="ff-count"></span>' +
+            '<button class="ff-x" type="button" aria-label="Close">×</button></div>' +
+            '<div class="ff-bar"><i></i></div>' +
+            '<div class="ff-now"></div><div class="ff-tags"></div><div class="ff-more"></div>';
+        if (adopted) el.classList.add('ff-in');
+        else requestAnimationFrame(() => el.classList.add('ff-in'));
+        return el;
+    }
+
+    function setBar(el, frac) {
+        barAt = Math.max(barAt, Math.min(1, frac));
+        el.querySelector('.ff-bar i').style.setProperty('--ff-fill', (barAt * 100).toFixed(1) + '%');
+    }
+
+    function creep(el, band) {
+        clearInterval(trickle);
+        const [from, to] = band;
+        setBar(el, from);
+        trickle = setInterval(() => {
+            if (!document.contains(el)) return clearInterval(trickle);
+            setBar(el, barAt + (to - barAt) * 0.06);
+        }, 120);
+    }
+
+    // Closed means closed: the fill goes on, but the card must not come back.
+    function closable(el) {
+        const x = el.querySelector('.ff-x');
+        if (!x || x.dataset.wired) return;
+        x.dataset.wired = '1';
+        x.addEventListener('click', (e) => {
+            e.stopPropagation();
+            clearTimeout(hudTimer);
+            dismissed = true;
+            el.classList.remove('ff-in');
+            setTimeout(() => el.remove(), 220);
+        });
+    }
+
+    function ping(step) {
+        try {
+            chrome.runtime.sendMessage({kind: 'fill-progress', step}, () => void chrome.runtime.lastError);
+        } catch (_) {
+        }
+    }
+
+    // Every stage change reaches the popup; movement within a stage is rate-limited.
+    function relay(stage, text, at) {
+        const t = Date.now();
+        if (stage === lastStage && t - lastPing <= 120) return;
+        lastStage = stage;
+        lastPing = t;
+        ping({stage, text, done: at && at.done, total: at && at.total, label: at && at.label});
+    }
+
+    /* Report a stage. `at` = { done, total, label } when there is something to
+     * count; otherwise the bar creeps. `stage` is an identity the popup keys on. */
+    function progress(stage, text, at) {
+        if (dismissed) return relay(stage, text, at);
+        const el = box();
+        clearTimeout(hudTimer);
+        el.classList.remove('ff-open', 'ff-clickable');
+        el.classList.add('ff-busy');
+        closable(el);
+        el.querySelector('.ff-top').firstChild.className = 'ff-spin';
+        const now = el.querySelector('.ff-now');
+        if (at && at.total) {
+            clearInterval(trickle);
+            const [from, to] = BANDS[stage] || BANDS.fill;
+            setBar(el, from + (to - from) * (at.done / at.total));
+            el.querySelector('.ff-count').textContent = `${at.done}/${at.total}`;
+            if (now.textContent !== (at.label || '')) {
+                now.textContent = at.label || '';
+                now.classList.remove('ff-rise');
+                void now.offsetWidth;                  // restart the arrival animation
+                now.classList.add('ff-rise');
+            }
+            now.classList.toggle('ff-off', !at.label);
+        } else {
+            creep(el, BANDS[stage] || BANDS.repair);
+            el.querySelector('.ff-count').textContent = '';
+            now.textContent = '';
+            now.classList.add('ff-off');
+        }
+        el.querySelector('.ff-title').textContent = text;
+        el.querySelector('.ff-tags').textContent = '';
+        relay(stage, text, at);
+    }
+
+    const fmtMs = (ms) => ms < 950 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
+
+    function bugReport(p, d) {
+        return [
+            `Test persona (FormForge, seed ${p.seed}, locale ${p.locale})`,
+            `Name:    ${p.fullName}`,
+            `Email:   ${p.email}`,
+            `Phone:   ${p.phone}`,
+            `Company: ${p.company}`,
+            `Address: ${p.street}, ${p.postal} ${p.city}, ${p.country}`,
+            `Page:    ${location.href}`,
+            '',
+            'Fields filled:',
+            ...(d.filled || []).map(f => `  ${f.label}: ${f.value}  [${f.source}]`),
+            ...((d.skipped || []).length
+                ? ['', 'Planned but wrote nothing:', ...d.skipped.map(s => `  ${s.label}  [${s.type}]`)]
+                : [])
+        ].join('\n');
+    }
+
+    /* The result, in the same box. It names what did not work — a fill that
+     * left required fields empty must not read as a success — and stays up
+     * longer when there is bad news to read. */
+    function toast(title, detail) {
+        if (dismissed) return;
+        const el = box();
+        const d = detail || {};
+        const p = d.persona;
+        clearTimeout(hudTimer);
+        el.classList.remove('ff-busy');
+        closable(el);
+
+        el.querySelector('.ff-top').firstChild.className =
+            'ff-tick' + (d.hint || (d.skipped && d.skipped.length) ? ' ff-warn' : '');
+        el.querySelector('.ff-title').textContent = title;
+        el.querySelector('.ff-count').textContent = d.ms != null ? fmtMs(d.ms) : '';
+
+        clearInterval(trickle);
+        setBar(el, 1);
+        el.querySelector('.ff-bar').classList.toggle('ff-off', !(d.persona || d.ms != null));
+
+        const now = el.querySelector('.ff-now');
+        now.classList.add('ff-off');
+
+        const tags = el.querySelector('.ff-tags');
+        tags.textContent = '';
+        const tag = (text, cls) => {
+            const s = document.createElement('span');
+            s.className = 'ff-tag' + (cls ? ' ' + cls : '');
+            s.textContent = text;
+            tags.appendChild(s);
+        };
+        const by = {};
+        for (const f of (d.filled || [])) {
+            const how = String(f.source || '').split('/')[0];
+            by[how] = (by[how] || 0) + 1;
+        }
+        if (by.rule || by.type) tag(`${(by.rule || 0) + (by.type || 0)} from rules`);
+        if (by.ai) tag(`${by.ai} from the model`, 'ff-ai');
+        if (by.fallback) tag(`${by.fallback} filler`);
+        if (d.widgets) tag(`${d.widgets} widget${d.widgets === 1 ? '' : 's'}`);
+        if (d.skipped && d.skipped.length) {
+            tag(`${d.skipped.length} left empty`, 'ff-miss');
+            const names = d.skipped.slice(0, 2).map(s => s.label).filter(Boolean).join(', ');
+            if (names) {
+                now.textContent = names + (d.skipped.length > 2 ? ` +${d.skipped.length - 2} more` : '');
+                now.classList.remove('ff-off');
+            }
+        }
+
+        const more = el.querySelector('.ff-more');
+        more.textContent = '';
+        if (p) {
+            el.classList.add('ff-clickable');
+            const line = (t) => {
+                const n = document.createElement('div');
+                n.textContent = t;
+                more.appendChild(n);
+            };
+            line(p.email);
+            line(`${p.street}, ${p.postal} ${p.city}`);
+            const seed = document.createElement('div');
+            seed.append('seed ');
+            const s = document.createElement('b');
+            s.className = 'ff-seed';
+            s.textContent = p.seed;
+            seed.append(s);
+            more.appendChild(seed);
+            const btn = document.createElement('button');
+            btn.className = 'ff-btn';
+            btn.textContent = 'Copy for bug report';
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(bugReport(p, d));
+                btn.textContent = 'Copied';
+            });
+            more.appendChild(btn);
+            const hint = document.createElement('div');
+            hint.className = 'ff-hint';
+            hint.textContent = 'Click to hide';
+            more.appendChild(hint);
+        }
+
+        const dismiss = () => {
+            el.classList.remove('ff-in');
+            setTimeout(() => el.remove(), 220);
+        };
+        const arm = (ms) => {
+            clearTimeout(hudTimer);
+            hudTimer = setTimeout(dismiss, ms);
+        };
+        arm(d.skipped && d.skipped.length ? 6000 : 3200);
+        el.onmouseenter = () => clearTimeout(hudTimer);
+        el.onmouseleave = () => {
+            if (!el.classList.contains('ff-open')) arm(1200);
+        };
+        el.onclick = (e) => {
+            if (e.target && e.target.classList && e.target.classList.contains('ff-btn')) return;
+            if (!p) return dismiss();
+            el.classList.toggle('ff-open');
+            if (el.classList.contains('ff-open')) clearTimeout(hudTimer); else arm(1600);
+        };
+    }
+
+    globalThis.FormForgeHud = {reset, progress, toast, ping};
 })();

@@ -232,11 +232,14 @@ const ph = r.phase || {};
 console.log('\nwhere the time went');
 for (const [k, v] of Object.entries(ph)) console.log(`  ${k.padEnd(12)} ${v}ms`);
 console.log(`  ${'wall'.padEnd(12)} ${wall}ms`);
+// Time spent waiting on the page's own loading indicators is the page's, not ours.
+const pageWait = (r.choiceTimings || []).reduce((n, c) => n + (c.load || 0), 0);
+if (pageWait) console.log(`  ${'page load'.padEnd(12)} ${pageWait}ms  (waiting on the page's loaders, inside the above)`);
 console.log('\nslowest fields');
 for (const s of (r.slowest || []).slice(0, 6)) {
   console.log(`  ${String(s.ms).padStart(6)}ms  ${String(s.type).padEnd(14)} ${s.label}`);
 }
-if (ph.total > 6000) note('warn', 'the fill took over six seconds', `${ph.total}ms`);
+if (ph.total - pageWait > 6000) note('warn', 'the fill took over six seconds of its own time', `${ph.total - pageWait}ms`);
 
 await page.screenshot({ path: join(OUT, 'page.png'), fullPage: false });
 writeFileSync(join(OUT, 'fill.json'), JSON.stringify(r, null, 2));

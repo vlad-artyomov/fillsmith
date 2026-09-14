@@ -1,71 +1,78 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><title>Vendor onboarding — staging</title></head>
+<head>
+    <meta charset="utf-8">
+    <title>Vendor onboarding — staging</title></head>
 <body>
 <h1>Vendor onboarding</h1>
 <form id="f">
-  <fieldset>
-    <legend>Contact</legend>
-    <label for="fn">First name</label><input id="fn" name="given-name" required>
-    <label for="ln">Last name</label><input id="ln" name="family_name" required>
-    <label for="em">Work email</label><input id="em" type="email" name="email" required>
-    <label for="ph">Phone</label><input id="ph" type="tel" name="phone">
-    <div><span id="lbl-co">Company legal name</span><input aria-labelledby="lbl-co" name="orgName"></div>
-    <label for="jt">Job title</label><input id="jt" name="jobTitle">
-  </fieldset>
-
-  <fieldset>
-    <legend>Registered address</legend>
-    <label for="s1">Street and number</label><input id="s1" name="address-line1">
-    <label for="s2">Address line 2</label><input id="s2" name="address-line2">
-    <label for="pc">Postcode</label><input id="pc" name="postal-code" maxlength="10">
-    <label for="ct">City</label><input id="ct" name="city">
-    <label for="cn">Country</label>
-    <select id="cn" name="country">
-      <option value="">Select…</option>
-      <option value="DE">Germany</option>
-      <option value="GB">United Kingdom</option>
-      <option value="US">United States</option>
-    </select>
-  </fieldset>
-
-  <fieldset>
-    <legend>Banking and tax</legend>
-    <label for="ib">IBAN</label><input id="ib" name="iban">
-    <label for="vt">VAT ID</label><input id="vt" name="vat_number">
-  </fieldset>
-
-  <fieldset>
-    <legend>Engagement</legend>
-    <!-- domain-specific: no rule should match these; the model handles them -->
-    <label for="pcode">Internal project code</label><input id="pcode" name="projectCode" maxlength="12">
-    <label for="just">Reason for engaging this vendor</label><textarea id="just" name="justification"></textarea>
-    <label for="sla">Requested SLA tier</label>
-    <select id="sla" name="slaTier">
-      <option value="">—</option><option>Bronze</option><option>Silver</option><option>Gold</option>
-    </select>
-    <label for="hc">Expected headcount on site</label><input id="hc" type="number" name="headcount" min="1" max="50">
-    <label for="sd">Start date</label><input id="sd" type="date" name="startDate">
-    <label for="scope">Lieferumfang</label><input id="scope" name="deliveryScope">
-    <fieldset><legend>Risk classification</legend>
-      <label><input type="radio" name="risk" value="low"> Low</label>
-      <label><input type="radio" name="risk" value="medium"> Medium</label>
-      <label><input type="radio" name="risk" value="high"> High</label>
+    <fieldset>
+        <legend>Contact</legend>
+        <label for="fn">First name</label><input id="fn" name="given-name" required>
+        <label for="ln">Last name</label><input id="ln" name="family_name" required>
+        <label for="em">Work email</label><input id="em" type="email" name="email" required>
+        <label for="ph">Phone</label><input id="ph" type="tel" name="phone">
+        <div><span id="lbl-co">Company legal name</span><input aria-labelledby="lbl-co" name="orgName"></div>
+        <label for="jt">Job title</label><input id="jt" name="jobTitle">
     </fieldset>
-    <label><input type="checkbox" name="terms" required> I accept the supplier terms</label>
-    <label><input type="checkbox" name="newsletter"> Send me product updates</label>
-  </fieldset>
 
-  <input type="hidden" name="csrf" value="xyz">
-  <input type="text" name="captcha_answer" placeholder="Enter the captcha code">
-  <input type="text" name="disabled_field" disabled>
-  <button type="submit">Submit</button>
+    <fieldset>
+        <legend>Registered address</legend>
+        <label for="s1">Street and number</label><input id="s1" name="address-line1">
+        <label for="s2">Address line 2</label><input id="s2" name="address-line2">
+        <label for="pc">Postcode</label><input id="pc" name="postal-code" maxlength="10">
+        <label for="ct">City</label><input id="ct" name="city">
+        <label for="cn">Country</label>
+        <select id="cn" name="country">
+            <option value="">Select…</option>
+            <option value="DE">Germany</option>
+            <option value="GB">United Kingdom</option>
+            <option value="US">United States</option>
+        </select>
+    </fieldset>
+
+    <fieldset>
+        <legend>Banking and tax</legend>
+        <label for="ib">IBAN</label><input id="ib" name="iban">
+        <label for="vt">VAT ID</label><input id="vt" name="vat_number">
+    </fieldset>
+
+    <fieldset>
+        <legend>Engagement</legend>
+        <!-- domain-specific: no rule should match these; the model handles them -->
+        <label for="pcode">Internal project code</label><input id="pcode" name="projectCode" maxlength="12">
+        <label for="just">Reason for engaging this vendor</label><textarea id="just" name="justification"></textarea>
+        <label for="sla">Requested SLA tier</label>
+        <select id="sla" name="slaTier">
+            <option value="">—</option>
+            <option>Bronze</option>
+            <option>Silver</option>
+            <option>Gold</option>
+        </select>
+        <label for="hc">Expected headcount on site</label><input id="hc" type="number" name="headcount" min="1"
+                                                                 max="50">
+        <label for="sd">Start date</label><input id="sd" type="date" name="startDate">
+        <label for="scope">Lieferumfang</label><input id="scope" name="deliveryScope">
+        <fieldset>
+            <legend>Risk classification</legend>
+            <label><input type="radio" name="risk" value="low"> Low</label>
+            <label><input type="radio" name="risk" value="medium"> Medium</label>
+            <label><input type="radio" name="risk" value="high"> High</label>
+        </fieldset>
+        <label><input type="checkbox" name="terms" required> I accept the supplier terms</label>
+        <label><input type="checkbox" name="newsletter"> Send me product updates</label>
+    </fieldset>
+
+    <input type="hidden" name="csrf" value="xyz">
+    <input type="text" name="captcha_answer" placeholder="Enter the captcha code">
+    <input type="text" name="disabled_field" disabled>
+    <button type="submit">Submit</button>
 </form>
 
 <script>
-  window.__events = { input: 0, change: 0 };
-  document.getElementById('f').addEventListener('input', () => window.__events.input++, true);
-  document.getElementById('f').addEventListener('change', () => window.__events.change++, true);
+    window.__events = {input: 0, change: 0};
+    document.getElementById('f').addEventListener('input', () => window.__events.input++, true);
+    document.getElementById('f').addEventListener('change', () => window.__events.change++, true);
 </script>
 </body>
 </html>

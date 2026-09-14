@@ -52,13 +52,16 @@ For each field, the first step that answers wins:
 `run()` loops until the form stops changing: re-write what a component reverted, retry what wrote nothing, fill what our
 own writes revealed, then pause once and look again. A field is identified by name/id (and by caption only when its
 original node left the DOM), so a node the framework rebuilt gets its *original* value back rather than a freshly
-invented one.
+invented one. The same loop reads the form's own complaints: a maximum that lives only in a validation schema reaches
+the DOM as the message under the field, so a value it calls too long is shortened to what it asks and written again.
 
 ## Entry points
 
 The popup's Fill button injects and dispatches. Shortcuts and the *Fill this page* context menu go through `send()` in
-the worker, which puts an indicator on the page *before* injecting. *Fill just this field* fills one control with no
-ordering or repair loop; `content.js` records the target of its own `contextmenu` listener, since Chrome does not say
+the worker, which puts an indicator on the page *before* injecting. *Fill just this field* (the context menu) and
+`Alt+Shift+D`
+fill one control with no ordering or repair loop. From the keyboard the field is the focused one; from the menu it is
+the one under the pointer, which `content.js` records with its own `contextmenu` listener since Chrome does not say
 what was clicked.
 
 ## Telling the user
@@ -110,12 +113,27 @@ Each of these was a bug on a real form and has a regression check.
 - The caption is the first label fragment with two letters; an asterisk in any fragment means required.
 - Page chrome (a language switcher) and CAPTCHA-shaped fields are skipped by whole-word patterns.
 - A field is identified by name/id across re-renders, not by DOM node.
+- A fill starts by removing the marks the previous fill left. A control disabled at collect time is skipped, and a
+  stale mark would hide it from the later passes once this fill has enabled it (Fill → Clear → Fill).
 
 **Waiting**
 
 - Poll a condition; never sleep a fixed time. Every search gets a budget, and the caller sets it.
-- A sorted virtualised list is binary-searched by scroll position; an unsorted one is walked. Filter when rows are out
-  of the document, not merely below the fold.
+- A list that comes over the network says so while it loads (a spinner on the trigger, a loader in the panel,
+  `aria-busy`). Wait on that state, never on a fixed clock — and PrimeVue ignores clicks on a trigger that is still
+  loading, so wait before pressing it too.
+- Search a list only for a candidate that could be in it: a country, a city, a salutation. An invented company name is
+  in nobody's list, and asking a server-side filter for it costs two round trips to learn nothing.
+- An open modal dialog is the whole form. Nothing under its mask is a field, and no popup inside it is closed with
+  Escape or a click on the body: both reach the dialog's own listeners and close it. Click the dialog's header instead.
+- The node a control names through `aria-controls` is the list itself; the filter box, the loader and the empty
+  message live in the panel around it, and a server's answer to a filter may replace the list node under the same id.
+  Look things up from the panel, and hold the id rather than the node.
+- A filter that answers from the rows it already holds, then asks the server, has not answered until the loader that
+  follows has cleared; a "no results" left over from the previous query is not a reaction to this one.
+- A sorted virtualised list is binary-searched by scroll position; an unsorted one is walked. When a match is required
+  and not in sight, the filter is asked, under every spelling the persona knows for its country: the rows on screen say
+  nothing about what a virtualised window or a server's page leaves out, and a client-side miss answers at once.
 - An autocomplete asks its shortest query first and its full candidate last; a panel that says "no results" has
   answered.
 

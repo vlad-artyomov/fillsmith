@@ -16,8 +16,13 @@ npm run audit           # drive the real extension and judge the page
 npm run vocab           # regenerate src/vocab.js (only when changing tools/vendor-faker.mjs)
 ```
 
+`npm test` runs the four suites in parallel (about a minute and a half; the extension suite is the long pole). While iterating,
+run only the suite that observes the change — `test:native` for rules and the generator, `test:widgets` for anything
+that drives a control, `test:ext` for the popup, manifest or worker — and the full set once at the end. `npm run audit`
+is for changes to the indicator, the overlays or the toolbar icon, not for every edit.
+
 `test:ext` needs the new headless mode (`channel: 'chromium'`); extension service workers do not register under the old
-one.
+one. `test/primevue-form.html?latency=slow` makes the fixture's remote pickers slow; the default keeps them quick.
 
 ## Where things live
 
@@ -43,3 +48,5 @@ one.
   first, then fix.
 - **Comments say why**, in one to four lines. The history of a fix belongs in git, not in the file.
 - **Keep the persona invisible.** It is machinery for coherence, not a setting a tester should reason about.
+- **Bump the version with every change that lands**, in `manifest.json` and `package.json` together: patch for a fix,
+  minor for a feature. A reloaded extension must say which build it is.

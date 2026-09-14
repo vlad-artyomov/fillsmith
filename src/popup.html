@@ -1,28 +1,28 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <link rel="stylesheet" href="popup.css">
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <header class="head">
+<header class="head">
     <div class="brand">
-      <span class="mark" aria-hidden="true">FF</span>
-      <span class="brand-name">FormForge</span>
+        <span class="mark" aria-hidden="true">FF</span>
+        <span class="brand-name">FormForge</span>
     </div>
     <div class="pill" id="status" title="Checking the on-device model…">
-      <span class="dot"></span><span id="statusText">checking…</span>
+        <span class="dot"></span><span id="statusText">checking…</span>
     </div>
-  </header>
+</header>
 
-  <nav class="tabs" role="tablist">
+<nav class="tabs" role="tablist">
     <button class="tab is-active" id="tabFill" role="tab" aria-selected="true" aria-controls="paneFill">Fill</button>
     <button class="tab" id="tabSettings" role="tab" aria-selected="false" aria-controls="paneSettings">Settings</button>
     <button class="tab" id="tabDebug" role="tab" aria-selected="false" aria-controls="paneDebug">Debug</button>
-  </nav>
+</nav>
 
-  <!-- ------------------------------------------------------------ fill -->
-  <section class="pane" id="paneFill" role="tabpanel" aria-labelledby="tabFill">
+<!-- ------------------------------------------------------------ fill -->
+<section class="pane" id="paneFill" role="tabpanel" aria-labelledby="tabFill">
 
     <!-- One button. The coherent-person machinery behind it is why the email
          matches the name and the postcode matches the city, but none of that
@@ -30,115 +30,126 @@
     <button id="fill" class="btn primary big">Fill this page</button>
 
     <div class="actions">
-      <button id="scan" class="btn">Dry run</button>
-      <button id="clear" class="btn subtle">Clear</button>
-      <select id="locale" aria-label="Language of the generated data"></select>
+        <button id="scan" class="btn">Dry run</button>
+        <button id="clear" class="btn subtle">Clear</button>
+        <select id="locale" aria-label="Language of the generated data"></select>
     </div>
 
     <div id="result" class="result" hidden></div>
-  </section>
+</section>
 
-  <!-- -------------------------------------------------------- settings -->
-  <section class="pane" id="paneSettings" role="tabpanel" aria-labelledby="tabSettings" hidden>
+<!-- -------------------------------------------------------- settings -->
+<section class="pane" id="paneSettings" role="tabpanel" aria-labelledby="tabSettings" hidden>
     <!-- Off the main pane on purpose. Every fill invents fresh data, which is
          what a tester wants; setting a value here repeats the same data
          instead, which is what you want when reproducing a bug rather than
          finding one. -->
     <div class="field">
-      <label for="seed">Repeat data</label>
-      <input id="seed" type="text" spellcheck="false" autocomplete="off"
-             placeholder="empty = new data every fill" aria-label="Repeat the same data">
-      <button id="reseed" class="icon" title="Use a different fixed seed" aria-label="Use a different fixed seed">
-        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-          <path d="M13.6 7.3a5.6 5.6 0 1 1-1.7-3.6" fill="none" stroke="currentColor"
-                stroke-width="1.6" stroke-linecap="round"/>
-          <path d="M13.8 1.9v3.2h-3.2" fill="none" stroke="currentColor"
-                stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
+        <label for="seed">Repeat data</label>
+        <input id="seed" type="text" spellcheck="false" autocomplete="off"
+               placeholder="empty = new data every fill" aria-label="Repeat the same data">
+        <button id="reseed" class="icon" title="Use a different fixed seed" aria-label="Use a different fixed seed">
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <path d="M13.6 7.3a5.6 5.6 0 1 1-1.7-3.6" fill="none" stroke="currentColor"
+                      stroke-width="1.6" stroke-linecap="round"/>
+                <path d="M13.8 1.9v3.2h-3.2" fill="none" stroke="currentColor"
+                      stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
     </div>
 
     <div class="field">
-      <label for="modelTimeout">Model patience</label>
-      <select id="modelTimeout">
-        <option value="0">Automatic — patient once, brisk after</option>
-        <option value="5">5 seconds</option>
-        <option value="15">15 seconds</option>
-        <option value="30">30 seconds</option>
-      </select>
+        <label for="modelTimeout">Model patience</label>
+        <select id="modelTimeout">
+            <option value="0">Automatic — patient once, brisk after</option>
+            <option value="5">5 seconds</option>
+            <option value="15">15 seconds</option>
+            <option value="30">30 seconds</option>
+        </select>
     </div>
 
     <div class="field">
-      <label for="emailDomain">Email domain</label>
-      <input id="emailDomain" type="text" spellcheck="false" autocomplete="off" placeholder="example.com">
+        <label for="emailDomain">Email domain</label>
+        <input id="emailDomain" type="text" spellcheck="false" autocomplete="off" placeholder="example.com">
     </div>
 
     <div class="opts">
-      <label class="opt">
-        <input type="checkbox" id="useAI" checked>
-        <span><b>Use the model for unknown fields</b><i>Rules and real options come first, always.</i></span>
-      </label>
-      <label class="opt">
-        <input type="checkbox" id="overwrite" checked>
-        <span><b>Overwrite fields that already have values</b><i>Off: only empty fields are touched.</i></span>
-      </label>
-      <label class="opt">
-        <input type="checkbox" id="plusTag" checked>
-        <span><b>Tag the email with the seed</b><i>name+ab12@example.com — traces a bug back to a fill.</i></span>
-      </label>
+        <label class="opt">
+            <input type="checkbox" id="useAI" checked>
+            <span><b>Use the model for unknown fields</b><i>Rules and real options come first, always.</i></span>
+        </label>
+        <label class="opt">
+            <input type="checkbox" id="overwrite" checked>
+            <span><b>Overwrite fields that already have values</b><i>Off: only empty fields are touched.</i></span>
+        </label>
+        <label class="opt">
+            <input type="checkbox" id="plusTag" checked>
+            <span><b>Tag the email with the seed</b><i>name+ab12@example.com — traces a bug back to a fill.</i></span>
+        </label>
+        <label class="opt">
+            <input type="checkbox" id="debugTab">
+            <span><b>Show the Debug tab</b><i>Adds a "why?" link under each fill result that opens the decision trail: what every field got, and why.</i></span>
+        </label>
     </div>
 
     <details id="advanced">
-      <summary>Fallback API key <span class="opt-tag">optional</span></summary>
-      <p class="hint">
-        Used only when the on-device model cannot answer. The key is stored in this
-        browser profile and sent only to the provider you pick.
-      </p>
-      <div class="field">
-        <label for="backend">Backend</label>
-        <select id="backend">
-          <option value="ondevice-first">On-device first, key as fallback</option>
-          <option value="ondevice-only">On-device only (no network, ever)</option>
-          <option value="remote-only">Key only</option>
-        </select>
-      </div>
-      <div class="field">
-        <label for="provider">Provider</label>
-        <select id="provider">
-          <option value="">— none —</option>
-          <option value="anthropic">Anthropic</option>
-          <option value="openai">OpenAI</option>
-          <option value="gemini">Google Gemini</option>
-        </select>
-      </div>
-      <div class="field">
-        <label for="apiKey">API key</label>
-        <input id="apiKey" type="password" spellcheck="false" autocomplete="off">
-      </div>
-      <div class="field">
-        <label for="model">Model</label>
-        <input id="model" type="text" spellcheck="false" placeholder="provider default">
-      </div>
+        <summary>Fallback API key <span class="opt-tag">optional</span></summary>
+        <p class="hint">
+            Used only when the on-device model cannot answer. The key is stored in this
+            browser profile and sent only to the provider you pick.
+        </p>
+        <div class="field">
+            <label for="backend">Backend</label>
+            <select id="backend">
+                <option value="ondevice-first">On-device first, key as fallback</option>
+                <option value="ondevice-only">On-device only (no network, ever)</option>
+                <option value="remote-only">Key only</option>
+            </select>
+        </div>
+        <!-- Meaningless with an on-device-only backend, so hidden then. -->
+        <div id="remoteFields">
+        <div class="field">
+            <label for="provider">Provider</label>
+            <select id="provider">
+                <option value="">— none —</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="openai">OpenAI</option>
+                <option value="gemini">Google Gemini</option>
+            </select>
+        </div>
+        <div class="field">
+            <label for="apiKey">API key</label>
+            <input id="apiKey" type="password" spellcheck="false" autocomplete="off">
+        </div>
+        <div class="field">
+            <label for="model">Model</label>
+            <input id="model" type="text" spellcheck="false" placeholder="provider default">
+        </div>
+        <!-- A real round trip through the configured backend, with the API's own error text. -->
+        <button id="checkSetup" class="btn wide" disabled title="Choose a provider and enter a key first">Test this setup</button>
+        <div id="setupCheck"></div>
+        </div>
     </details>
-  </section>
+</section>
 
-  <!-- ----------------------------------------------------------- debug -->
-  <!-- Everything behind the last fill: what each field got and why, what the
-       model was asked, what it said, and where the time went. -->
-  <section class="pane" id="paneDebug" role="tabpanel" aria-labelledby="tabDebug" hidden>
-    <button id="checkModel" class="btn wide">Test the model</button>
+<!-- ----------------------------------------------------------- debug -->
+<!-- Everything behind the last fill: what each field got and why, what the
+     model was asked, what it said, and where the time went. -->
+<section class="pane" id="paneDebug" role="tabpanel" aria-labelledby="tabDebug" hidden>
+    <button id="checkModel" class="btn wide">Test the model setup</button>
     <div id="modelCheck"></div>
     <div id="debugBody"></div>
-  </section>
+</section>
 
-  <footer class="foot">
-    <span><kbd>Alt</kbd><kbd>Shift</kbd><kbd>F</kbd> fill · <kbd>R</kbd> new · <kbd>C</kbd> clear</span>
-  </footer>
+<footer class="foot">
+    <!-- Filled from chrome.commands.getAll(): Chrome binds suggested keys only at install time. -->
+    <span id="shortcuts"></span>
+</footer>
 
-  <!-- The generator is loaded here so the popup can name the data it just
-       wrote in the result panel, without a second copy of that logic. -->
-  <script src="vocab.js"></script>
-  <script src="generator.js"></script>
-  <script src="popup.js"></script>
+<!-- The generator is loaded here so the popup can name the data it just
+     wrote in the result panel, without a second copy of that logic. -->
+<script src="vocab.js"></script>
+<script src="generator.js"></script>
+<script src="popup.js"></script>
 </body>
 </html>
