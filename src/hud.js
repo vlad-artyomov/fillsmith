@@ -38,7 +38,14 @@
 }
 #formforge-hud.ff-in{ opacity:1!important; transform:none!important; }
 #formforge-hud .ff-top{ display:flex!important; align-items:center!important; gap:8px!important; overflow:visible!important; }
-#formforge-hud .ff-title{ font-weight:600!important; flex:1 1 auto!important; min-width:0!important; }
+/* The stage wraps rather than being cut. Every descendant is nowrap-with-ellipsis
+   by default, which is right for a field caption the page supplied and wrong for
+   our own sentence: "Waiting for the model — 14 fields left" lost its half in a
+   272px card and left the reader looking at "Waiting for the model — 1...".
+   Clamped at two lines so an unexpectedly long one still cannot grow the card. */
+#formforge-hud .ff-title{ font-weight:600!important; flex:1 1 auto!important; min-width:0!important;
+  white-space:normal!important; overflow-wrap:anywhere!important;
+  display:-webkit-box!important; -webkit-box-orient:vertical!important; -webkit-line-clamp:2!important; }
 /* Literal colours and background-image, not currentColor and the shorthand: the text is made
    transparent for the gradient to show through, and the shorthand resets background-clip. */
 #formforge-hud.ff-busy .ff-title{

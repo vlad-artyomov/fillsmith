@@ -16,10 +16,18 @@ import {fileURLToPath} from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /* 16 toolbar and favicon · 24 toolbar at 1.5x · 32 Windows, and what the
- * spinner draws · 48 the extensions page · 128 the install dialog and the
- * store. The store's own listing icon is the same mark inside 16px of padding,
- * which is what its guidelines ask for and what the package never uses. */
-const SIZES = [16, 24, 32, 48, 128];
+ * spinner draws · 48 the extensions page · 128 the install dialog.
+ *
+ * 256 and 512 are not asked for by any surface by name. Chrome picks the
+ * nearest size at or above what it is drawing and reduces it, so they are what
+ * keeps the mark sharp on a HiDPI screen and in a zoomed-in extensions page —
+ * the only way to get that, since Chrome cannot decode an SVG icon at all
+ * ("the source image could not be decoded", and the extension falls back to
+ * the generic puzzle piece).
+ *
+ * The store's own listing icon is the same mark inside 16px of padding, which
+ * is what its guidelines ask for and what the package never uses. */
+const SIZES = [16, 24, 32, 48, 128, 256, 512];
 const STORE = {size: 128, pad: 16, name: 'store-icon128.png'};
 
 const worker = readFileSync(join(root, 'src/background.js'), 'utf8');

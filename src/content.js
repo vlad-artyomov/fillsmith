@@ -858,8 +858,14 @@
         // Whatever the model still owed when the pass ended: wait out the rest of its budget, then write.
         const tWait = Date.now();
         if (late.length && pending) {
-            progress('fill', `Waiting for the model — ${late.length} field${late.length === 1 ? '' : 's'} left`,
-                {done: at, total: fields.length});
+            /* The stage on the first line, what it is waiting on underneath, the
+             * way every other stage reads: one sentence carrying both was the
+             * one line a reader needs while nothing on the page is moving, and
+             * it was the line that got cut. */
+            progress('fill', 'Waiting for the model', {
+                done: at, total: fields.length,
+                label: `${late.length} field${late.length === 1 ? '' : 's'} left`
+            });
             await pending;
         }
         phase.model = Date.now() - tWait;

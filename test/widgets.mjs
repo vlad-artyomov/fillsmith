@@ -1422,6 +1422,41 @@ check('progress and result share one box, and it ends on the result',
     announced.seen[announced.seen.length - 1] || '(nothing)');
 check('the progress indicator animates', announced.spinner);
 
+/* While the model is the only thing left, nothing on the page moves, so this is
+   the one line a reader needs — and it was the line that got cut. Everything in
+   the indicator is nowrap-with-ellipsis, which is right for a field name the
+   page supplied and wrong for our own sentence: "Waiting for the model — 15
+   fields left" showed as "Waiting for the model — 1...", which reads as a hang
+   with the reason hidden. The stage takes the first line and what it is waiting
+   on takes the second, the way every other stage already reads. */
+const waiting = await page.evaluate(() => {
+    FormForgeHud.reset();
+    FormForgeHud.progress('fill', 'Waiting for the model',
+        {done: 21, total: 36, label: '15 fields left'});
+    const cut = (el) => el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1;
+    const title = document.querySelector('#formforge-hud .ff-title');
+    const sub = document.querySelector('#formforge-hud .ff-now');
+    // Read before the next stage overwrites the same nodes; reset() reuses the card.
+    const out = {
+        stage: title.textContent, stageCut: cut(title),
+        sub: sub.textContent, subCut: cut(sub),
+        counter: document.querySelector('#formforge-hud .ff-count').textContent
+    };
+    // A title long enough to need the clamp: it may wrap, it may not be cut to a fragment.
+    FormForgeHud.reset();
+    FormForgeHud.progress('fill', 'FormForge does not know how to fill that control', {done: 1, total: 2});
+    const long = document.querySelector('#formforge-hud .ff-title');
+    out.longLines = Math.round(long.getBoundingClientRect().height / parseFloat(getComputedStyle(long).lineHeight));
+    return out;
+});
+check('the stage and what it is waiting on get a line each, neither cut off',
+    !waiting.stageCut && !waiting.subCut
+    && waiting.stage === 'Waiting for the model' && waiting.sub === '15 fields left',
+    `"${waiting.stage}" / "${waiting.sub}" cut=${waiting.stageCut}/${waiting.subCut}`);
+check('and the count beside them survives it', waiting.counter === '21/36', waiting.counter);
+check('a sentence too long for one line wraps instead of losing its end',
+    waiting.longLines === 2, `${waiting.longLines} line(s)`);
+
 /* Fill, clear, fill again without reloading. Clearing the organization locks the
  * role template, so at the second collect it is disabled and skipped; it must
  * still be found by the later passes once the organization is chosen again. */
