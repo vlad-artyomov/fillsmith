@@ -137,7 +137,7 @@ const counts = Object.entries(out)
     .join('\n *   ');
 
 const body = Object.entries(out).map(([loc, groups]) =>
-        `    ${loc}: {\n` + Object.entries(groups).map(([k, list]) => {
+        `        ${loc}: {\n` + Object.entries(groups).map(([k, list]) => {
             // Wrapped by hand rather than by JSON.stringify, which puts it all on one
             // line and makes the diff of a regeneration unreadable.
             const lines = [];
@@ -151,8 +151,8 @@ const body = Object.entries(out).map(([loc, groups]) =>
                 line += item;
             }
             if (line.trim()) lines.push(line.trimEnd().replace(/,$/, ''));
-            return `      ${k}: [\n        ${lines.join('\n        ')}\n      ]`;
-        }).join(',\n') + '\n    }'
+            return `            ${k}: [\n                ${lines.join('\n                ')}\n            ]`;
+        }).join(',\n') + '\n        }'
 ).join(',\n');
 
 const file = `/* FormForge — vocabulary. GENERATED FILE, do not edit by hand.
@@ -169,10 +169,10 @@ const file = `/* FormForge — vocabulary. GENERATED FILE, do not edit by hand.
  * ${counts}
  */
 (function () {
-  'use strict';
-  globalThis.FormForgeVocab = {
+    'use strict';
+    globalThis.FormForgeVocab = {
 ${body}
-  };
+    };
 })();
 `;
 
