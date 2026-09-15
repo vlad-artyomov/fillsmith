@@ -1113,16 +1113,22 @@ if (worker) {
         await chrome.tabs.remove(tab.id);
         self.LanguageModel = real;
         nanoSession = realSession;
-        return {phase: res.phase, aiUsed: res.aiUsed, count: res.count};
+        return {phase: res.phase, aiUsed: res.aiUsed, count: res.count, asked: res.unresolvedCount};
     }, {files: INJECTED, url: fixtureUrl}).catch(e => ({error: e.message})), 60000, 'overlap');
 
     check('the fill starts writing before the model answers',
         overlapped && !overlapped.error && overlapped.phase.model < 1200,
         overlapped && overlapped.error ? overlapped.error
             : `blocked ${overlapped.phase.model}ms of a 2500ms answer`);
+    /* Every answer, not a number of them: this stub answers everything it is
+       asked, so any shortfall is one the fill dropped on the floor. A count was
+       the assertion once, and it only measured how many fields were being asked
+       about — which went down, rightly, when bools and blind lists stopped
+       being asked at all. */
     check('and still uses every answer when it arrives',
-        overlapped && !overlapped.error && overlapped.aiUsed > 10,
-        overlapped && !overlapped.error ? `${overlapped.aiUsed} of ${overlapped.count} from the model` : '');
+        overlapped && !overlapped.error && overlapped.asked > 0 && overlapped.aiUsed === overlapped.asked,
+        overlapped && !overlapped.error
+            ? `${overlapped.aiUsed} used of ${overlapped.asked} asked, ${overlapped.count} filled` : '');
 
     check('the very first fill uses the model rather than falling back',
         firstFill && !firstFill.error && firstFill.aiUsed > 3 && firstFill.via === 'on-device',
@@ -1375,6 +1381,61 @@ if (worker) {
     check('and the indicator is still styled there',
         strict && !strict.error && strict.hud.up && strict.hud.position === 'fixed',
         strict && !strict.error ? JSON.stringify(strict.hud) : '');
+
+    /* What the model is worth asking about. Every bool and every component-library
+     * list used to go into the batch, and the answers were thrown away at the
+     * other end: a bool has two values and the seed picks one, and a list asked
+     * without its options can only be invented — "Standard" came back for a
+     * Yes/No radio group, "Office" for a list holding "Branch", and the filler
+     * discarded both and picked a valid option itself. Seven bools and two blind
+     * lists filled a batch of twelve on one real form. */
+    const asked = await withTimeout(worker.evaluate(async ({files, url}) => {
+        const real = self.LanguageModel, realSession = nanoSession;
+        const prompts = [];
+        self.LanguageModel = {
+            availability: async () => 'available',
+            create: async () => ({
+                clone: async function () {
+                    return {...this};
+                },
+                prompt: async (p) => {
+                    prompts.push(p);
+                    const ids = [...p.matchAll(/^(\d+) /gm)].map(m => +m[1]);
+                    return JSON.stringify({values: ids.map(id => ({id, value: 'Wert ' + id}))});
+                },
+                destroy() {
+                }
+            })
+        };
+        nanoSession = null;
+        nanoPending = null;
+        nanoBuilding = false;
+        const tab = await chrome.tabs.create({url, active: false});
+        await new Promise(r => setTimeout(r, 600));
+        await chrome.scripting.executeScript({target: {tabId: tab.id, allFrames: true}, files});
+        await chrome.tabs.sendMessage(tab.id, {
+            kind: 'fill', settings: {locale: 'de-DE', useAI: true, overwrite: true}
+        });
+        await chrome.tabs.remove(tab.id);
+        self.LanguageModel = real;
+        nanoSession = realSession;
+        // Only the field lines: "<id> <type> \"<label>\" ..."
+        const lines = prompts.join('\n').split('\n').filter(l => /^\d+ \S/.test(l));
+        return {
+            lines,
+            bools: lines.filter(l => /^\d+ (bool|checkbox)\b/.test(l)),
+            listsWithout: lines.filter(l => /^\d+ (inline-choice|radio-group)\b/.test(l) && !/one of:/.test(l)),
+            listsWith: lines.filter(l => /^\d+ (inline-choice|radio-group)\b/.test(l) && /one of:/.test(l))
+        };
+    }, {files: INJECTED, url: fixtureUrl}).catch(e => ({error: e.message})), 60000, 'asked');
+
+    check('the model is not asked to choose between true and false',
+        asked && !asked.error && asked.bools.length === 0,
+        asked && asked.error ? asked.error : asked.bools.join(' | ') || 'none asked');
+    check('and a list it is asked about comes with its options',
+        asked && !asked.error && asked.listsWithout.length === 0 && asked.lines.length > 0,
+        asked && asked.error ? asked.error
+            : `${asked.listsWith.length} with options, ${asked.listsWithout.length} blind`);
 
     /* "No fillable fields found on this page" is an ending, and every ending has
      * to stop the toolbar icon. Only the "filled N fields" path was saying so,

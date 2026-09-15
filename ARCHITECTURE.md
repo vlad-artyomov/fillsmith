@@ -187,6 +187,15 @@ Each of these was a bug on a real form and has a regression check.
   together.
 - "Still loading" and "no model" are different answers and get different advice.
 - Count a model answer where it lands in the form, not where it arrives.
+- Ask it only what it can improve. A bool has two values and the seed picks one; a list asked without its options
+  can only be invented, and the invention is discarded by the filler that then picks a valid option itself. Seven
+  toggles and two blind lists once filled a batch of twelve, and every one of those answers was thrown away. A
+  control whose options are on screen (a radio group, a select button) carries them into the prompt; one whose list
+  lives behind a popup is not asked at all.
+- A field the seed decided is reported as a choice, not as a fallback. "The model had no answer for it" against a
+  toggle nobody asked it about sends the reader looking in the wrong place.
+- A prose field with no declared maximum gets one in the prompt. One richtext answer ran to seven hundred
+  characters, spent the reply's token budget and left the other two fields of its batch unanswered.
 - The model copies the shape of the example it is shown. The response schema constrains the decoder but is never
   spelled out in the prompt (`omitResponseConstraintInput`), so the skeleton on the last line is the only shape the
   model ever sees — and a skeleton holding one `{"id":N}` came back with one value for a batch of twelve, in under

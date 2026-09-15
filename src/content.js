@@ -18,6 +18,8 @@
     const MARK = 'data-formforge-id';
     const SKIP_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image']);
     const CHOICE_KINDS = new Set(['choice', 'multichoice', 'inline-choice', 'autocomplete', 'radio', 'radio-group', 'select']);
+    // Their options are in the page, not behind a popup, so they can be read at collect time.
+    const INLINE_OPTIONS = new Set(['inline-choice', 'radio-group']);
     const CAPTCHA = /\b(captcha|recaptcha|hcaptcha|turnstile|otp|one-?time|2fa|mfa|verification\s*code|sicherheitscode)\b/i;
     // Page chrome that happens to be a form control: filling a language switcher rewrites every label mid-run.
     const APP_CHROME = /locale\s*switcher|switch\s+language|change\s+language|language\s+switcher|sprache\s+(wechseln|ändern)|theme\s+switcher/i;
@@ -207,12 +209,24 @@
             const shown = W.displayedValue(w);
             const filled = shown && !H.PLACEHOLDER.test(shown);
             if (filled && !opts.overwrite && w.kind !== 'bool') continue;
-            fields.push({
+            const f = {
                 kind: 'widget', widget: w, el: w.root, type: w.kind, lib: w.id,
                 label, section: sectionOf(w.root),
                 required: looksRequired(w.root, label),
                 ...limitsOf(w.root.querySelector('input, textarea'))
-            });
+            };
+            /* A control whose choices are already on screen can say what they are.
+             * Only native <select> and radio used to, so every component-library
+             * list reached the model blind — and blind it invents: "Standard" for
+             * a Yes/No radio group, "Office" for a list holding "Branch". The
+             * filler then threw the invention away and picked a valid option
+             * itself, which is the whole answer wasted. */
+            if (INLINE_OPTIONS.has(w.kind)) {
+                const seen = O.asTexts(O.optionsIn(w.root, w.lib))
+                    .filter(o => o.text).slice(0, 40);
+                if (seen.length) f.options = seen.map(o => ({value: o.value, text: o.text.slice(0, 60)}));
+            }
+            fields.push(f);
         }
 
         // 2. Plain native controls.
@@ -758,7 +772,28 @@
             else unresolved.push(f);
         }
         const weakly = fields.filter(f => f.weakRule && plan.has(f.idx));
-        const askAbout = unresolved.concat(weakly);
+        /* Worth asking about: a field the model can actually improve. A bool has
+         * two values and the seed picks one — asking a language model to say
+         * "true" spends a slot in the batch, and asked about seven of them it
+         * answered "true" seven times, where the seed exercises both branches. A
+         * choice is worth a question only when we can show it the list; asked
+         * blind it invents, and the filler discards the invention and picks a
+         * valid option anyway. Both were being asked, and the answers thrown
+         * away, on every fill. */
+        const worthAsking = (f) => {
+            if (f.type === 'bool' || f.type === 'checkbox') return false;
+            if (CHOICE_KINDS.has(f.type)) return !!(f.options && f.options.length);
+            return true;
+        };
+        const askAbout = unresolved.filter(worthAsking).concat(weakly);
+        /* The rest of the unresolved decide for themselves, out of what the
+         * control offers. That is a decision and the report says so: left to fall
+         * through, a toggle the seed set on purpose was listed as a fallback with
+         * "the model had no answer for it", which is both untrue and the wrong
+         * thing to go looking at when a fill comes out wrong. */
+        for (const f of unresolved) {
+            if (!worthAsking(f)) plan.set(f.idx, {value: null, source: 'choice'});
+        }
         const awaiting = new Set(askAbout.map(f => f.idx));
 
         /* The model is asked, not waited for. Every field a rule already answered
