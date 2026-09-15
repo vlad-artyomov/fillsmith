@@ -75,7 +75,6 @@ body {
 .mark {
     width: 20px;
     height: 20px;
-    font-size: 9px;
     display: grid;
     place-items: center;
     border-radius: 6px;

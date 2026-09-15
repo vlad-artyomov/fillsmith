@@ -79,10 +79,13 @@
             option: '.ant-select-item-option'
         },
         {id: 'antd-picker', kind: 'date', root: '.ant-picker', input: 'input'},
+        /* Emotion class names end in the part name, so the anchor is the suffix.
+         * `[class*="-container"]` also matches an application's own
+         * `page-container`, which then swallows every real control inside it. */
         {
             id: 'react-select',
             kind: 'choice',
-            root: '[class*="-container"]:has(> [class*="-control"]), .select__control',
+            root: '[class$="-container"]:has(> [class$="-control"]), .select__container:has(> .select__control)',
             overlay: '[class*="-menu"], .select__menu',
             option: '[class*="-option"], .select__option'
         },
@@ -115,10 +118,14 @@
             option: '.select2-results__option'
         },
         {id: 'tom-select', kind: 'choice', root: '.ts-wrapper', overlay: '.ts-dropdown', option: '.option'},
+        /* `.multiselect` is a name applications give their own wrappers, and a
+         * wrapper that matches first wins the whole control — on one real admin
+         * it hid the PrimeVue MultiSelect inside it, label, options and all.
+         * The library's own parts are the proof that this is the library. */
         {
             id: 'vue-multiselect',
             kind: 'choice',
-            root: '.multiselect',
+            root: '.multiselect:has(> .multiselect__tags, > .multiselect__select, > .multiselect__content-wrapper)',
             overlay: '.multiselect__content-wrapper',
             option: '.multiselect__option'
         },
@@ -141,6 +148,12 @@
 
     function writable(el) {
         if (el.matches(OFF)) return false;
+        /* A rich-text editor the form has switched off says so on the element
+         * that holds the text — Quill sets contenteditable="false" and marks its
+         * container disabled. It is not ours yet: the pass that runs after our
+         * own writes finds it once the form has enabled it. */
+        const host = el.querySelector('[contenteditable]');
+        if (host && host.getAttribute('contenteditable') === 'false') return false;
         const inner = el.querySelector('[role="combobox"], input, textarea');
         return !(inner && inner.matches(OFF));
     }

@@ -234,7 +234,7 @@
         tt.hunt = Date.now() - tHunt;
         const tPick = Date.now();
         const picked = [];
-        const count = multi ? Math.min(options.length, 1 + Math.floor((ctx.rng ? ctx.rng() : Math.random()) * 2)) : 1;
+        const count = multi ? Math.min(options.length, 1 + Math.floor(ctx.rng() * 2)) : 1;
         for (let i = 0; i < count; i++) {
             const fresh = optionsIn(live(), widget.lib).filter(o => !picked.includes(o));
             if (!fresh.length) break;
@@ -273,7 +273,12 @@
         overlay.removeAttribute('data-formforge-overlay');
         const pickedText = picked.length ? textOf(picked[picked.length - 1]) : '';
         await closeOverlay(widget);
-        await sleep(40);
+        /* The label is rendered a tick after the choice: wait for it, or for any
+         * change at all — a picker whose value is a flag has no text to show. */
+        await settle(() => {
+            const v = displayedValue(widget);
+            return (v && !PLACEHOLDER.test(v)) || widget.root.innerHTML !== markBefore;
+        }, 120);
         tt.close = Date.now() - tClose;
 
         const shown = displayedValue(widget);
@@ -308,7 +313,7 @@
         const choice = chooseOption(options, candidates, ctx.rng);
         if (!choice) return null;
         press(choice.el);
-        await sleep(80);
+        await settle(() => isSelected(choice.el) || !!displayedValue(widget), 150);
         return choice.text || displayedValue(widget);
     }
 
@@ -352,7 +357,7 @@
         const required = input && (input.required || input.getAttribute('aria-required') === 'true');
         const want = value === true || value === 'true' ? true
             : value === false || value === 'false' ? false
-                : required ? true : (ctx.rng ? ctx.rng() : Math.random()) > 0.55;
+                : required ? true : ctx.rng() > 0.55;
         const isOn = () => {
             if (input && typeof input.checked === 'boolean') return input.checked;
             const a = widget.root.getAttribute('aria-checked') || widget.root.getAttribute('aria-pressed');
@@ -462,6 +467,37 @@
         return String(fmt).replace(/TT|DD|MM|JJJJ|YYYY/g, k => map[k]);
     }
 
+    /* A control that states its own date format outranks the persona's locale.
+     * A tester filling a German application with English data types 11/24/2026
+     * into a field that wants 24.11.2026, and the component discards it without
+     * a word — the field reads as skipped and nobody can see why. Only an
+     * unambiguous, whole mask counts; anything else leaves the locale in charge. */
+    const DATE_MASK = /^(TT|DD|MM|JJJJ|YYYY)([.\/-](TT|DD|MM|JJJJ|YYYY)){2}$/i;
+    const FORMAT_ATTRS = ['dateformat', 'previewdateformat', 'data-date-format', 'placeholder'];
+
+    function declaredFormat(widget, input) {
+        for (const el of [widget.root, input]) {
+            for (const a of (el ? FORMAT_ATTRS : [])) {
+                const v = (el.getAttribute(a) || '').trim().toUpperCase();
+                if (DATE_MASK.test(v)) return v;
+            }
+        }
+        return null;
+    }
+
+    // The same day laid out to a different mask; null when the two do not line up.
+    function reformatDate(value, from, to) {
+        const keys = String(from).toUpperCase().match(/TT|DD|MM|JJJJ|YYYY/g) || [];
+        const nums = String(value).match(/\d+/g) || [];
+        if (!keys.length || keys.length !== nums.length) return null;
+        const at = {};
+        keys.forEach((k, i) => (at[k] = nums[i]));
+        const day = at.DD || at.TT, month = at.MM, year = at.YYYY || at.JJJJ;
+        if (!day || !month || !year) return null;
+        return String(to).replace(/TT|DD|MM|JJJJ|YYYY/g,
+            k => (k === 'MM' ? month : (k === 'YYYY' || k === 'JJJJ') ? year : day));
+    }
+
     /* A time-only picker is a pair of spinners; its input refuses focus and is
      * written by the component, so the buttons are driven the way a person would. */
     async function fillTimeOnly(widget, hhmm) {
@@ -516,10 +552,14 @@
         const msSpin = Date.now() - tSpin;
         const tClose = Date.now();
 
-        // Click away, never Escape (it cancels the edit); wait for the value, not for the panel's exit.
+        /* Click away, never Escape — it cancels the edit. Waiting for the value
+         * is not the same as waiting for the panel: a form with five opening-hour
+         * rows ended every fill with five time panels stacked over it, because
+         * each one was left for the end-of-fill sweep to find and the sweep gets
+         * three presses for the lot. A control closes its own panel. */
         press(neutralSpot(widget.root));
         await settle(() => String(input && input.value || '') !== '', 450);
-        if (ownPanels(widget).length) press(neutralSpot(widget.root));
+        await dismissPanel(widget, {keepTypedValue: true});
         choiceTimings.push({id: 'timeonly', open: msOpen, hunt: msSpin, pick: 0, close: Date.now() - tClose});
         return (input && input.value) || null;
     }
@@ -534,9 +574,11 @@
 
     async function fillDate(widget, value, ctx) {
         const input = widget.root.querySelector(widget.lib.input || 'input');
-        const fmt = (ctx.persona && ctx.persona.dateFormat) || 'YYYY-MM-DD';
-        // A model can answer in ISO; the control wants the locale's shape.
+        const locale = (ctx.persona && ctx.persona.dateFormat) || 'YYYY-MM-DD';
+        const fmt = declaredFormat(widget, input) || locale;
+        // A model can answer in ISO; the control wants a shape it recognises.
         if (ISO_DATE.test(String(value || ''))) value = localDate(String(value), fmt);
+        else if (fmt !== locale.toUpperCase()) value = reformatDate(value, locale, fmt) || value;
 
         if (CLOCK.test(String(value || '')) && input) {
             const viaPanel = await fillTimeOnly(widget, value);
@@ -551,26 +593,53 @@
             if (typed) return typed;
         }
 
-        // Clicking a day is format-independent, so try the panel first.
+        /* Clicking a cell is format-independent, so try the panel first. It is
+         * found by whose it is, not by what it shows: a picker scoped to years
+         * never renders a day, and waiting for one spent the whole budget before
+         * falling back to typing. */
+        const opened = (p) => safeQuery(p, 'td, [class*="day"], [class*="month"], [class*="year"]').some(visible);
         const before = new Set([...safeQuery(document, PANEL_SELECTOR).filter(visible), ...ownPanels(widget)]);
-        press(input && !input.readOnly ? input : widget.root);
-        const panel = await waitFor(() => {
-            const mine = ownPanels(widget).filter(p => p.querySelector('td, [class*="day"]'));
+        const findPanel = () => {
+            const mine = ownPanels(widget).filter(opened);
             const fresh = mine.find(p => !before.has(p));
             if (fresh) return fresh;
             if (mine.length && !before.size) return mine[0];
             return safeQuery(document, PANEL_SELECTOR)
-                .filter(p => visible(p) && p.querySelector('td, [class*="day"]'))
+                .filter(p => visible(p) && opened(p))
                 .find(p => !before.has(p)) || null;
-        }, 1200);
+        };
+        const openPanel = async () => {
+            press(input && !input.readOnly ? input : widget.root);
+            return await waitFor(findPanel, 700);
+        };
+        let panel = await openPanel();
+        /* A press that lands while another panel is on screen can be spent
+         * closing that one instead — including this picker's own, left over from
+         * the fill before, which toggles shut rather than open. One more press on
+         * a quiet page is the difference between a date and an empty field. A
+         * control still saying it is closed declined the press outright: its
+         * panel is not going to appear, and a second wait buys nothing. */
+        if (!panel && before.size && input && input.getAttribute('aria-expanded') !== 'false') {
+            panel = await openPanel();
+        }
 
         if (panel) {
-            const enabledCells = () => safeQuery(panel, 'td:not([class*="other-month"]) span, td:not(.p-datepicker-other-month), [class*="day-cell"]:not([class*="other-month"]), [class*="cell"]:not([class*="other"])')
-                .filter(c => visible(c) && /^\d{1,2}$/.test(textOf(c)) &&
-                    !(c.getAttribute('aria-disabled') === 'true' || c.classList.contains('p-disabled')));
+            /* One node per day. The selectors match a `td` and the span inside
+             * it, which is the same choice twice — and a library binds its click
+             * to the inner one, so pressing the outer did nothing. A pool of both
+             * left every second date field empty, at random. */
+            const off = (c) => c.getAttribute('aria-disabled') === 'true' || c.classList.contains('p-disabled');
+            const enabledCells = () => {
+                const all = safeQuery(panel, 'td:not([class*="other-month"]) span, td:not(.p-datepicker-other-month), [class*="day-cell"]:not([class*="other-month"]), [class*="cell"]:not([class*="other"])')
+                    .filter(c => visible(c) && /^\d{1,2}$/.test(textOf(c))
+                        && !off(c) && !(c.parentElement && off(c.parentElement)));
+                return all.filter(c => !all.some(other => other !== c && c.contains(other)));
+            };
             let cells = enabledCells();
+            // Only a day grid is worth paging through; a year or month grid has no next month.
+            const dayGrid = cells.length > 0 || !!panel.querySelector('td');
             // A constrained picker can open on a month with nothing selectable: step forward.
-            for (let hop = 0; !cells.length && hop < 3; hop++) {
+            for (let hop = 0; dayGrid && !cells.length && hop < 3; hop++) {
                 const next = panel.querySelector('[class*="next"], [aria-label*="Next"], [aria-label*="Nächst"]');
                 if (!next) break;
                 press(next);
@@ -589,7 +658,7 @@
                     if (exact) coarse = [exact];
                 }
                 if (coarse.length) {
-                    press(coarse[Math.floor((ctx.rng ? ctx.rng() : Math.random()) * coarse.length)] || coarse[0]);
+                    press(coarse[Math.floor(ctx.rng() * coarse.length)] || coarse[0]);
                     const el2 = widget.root.querySelector('input');
                     await settle(() => el2 && el2.value, 300);
                     // A year view may then ask for a month, and a month view for a day.
@@ -597,7 +666,7 @@
                         const next = safeQuery(panel, 'td span, [class*="day-cell"], [class*="month"]')
                             .filter(c => visible(c) && !c.classList.contains('p-disabled'));
                         if (!next.length) break;
-                        press(next[Math.floor((ctx.rng ? ctx.rng() : Math.random()) * next.length)]);
+                        press(next[Math.floor(ctx.rng() * next.length)]);
                         await settle(() => el2 && el2.value, 300);
                     }
                     await dismissPanel(widget, {keepTypedValue: true});
@@ -615,7 +684,7 @@
                     const half = Math.floor(pool.length / 2);
                     pool = role === 'end' ? pool.slice(half) : pool.slice(0, half);
                 }
-                const target = pool[Math.floor((ctx.rng ? ctx.rng() : Math.random()) * pool.length)] || pool[0];
+                const target = pool[Math.floor(ctx.rng() * pool.length)] || pool[0];
                 press(target);
                 const el = widget.root.querySelector('input');
                 await settle(() => el && el.value, 250);
@@ -627,9 +696,10 @@
             await dismissPanel(widget);
         }
 
-        // Fall back to typing, in the locale's format.
+        // Fall back to typing, in whatever shape the control asked for.
         if (input && !input.readOnly) {
-            const fallback = ctx.persona?.futureDateLocal || ctx.persona?.futureDate || '';
+            const persona = ctx.persona || {};
+            const fallback = persona.futureDate ? localDate(persona.futureDate, fmt) : (persona.futureDateLocal || '');
             return await typeDate(widget, input, value || fallback);
         }
         return null;
@@ -664,7 +734,11 @@
 
     // --------------------------------------------------------------- dispatch ----
     async function fill(widget, value, ctx) {
-        ctx = ctx || {};
+        /* Every choice made below comes from the persona's RNG, so a seed
+         * reproduces the whole fill. The default belongs here and nowhere else:
+         * a direct call from a test harness need not carry one, and the
+         * alternative is the same silent fallback written out five times. */
+        ctx = Object.assign({rng: Math.random}, ctx);
         try {
             switch (widget.kind) {
                 case 'choice':

@@ -1,0 +1,30 @@
+# The four suites drive a real Chromium with the unpacked extension loaded, so
+# the browser is the only thing to install. Extension service workers register
+# under the new headless mode alone, which is what `--with-deps chromium` gives.
+name: test
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  suites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+
+      # The generated vocabulary is committed; regenerating it must not change it.
+      - name: vocab is up to date
+        run: |
+          npm run vocab
+          git diff --exit-code src/vocab.js

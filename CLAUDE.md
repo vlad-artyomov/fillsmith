@@ -30,7 +30,9 @@ one. `test/primevue-form.html?latency=slow` makes the fixture's remote pickers s
 - `src/background.js` owns `FILLER_FILES`, the ordered list of injected scripts. Every suite and tool parses it from
   there. Adding a file is one line here and nowhere else.
 - `RULES` in `src/generator.js` decides values from labels. Specific patterns above general ones.
-- `LIBS` in `src/adapters.js` recognises widget libraries. `root` and `kind` are required; the rest are hints.
+- `LIBS` in `src/adapters.js` recognises widget libraries. `root` and `kind` are required; the rest are hints. Only the
+  outermost match survives, so `root` must be something only that library renders — an application's own wrapper class
+  matching it replaces the real control rather than merely missing it.
 - `src/fillers.js` drives controls; `src/overlays.js` finds and closes their popups; `src/content.js` orders the fill
   and repairs it.
 
@@ -42,8 +44,9 @@ one. `test/primevue-form.html?latency=slow` makes the fixture's remote pickers s
   do not make it a seventh.
 - **No `Math.random()` in a fill path.** `rng` is the persona's RNG; the seed must reproduce every choice.
 - **Nothing to the console** from content scripts or the worker. Use `note()` from `dom.js`; it lands in the Debug tab.
-- **Never block on the model.** Every await has a budget. A missing, slow or wedged model changes how good the values
-  are, never whether they arrive.
+- **Never block on the model.** Every await has a budget, and the fill does not wait for it: the request goes out as
+  soon as the form is read and writing starts immediately. A missing, slow or wedged model changes how good the values
+  are, never whether they arrive — or when.
 - **Wait for a condition, do not sleep for a time**, and give every search a budget.
 - **Every bug fix ships with a regression check** in the suite that can observe it. Reproduce the observed symptom
   first, then fix.

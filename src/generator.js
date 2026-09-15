@@ -403,12 +403,17 @@
         [/countrylist|countrycode|phonecountry/i, p => [p.country, p.countryEn, ...(p.countryNames || []), p.countryCode]],
         [/\b(mobile|cell|handy)\b/i, p => p.phone],
         [/\b(phone|tel|telefon|telephone|fax)\b/i, p => p.phone],
+        // A floor, not an answer: the model knows real makes, and the persona's company is the fallback.
+        [/\b(manufacturer|hersteller|brand|marke|vendor|lieferant|supplier)\b/i, p => p.company, WEAK],
         [/\b(company|organisation|organization|employer|firma|unternehmen)\b/i, p => p.company],
         [/\b(job\s*-?title|position|role|berufsbezeichnung|funktion)\b/i, p => p.jobTitle],
         [/\b(department|abteilung|team)\b/i, p => p.department],
         [/\b(colour|color|farbe|lackierung)\b/i, p => p.color],
-        // German compounds glue the tail on: Gerätebezeichnung, Artikelname, Produkttyp.
-        [/\b(ger(ä|ae)te?|artikel|produkt|product|item|equipment|material)(n?(name|bezeichnung|typ))?\b/i, p => p.productName],
+        /* German compounds glue the tail on: Gerätebezeichnung, Artikelname,
+         * Produkttyp. "device" is only ever the compound: on its own it also
+         * claims "Year in which the device was produced". */
+        [/\b(device|ger(ä|ae)te?)\s*-?\s*(name|bezeichnung|model|modell|titel)\b|\bdevicename\b/i, p => p.productName, WEAK],
+        [/\b(artikel|produkt|product|item|equipment|material)(n?(name|bezeichnung|typ))?\b/i, p => p.productName, WEAK],
         [/\b(address\s*-?(line\s*)?2|addr2|street2|adresszusatz|zusatz|apt|suite|unit)\b/i, p => p.street2 || 'Unit 4'],
         [/\b(zip|postal|postcode|plz|post\s*code)\b/i, p => p.postal],
         [/\b(city|town|ort|stadt|locality)\b/i, p => p.city],
@@ -491,6 +496,16 @@
         return String(mask).replace(MASK_CHARS, () => i < ds.length ? ds[i++] : String(Math.floor(rand() * 10)));
     }
 
+    /* Cut prose to a length without cutting a word in half. A phrase that ends
+     * mid-word reads as a bug in the form; one that ends a word early reads as
+     * test data. Only worth it when the whole last word is a small sacrifice. */
+    function shortenTo(text, max) {
+        if (text.length <= max) return text;
+        const cut = text.slice(0, max);
+        const whole = /\s/.test(text.charAt(max)) ? cut : cut.replace(/\s+\S*$/, '');
+        return (whole.length >= max / 2 ? whole : cut).replace(/[\s,;:\-–]+$/, '').trim() || cut.trim();
+    }
+
     /* Bring a value inside what the control says it accepts. A rejected value
      * reverts silently, which is indistinguishable from never having written. */
     function constrain(value, limits) {
@@ -510,7 +525,7 @@
         }
 
         let out = String(value);
-        if (limits.maxLength && out.length > limits.maxLength) out = out.slice(0, limits.maxLength).trim();
+        if (limits.maxLength && out.length > limits.maxLength) out = shortenTo(out, limits.maxLength);
         if (limits.pattern) {
             let re = null;
             try {
@@ -588,6 +603,6 @@
 
     globalThis.FormForgeGen = {
         LOCALES, buildPersona, matchRule, matchRuleDetail, byType, fallbackText, constrain, numberFor,
-        fitMask, looksLikeMask, formatDate, newSeed, mulberry32, seedFromString
+        fitMask, looksLikeMask, formatDate, shortenTo, newSeed, mulberry32, seedFromString
     };
 })();

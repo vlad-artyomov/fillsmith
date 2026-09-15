@@ -355,13 +355,6 @@
         return m ? Number(m[1] || m[2]) : null;
     }
 
-    // Cut at a word boundary when one is near enough; a clipped word reads worse than a shorter phrase.
-    function shortenTo(text, max) {
-        const cut = text.slice(0, max);
-        const whole = /\s/.test(text.charAt(max)) ? cut : cut.replace(/\s+\S*$/, '');
-        return (whole.length >= max / 2 ? whole : cut).replace(/[\s,;:\-–]+$/, '').trim() || cut.trim();
-    }
-
     const FIXED_LENGTH = new Set(['file', 'date', 'number', 'range', 'color', 'time', 'datetime-local', 'month', 'week', 'checkbox', 'radio']);
 
     function currentValue(f) {
@@ -563,6 +556,8 @@
     let modelError = '';
     let modelWarming = false;
     let modelLoading = false;
+    let modelRequestMs = 0;         // how long the model took, which is not how long the fill waited
+    let warmProbe = null;           // "is the session already up?", asked before the form is read
 
     function modelBudget(n, settings) {
         const override = Number(settings && settings.modelTimeout) || 0;
@@ -646,8 +641,13 @@
             const want = modelBudget(unresolved.length, modelSettings);
             const budget = modelCalls === 0 ? want : Math.round(want * LATER_PASS_SHARE);
             modelCalls++;
-            const warm = await sendMessage({kind: 'nano-warm'});
-            const loading = !(warm && warm.ready);
+            /* Whether the session is already up decides how long to wait, and the
+             * answer is wanted here rather than a round trip later: run() sends
+             * this probe before it reads the form, so by now it has usually come
+             * back. A probe that has not is not worth blocking on. */
+            if (!warmProbe) warmProbe = sendMessage({kind: 'nano-warm'});
+            const warm = await Promise.race([warmProbe, H.sleep(120).then(() => null)]);
+            const loading = !(warm && warm.ready) && !modelWarm;
             if (loading) {
                 modelLoading = true;
                 progress('model', 'Warming up the model', null);
@@ -663,6 +663,7 @@
                 }), budget + (loading ? SESSION_ALLOWANCE_MS : 0)))
             ]);
             modelLoading = false;
+            modelRequestMs += Date.now() - tAsk;
             if (res && !res.timedOut) modelWarm = true;
             if (res && res.debug) modelDebug = res.debug;
             if (res && res.via) modelVia = res.via;
@@ -687,9 +688,11 @@
     // ------------------------------------------------------------------ run ----
     async function run(settings) {
         modelSettings = settings || {};
-        // Warm the model session in parallel with reading the form; nothing waits on it.
+        // Bring the model session up while the form is being read; nothing waits on it.
+        warmProbe = null;
         if (modelSettings.useAI !== false) {
-            sendMessage({kind: 'nano-warm'}).then(r => {
+            warmProbe = sendMessage({kind: 'nano-warm'});
+            warmProbe.then(r => {
                 if (r && r.ready) modelWarm = true;
             });
         }
@@ -700,6 +703,7 @@
         modelError = '';
         modelWarming = false;
         modelCalls = 0;
+        modelRequestMs = 0;
         filesAttached.clear();
         Hud.reset();
         H.takeNotes();
@@ -743,45 +747,49 @@
         }
         const weakly = fields.filter(f => f.weakRule && plan.has(f.idx));
         const askAbout = unresolved.concat(weakly);
+        const awaiting = new Set(askAbout.map(f => f.idx));
 
-        let aiUsed = 0;
+        /* The model is asked, not waited for. Every field a rule already answered
+         * is written while the request is in flight, so the form starts filling
+         * at once instead of after the model; a field the model owns is written
+         * the moment its answer lands, and whatever is still outstanding when the
+         * pass ends is collected afterwards — on the same deadline, which runs
+         * from the request, so overlapping shortens the fill and never extends
+         * the patience the setting promises. */
+        let answers = null;
+        let pending = null;
         let modelAsked = false;
-        const tModel = Date.now();
+        let aiUsed = 0;
         if (settings.useAI !== false && askAbout.length) {
-            progress('model', `Asking the model about ${askAbout.length} field${askAbout.length === 1 ? '' : 's'}`);
             modelAsked = true;
-            const aiValues = await askModel(askAbout, persona);
-            for (const f of askAbout) {
-                const v = aiValues[String(f.idx)] ?? aiValues[f.idx];
-                if (v != null && String(v).trim() !== '') {
-                    plan.set(f.idx, {value: v, source: 'ai'});
-                    aiUsed++;
-                }
-            }
-        }
-        phase.model = Date.now() - tModel;
-        if (modelAsked) {
-            ping({
-                stage: 'model',
-                text: `Asking the model about ${askAbout.length} field${askAbout.length === 1 ? '' : 's'}`,
-                detail: modelWarming ? 'still loading — try again in a moment'
-                    : modelTimedOut ? 'out of time'
-                        : aiUsed ? `${aiUsed} answered`
-                            : modelError ? `error — ${modelError.slice(0, 80)}`
-                                : modelVia && modelVia !== 'none' ? 'answered none' : 'no model available'
+            progress('model', `Asking the model about ${askAbout.length} field${askAbout.length === 1 ? '' : 's'}`);
+            pending = askModel(askAbout, persona).then(v => {
+                answers = v || {};
             });
         }
-        for (const f of unresolved) {
-            if (plan.has(f.idx)) continue;
-            f.whyFallback = f.matchedRule ? 'a rule matched but produced nothing'
-                : settings.useAI === false ? 'no rule matched; the model was switched off'
-                    : modelWarming ? 'no rule matched; the model was still loading'
-                        : modelTimedOut ? 'no rule matched; the model ran out of time'
-                            : modelError ? `no rule matched; the model answered with an error: ${modelError.slice(0, 120)}`
-                                : modelAsked ? 'no rule matched; the model had no answer for it'
-                                    : 'no rule matched; the model was not available';
-            plan.set(f.idx, {value: picksItsOwn(f) ? null : G.fallbackText(f, persona), source: 'fallback'});
-        }
+
+        const modelAnswer = (f) => {
+            if (!answers) return null;
+            const v = answers[String(f.idx)] ?? answers[f.idx];
+            return v != null && String(v).trim() !== '' ? v : null;
+        };
+        // Why a field ended up on the filler, in the words of whatever went wrong.
+        const whyFallback = (f) => f.matchedRule ? 'a rule matched but produced nothing'
+            : settings.useAI === false ? 'no rule matched; the model was switched off'
+                : modelWarming ? 'no rule matched; the model was still loading'
+                    : modelTimedOut ? 'no rule matched; the model ran out of time'
+                        : modelError ? `no rule matched; the model answered with an error: ${modelError.slice(0, 120)}`
+                            : modelAsked ? 'no rule matched; the model had no answer for it'
+                                : 'no rule matched; the model was not available';
+        /* What to write, decided as late as possible: the model's answer if it
+         * has arrived, the rule underneath it if not, and the filler otherwise. */
+        const entryFor = (f) => {
+            const fromModel = modelAnswer(f);
+            if (fromModel != null) return {value: fromModel, source: 'ai'};
+            if (plan.has(f.idx)) return plan.get(f.idx);
+            f.whyFallback = whyFallback(f);
+            return {value: picksItsOwn(f) ? null : G.fallbackText(f, persona), source: 'fallback'};
+        };
 
         // First pass: sequential and awaited. Widgets open and close overlays; dependent dropdowns need order.
         progress('fill', 'Filling the form', {done: 0, total: fields.length});
@@ -791,14 +799,13 @@
         const timings = [];
         let widgetCount = 0;
         let at = 0;
-        for (const f of fields) {
-            const entry = plan.get(f.idx);
-            if (!entry) continue;
+
+        async function write(f, entry) {
             progress('fill', 'Filling the form', {done: at++, total: fields.length, label: captionOf(f)});
             // A switch written a moment ago may have folded this field away; that is the form's choice, not a miss.
             if (!document.contains(f.el) || !isVisible(f.el)) {
                 H.note(`${captionOf(f)}: gone from the page before its turn — hidden by an earlier write`);
-                continue;
+                return;
             }
             const t0 = Date.now();
             const written = await applyValue(f, entry.value, persona);
@@ -812,7 +819,7 @@
                     f,
                     plannedValue: entry.value
                 });
-                continue;
+                return;
             }
             // For a choice the plan is null ("pick one"); remember what was committed so a repair restores *that*.
             wrote.push({
@@ -822,6 +829,7 @@
                 value: entry.value == null ? String(written) : entry.value
             });
             if (f.kind === 'widget') widgetCount++;
+            if (entry.source === 'ai') aiUsed++;
             flash(f.el, entry.source !== 'fallback');
             filled.push({
                 label: captionOf(f),
@@ -832,6 +840,35 @@
                         : entry.source === 'ai' ? 'the model answered'
                             : (f.whyFallback || 'nothing else produced a value'),
                 type: f.type, lib: f.lib || ''
+            });
+        }
+
+        const late = [];
+        for (const f of fields) {
+            // Every field is either planned or waiting on the model; nothing is skipped here.
+            if (pending && !answers && awaiting.has(f.idx)) late.push(f);
+            else await write(f, entryFor(f));
+        }
+
+        // Whatever the model still owed when the pass ended: wait out the rest of its budget, then write.
+        const tWait = Date.now();
+        if (late.length && pending) {
+            progress('fill', `Waiting for the model — ${late.length} field${late.length === 1 ? '' : 's'} left`,
+                {done: at, total: fields.length});
+            await pending;
+        }
+        phase.model = Date.now() - tWait;
+        for (const f of late) await write(f, entryFor(f));
+
+        if (modelAsked) {
+            ping({
+                stage: 'model',
+                text: `Asking the model about ${askAbout.length} field${askAbout.length === 1 ? '' : 's'}`,
+                detail: modelWarming ? 'still loading — try again in a moment'
+                    : modelTimedOut ? 'out of time'
+                        : aiUsed ? `${aiUsed} answered`
+                            : modelError ? `error — ${modelError.slice(0, 80)}`
+                                : modelVia && modelVia !== 'none' ? 'answered none' : 'no model available'
             });
         }
 
@@ -873,7 +910,7 @@
                 const max = cur ? askedMaxChars(complaintFor(w.f)) : null;
                 if (!max || cur.length <= max) continue;
                 w.shortened = true;
-                const again = await applyValue(w.f, shortenTo(cur, max), persona);
+                const again = await applyValue(w.f, G.shortenTo(cur, max), persona);
                 if (again == null || String(again) === '') continue;
                 w.value = String(again);
                 repaired++;
@@ -992,7 +1029,7 @@
                     && el.getAttribute('aria-hidden') !== 'true');
             for (let i = 0; i < 3 && stillOpen().length; i++) {
                 H.press(H.neutralSpot(modalScope()));      // inside a dialog, on the dialog; never on the mask
-                await H.sleep(120);
+                await H.settle(() => !stillOpen().length, 150);
             }
             leftOpen = stillOpen().map(e => String(e.className || e.tagName).slice(0, 80));
             for (const cls of leftOpen) H.note(`left on screen: ${cls}`);
@@ -1011,7 +1048,7 @@
                     at: Date.now(), url: location.href.slice(0, 200), title: document.title.slice(0, 80),
                     count: filled.length, widgets: widgetCount, revealed, repaired, aiUsed,
                     modelTimedOut, modelWarming, modelVia, modelError, modelAsked, leftOpen, notes,
-                    unresolvedCount: unresolved.length,
+                    modelRequestMs, unresolvedCount: askAbout.length,
                     persona: {fullName: persona.fullName, seed: persona.seed, locale: persona.locale},
                     filled, skipped, phase, modelDebug
                 }
@@ -1026,9 +1063,26 @@
             done: filled.length, total: fields.length, aiUsed, skipped: skipped.length, ms: phase.total
         });
         return {
-            count: filled.length, persona: stripRng(persona), aiUsed, widgets: widgetCount,
-            revealed, repaired, leftOpen, notes, modelTimedOut, modelWarming, modelVia, modelError, modelDebug,
-            modelAsked, unresolvedCount: askAbout.length, filled, skipped, phase, slowest: timings.slice(0, 12),
+            count: filled.length,
+            persona: stripRng(persona),
+            aiUsed,
+            widgets: widgetCount,
+            revealed,
+            repaired,
+            leftOpen,
+            notes,
+            modelTimedOut,
+            modelWarming,
+            modelVia,
+            modelError,
+            modelDebug,
+            modelAsked,
+            modelRequestMs,
+            unresolvedCount: askAbout.length,
+            filled,
+            skipped,
+            phase,
+            slowest: timings.slice(0, 12),
             choiceTimings: W.takeChoiceTimings()
         };
     }
@@ -1065,7 +1119,17 @@
         // The clicked node may be the inner input of a widget; find the collected field that contains it.
         const fields = collectFields({overwrite: true});
         const f = fields.find(x => x.el === el || x.el.contains(el) || (x.group || []).includes(el));
-        if (!f) return {ok: false, error: 'that control is not one FormForge can fill'};
+        if (!f) {
+            /* A control the form has switched off is a different answer from one
+             * FormForge does not recognise, and only one of them is worth acting
+             * on. Said on the page, because a fill from the keyboard or the
+             * context menu has nowhere else to say it. */
+            const off = el.closest('[contenteditable="false"], [disabled], [aria-disabled="true"], [class*="disabled"]');
+            const why = off ? 'That field is switched off — turn it on first'
+                : 'FormForge does not know how to fill that control';
+            toast(why, {hint: true});
+            return {ok: false, error: why};
+        }
 
         progress('fill', 'Filling one field', {done: 0, total: 1, label: captionOf(f)});
         const local = resolveLocally(f, persona);

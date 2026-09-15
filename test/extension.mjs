@@ -131,9 +131,21 @@ if (worker) {
         '/form.html': readFileSync(join(root, 'test/form.html')),
         '/primevue-form.html': readFileSync(join(root, 'test/primevue-form.html'))
     };
+    /* A form under a policy that forbids everything the indicator needs — a
+     * stylesheet, an animation, a script. Applications behind a login are
+     * exactly where such a header is set. Its own markup carries nothing inline,
+     * so any violation reported on this page is one FormForge caused. */
+    const STRICT_CSP = "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'";
+    pages['/csp.html'] = Buffer.from(
+        '<!doctype html><meta charset="utf-8"><title>Strict policy</title><form>' +
+        '<label for="n">Full name</label><input id="n" name="fullName" required>' +
+        '<label for="e">Email</label><input id="e" name="email" type="email" required>' +
+        '<label for="c">Company</label><input id="c" name="company" required></form>');
     const server = createServer((req, res) => {
-        const body = pages[(req.url || '').split('?')[0]] || pages['/form.html'];
-        res.writeHead(200, {'content-type': 'text/html; charset=utf-8'});
+        const path = (req.url || '').split('?')[0];
+        const body = pages[path] || pages['/form.html'];
+        res.writeHead(200, Object.assign({'content-type': 'text/html; charset=utf-8'},
+            path === '/csp.html' ? {'content-security-policy': STRICT_CSP} : {}));
         res.end(body);
     });
     await new Promise(r => server.listen(0, '127.0.0.1', r));
@@ -1001,6 +1013,54 @@ if (worker) {
         uniformly && !uniformly.error
             ? `${uniformly.phase.total}ms (model ${uniformly.phase.model}ms, late ${uniformly.phase.modelLate || 0}ms)` : '');
 
+    /* The model is asked and not waited for. A fill that stops dead until the
+     * answer arrives costs the answer's latency on top of its own; one that
+     * writes what the rules already know while the request is in flight pays
+     * only for whatever the model still owes when the form runs out of fields.
+     * The stand-in here takes two and a half seconds — longer than a warm Nano,
+     * shorter than this fixture takes to fill — so a fill that blocks shows up
+     * as time in the phase it blocked in. */
+    step('the form fills while the model is still thinking');
+    const overlapped = await withTimeout(worker.evaluate(async ({files, url}) => {
+        const real = self.LanguageModel, realSession = nanoSession;
+        self.LanguageModel = {
+            availability: async () => 'available',
+            create: async () => ({
+                clone: async function () {
+                    return {...this};
+                },
+                prompt: async (p) => {
+                    await new Promise(r => setTimeout(r, 2500));
+                    const ids = [...p.matchAll(/^(\d+) /gm)].map(m => +m[1]);
+                    return JSON.stringify({values: ids.map(id => ({id, value: 'Modellwert ' + id}))});
+                },
+                destroy() {
+                }
+            })
+        };
+        nanoSession = null;
+        nanoPending = null;
+        nanoBuilding = false;
+        const tab = await chrome.tabs.create({url, active: false});
+        await new Promise(r => setTimeout(r, 600));
+        await chrome.scripting.executeScript({target: {tabId: tab.id, allFrames: true}, files});
+        const res = await chrome.tabs.sendMessage(tab.id, {
+            kind: 'fill', settings: {locale: 'de-DE', useAI: true, overwrite: true}
+        });
+        await chrome.tabs.remove(tab.id);
+        self.LanguageModel = real;
+        nanoSession = realSession;
+        return {phase: res.phase, aiUsed: res.aiUsed, count: res.count};
+    }, {files: INJECTED, url: fixtureUrl}).catch(e => ({error: e.message})), 60000, 'overlap');
+
+    check('the fill starts writing before the model answers',
+        overlapped && !overlapped.error && overlapped.phase.model < 1200,
+        overlapped && overlapped.error ? overlapped.error
+            : `blocked ${overlapped.phase.model}ms of a 2500ms answer`);
+    check('and still uses every answer when it arrives',
+        overlapped && !overlapped.error && overlapped.aiUsed > 10,
+        overlapped && !overlapped.error ? `${overlapped.aiUsed} of ${overlapped.count} from the model` : '');
+
     check('the very first fill uses the model rather than falling back',
         firstFill && !firstFill.error && firstFill.aiUsed > 3 && firstFill.via === 'on-device',
         firstFill && firstFill.error ? firstFill.error
@@ -1217,6 +1277,41 @@ if (worker) {
         (quiet && quiet.error) || (quiet && quiet.noisy.slice(0, 2).join(' | ')) || 'silent');
     check('and the extension itself has recorded nothing',
         swErrors.length === 0, swErrors.join(' | '));
+
+    /* A page may forbid inline styles and scripts outright. Chrome exempts what a
+     * content script injects from the page's policy, and the indicator depends on
+     * that: unstyled, it is an unreadable block of text over the form. */
+    step('filling a page with a strict Content-Security-Policy');
+    const strict = await withTimeout((async () => {
+        const tab = await ctx.newPage();
+        const blocked = [];
+        tab.on('console', m => {
+            if (/Content Security Policy/i.test(m.text())) blocked.push(m.text().slice(0, 120));
+        });
+        const cspUrl = `${origin}/csp.html`;
+        await tab.goto(cspUrl, {waitUntil: 'domcontentloaded'});
+        const res = await worker.evaluate(async ({files, url}) => {
+            const [t] = (await chrome.tabs.query({})).filter(x => x.url === url);
+            await chrome.scripting.executeScript({target: {tabId: t.id}, files});
+            return await chrome.tabs.sendMessage(t.id, {
+                kind: 'fill', settings: {locale: 'en-US', useAI: false, overwrite: true}
+            });
+        }, {files: INJECTED, url: cspUrl});
+        const hud = await tab.evaluate(() => {
+            const el = document.getElementById('formforge-hud');
+            const cs = el && getComputedStyle(el);
+            return {up: !!el, position: cs && cs.position, z: cs && cs.zIndex};
+        });
+        await tab.close();
+        return {count: res.count, blocked, hud};
+    })().catch(e => ({error: e.message})), 40000, 'csp');
+
+    check('a strict policy does not stop the fill',
+        strict && !strict.error && strict.count > 0 && strict.blocked.length === 0,
+        (strict && strict.error) || (strict && `${strict.count} fields, ${strict.blocked.length} blocked`));
+    check('and the indicator is still styled there',
+        strict && !strict.error && strict.hud.up && strict.hud.position === 'fixed',
+        strict && !strict.error ? JSON.stringify(strict.hud) : '');
 
     check('no service worker errors', swErrors.length === 0, swErrors.join(' | '));
 

@@ -30,37 +30,39 @@
     // Option texts that mean "nothing chosen" and must never be picked.
     const PLACEHOLDER = /^(|-+|—|–|\.\.\.|select|select\.\.\.|choose|choose\.\.\.|please\s*select|none|n\/?a|bitte\s*w(ä|ae)hlen|ausw(ä|ae)hlen|keine?|auswahl)$/i;
 
-    // The whole pointer sequence: libraries variously open on pointerdown, mousedown or click.
+    // A few embedded engines ship no PointerEvent; the mouse half still works there.
+    const Pointer = globalThis.PointerEvent || MouseEvent;
+
+    /* The whole pointer sequence: libraries variously open on pointerdown,
+     * mousedown or click, and a component listening for the pointer pair
+     * ignores a bare click. */
     function press(el) {
         if (!el) return;
         const r = el.getBoundingClientRect();
-        const o = {
+        const at = {
             bubbles: true, cancelable: true, composed: true, view: window,
             clientX: Math.round(r.left + Math.min(r.width / 2, 40)),
             clientY: Math.round(r.top + r.height / 2),
             button: 0, buttons: 1, isPrimary: true, pointerId: 1, pointerType: 'mouse'
         };
-        try {
-            el.dispatchEvent(new PointerEvent('pointerover', o));
-        } catch (_) {
-        }
-        try {
-            el.dispatchEvent(new PointerEvent('pointerdown', o));
-        } catch (_) {
-        }
-        el.dispatchEvent(new MouseEvent('mousedown', o));
-        if (el.focus) {
+        const up = Object.assign({}, at, {buttons: 0});
+        const send = (Kind, type, init) => {
             try {
-                el.focus({preventScroll: true});
-            } catch (_) {
+                el.dispatchEvent(new Kind(type, init));
+            } catch (_) { /* the engine has no such event; the rest of the sequence stands */
             }
-        }
+        };
+
+        send(Pointer, 'pointerover', at);
+        send(Pointer, 'pointerdown', at);
+        send(MouseEvent, 'mousedown', at);
         try {
-            el.dispatchEvent(new PointerEvent('pointerup', Object.assign({}, o, {buttons: 0})));
-        } catch (_) {
+            el.focus({preventScroll: true});
+        } catch (_) { /* not focusable */
         }
-        el.dispatchEvent(new MouseEvent('mouseup', Object.assign({}, o, {buttons: 0})));
-        el.dispatchEvent(new MouseEvent('click', Object.assign({}, o, {buttons: 0})));
+        send(Pointer, 'pointerup', up);
+        send(MouseEvent, 'mouseup', up);
+        send(MouseEvent, 'click', up);
     }
 
     function key(el, k, code) {
@@ -70,10 +72,23 @@
         target.dispatchEvent(new KeyboardEvent('keyup', o));
     }
 
+    /* A form control is one whose prototype defines a value setter — the setter
+     * React and Vue listen behind. Everything else that takes text is a
+     * contenteditable host, and has no value of its own. */
+    function valueSetter(el) {
+        for (let p = Object.getPrototypeOf(el); p; p = Object.getPrototypeOf(p)) {
+            const d = Object.getOwnPropertyDescriptor(p, 'value');
+            if (d && d.set) return d.set;
+        }
+        return null;
+    }
+
+    // Returns false when there was no value to set; giving a <div> one hides what it is.
     function setNativeValue(el, value) {
-        const desc = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value');
-        if (desc && desc.set) desc.set.call(el, value);
-        else el.value = value;
+        const set = valueSetter(el);
+        if (!set) return false;
+        set.call(el, value);
+        return true;
     }
 
     /* Type into a framework-controlled input. execCommand('insertText') produces
@@ -81,7 +96,14 @@
      * `.value =` is reverted by the next render. Falls back to the native setter.
      *
      * execCommand writes wherever the caret is, not into the element passed in,
-     * so it only runs once focus has actually landed on `el`. */
+     * so it only runs once focus has actually landed on `el`.
+     *
+     * Which branch to take is decided by what the element *is*. Asking whether it
+     * has a `value` property instead was self-poisoning: the control branch used
+     * to invent one on whatever it was handed, so a rich-text editor written to
+     * once while the form had it switched off became a "form control" for the
+     * rest of the page's life — and every later write put its markup in as
+     * visible tags, appended rather than replaced. */
     function typeInto(el, text) {
         if (!el) return null;
         try {
@@ -91,7 +113,10 @@
         const focused = document.activeElement === el;
         const str = String(text);
 
-        if (!('value' in el) && el.isContentEditable) {
+        if (!valueSetter(el)) {
+            // A host the page has switched off takes nothing, and saying otherwise
+            // would report a field as filled that is visibly empty.
+            if (!el.isContentEditable) return null;
             try {
                 const r = document.createRange();
                 r.selectNodeContents(el);

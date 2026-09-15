@@ -355,7 +355,7 @@ const fmtMs = (ms) => (ms < 950 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed
  * would total more than the fill took. */
 const PHASES = [
     ['collect', 'Reading the form', 'p-read'],
-    ['model', 'Asking the model', 'p-model'],
+    ['model', 'Waiting for the model', 'p-model'],
     ['firstPass', 'Filling', 'p-fill'],
     ['secondPass', 'Repairing and revealing', 'p-repair']
 ];
@@ -403,6 +403,13 @@ function drawDebug(box, d) {
                         : `Asked for ${d.unresolvedCount} field(s), answered none`;
     let modelBody = `<div class="dbg-kv"><div>${esc(head)}</div>`;
     if (m && m.sessionMs != null) modelBody += `<div class="dim">session ready in ${m.sessionMs}ms</div>`;
+    /* The two numbers people confuse. The model is asked before the filling
+       starts and answers in the middle of it, so what it cost the fill is the
+       part still outstanding when the form ran out of fields — usually none. */
+    if (d.modelRequestMs) {
+        modelBody += `<div class="dim">answered in ${fmtMs(d.modelRequestMs)}, of which the fill waited ` +
+            `${fmtMs((d.phase || {}).model || 0)} — the rest of the form was being filled meanwhile</div>`;
+    }
     if (m && m.note) modelBody += `<div class="dim">${esc(m.note)}</div>`;
     modelBody += '</div>';
     if (m && m.context) {
@@ -493,7 +500,13 @@ chrome.runtime.onMessage.addListener((msg) => {
     const prev = stream[stream.length - 1];
     if (prev && prev.stage === s.stage) stream[stream.length - 1] = s;
     else if (!prev || STAGES.indexOf(s.stage) >= STAGES.indexOf(prev.stage)) stream.push(s);
-    else return;                      // a stale message from a finished run
+    else {
+        /* A stage already passed can still report how it turned out: the model is
+         * asked before the filling starts and answers in the middle of it. */
+        const earlier = stream.findIndex(x => x.stage === s.stage);
+        if (earlier < 0) return;      // a stale message from a finished run
+        stream[earlier] = s;
+    }
     renderStream();
     if ($('fill').disabled) $('fill').textContent = s.text;
 });
@@ -668,7 +681,6 @@ $('clear').addEventListener('click', async () => report(await dispatch('clear'))
 $('scan').addEventListener('click', () => withBusy($('scan'), 'Scanning…', async () => {
     const res = await dispatch('scan');
     if (!res || !res.ok) return message('Could not reach this page.');
-    console.log('[FormForge] scan', res);
 
     const fields = res.fields || [];
     const widgets = fields.filter(f => f.kind === 'widget');

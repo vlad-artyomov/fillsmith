@@ -53,6 +53,113 @@ const widgetKinds = scan.filter(f => f.kind === 'widget').map(f => f.lib);
 // remote-backed Organization/Location one.
 check('detects the single selects', widgetKinds.filter(k => k === 'primevue-select').length === 6, widgetKinds.filter(k => k === 'primevue-select').length + '');
 check('detects the multiselect', widgetKinds.includes('primevue-multiselect'));
+
+/* An application wraps a library control in a div of its own and gives it a
+ * generic class. `.multiselect` is vue-multiselect's root, so the wrapper
+ * matched first and — outermost wins — the real PrimeVue MultiSelect inside it
+ * was never seen: no label selector, no options selector, and a read-back that
+ * returned the caption the wrapper holds. Found on a live admin, where every
+ * multi-select on the page was driven blind. */
+const impostor = await page.evaluate(() => {
+    const host = document.createElement('div');
+    host.innerHTML =
+        '<div class="multiselect"><div class="multiselect__label-row">' +
+        '<label for="ff-wrapped">Wrapped categories</label></div>' +
+        '<div class="p-multiselect p-component" data-pc-name="multiselect">' +
+        '<span class="p-multiselect-label p-multiselect-label-empty">Bitte wählen</span>' +
+        '<input id="ff-wrapped" class="p-hidden-accessible" role="combobox" ' +
+        'aria-haspopup="listbox" aria-expanded="false" readonly></div></div>';
+    document.body.appendChild(host);
+    try {
+        const W = globalThis.FormForgeWidgets;
+        const A = globalThis.FormForgeAdapters;
+        const mine = W.detect(document).filter(w => host.contains(w.root));
+        return {
+            count: mine.length,
+            id: mine[0] && mine[0].id,
+            kind: mine[0] && mine[0].kind,
+            shown: mine[0] ? A.displayedValue(mine[0]) : null
+        };
+    } finally {
+        host.remove();
+    }
+});
+check('a wrapper class does not impersonate the library inside it',
+    impostor.count === 1 && impostor.id === 'primevue-multiselect' && impostor.kind === 'multichoice',
+    `${impostor.count} widget(s), ${impostor.id} ${impostor.kind}`);
+check('and the wrapped control reads back as empty, not as its own caption',
+    impostor.shown === '', JSON.stringify(impostor.shown));
+
+/* A panel keeps its options, its size and its full opacity for the whole leave
+ * transition. The class that says it is leaving sits on the overlay wrapper,
+ * while `aria-controls` names the list inside it — so a question asked only of
+ * the list answered "still open" for every dropdown that had just been used,
+ * and each one was then chased with Escapes and clicks for 0.4s it did not
+ * need. Half the time a form spent in its dropdowns was this. */
+const fading = await page.evaluate(() => {
+    const host = document.createElement('div');
+    host.innerHTML =
+        '<div class="p-select-overlay p-anchored-overlay-leave-active p-anchored-overlay-leave-to">' +
+        '<ul id="ff-fading-list" role="listbox">' +
+        '<li role="option">Alpha</li><li role="option">Beta</li></ul></div>';
+    document.body.appendChild(host);
+    try {
+        const O = globalThis.FormForgeOverlays;
+        const list = document.getElementById('ff-fading-list');
+        return {
+            options: O.optionsIn(list, null).length,
+            list: O.liveOverlay(list),
+            wrapper: O.liveOverlay(host.firstElementChild)
+        };
+    } finally {
+        host.remove();
+    }
+});
+check('a list inside a panel on its way out is not an open list',
+    fading.options === 2 && fading.list === false && fading.wrapper === false,
+    JSON.stringify(fading));
+
+/* A rich-text editor the form has switched off — Quill marks it
+ * contenteditable="false" until the switch above it is on. Writing to it
+ * anyway used to poison the element: the branch for form controls invented a
+ * `value` on the <div>, after which every later write took that branch and put
+ * the markup in as visible tags, appended rather than replacing. Reported from
+ * a real location form, where one press of the focused-field shortcut on a
+ * disabled courier-service editor left two copies of the raw HTML on screen. */
+const switchedOff = await page.evaluate(() => {
+    const D = globalThis.FormForgeDom, W = globalThis.FormForgeWidgets;
+    const markup = '<p><strong>Note:</strong> one</p><ul><li>two</li></ul>';
+    const host = document.createElement('div');
+    host.innerHTML =
+        '<div class="p-editor" data-pc-name="editor" label="Courier service">' +
+        '<div class="p-editor-toolbar ql-toolbar"></div>' +
+        '<div class="p-editor-content ql-container ql-disabled">' +
+        '<div class="ql-editor" contenteditable="false"></div></div></div>';
+    document.body.appendChild(host);
+    try {
+        const editor = host.querySelector('.ql-editor');
+        const offered = W.detect(document).filter(w => host.contains(w.root)).length;
+        const refused = D.typeInto(editor, markup);
+        const poisoned = 'value' in editor;
+        // The form switches it on, exactly as the courier-service checkbox does.
+        editor.setAttribute('contenteditable', 'true');
+        host.querySelector('.ql-container').classList.remove('ql-disabled');
+        const enabledNow = W.detect(document).filter(w => host.contains(w.root)).length;
+        D.typeInto(editor, markup);
+        return {offered, refused, poisoned, enabledNow, html: editor.innerHTML};
+    } finally {
+        host.remove();
+    }
+});
+check('an editor the form has switched off is not offered as a field',
+    switchedOff.offered === 0 && switchedOff.enabledNow === 1,
+    `${switchedOff.offered} while off, ${switchedOff.enabledNow} once on`);
+check('and writing to one reports nothing rather than claiming success',
+    switchedOff.refused === null && switchedOff.poisoned === false,
+    `returned ${JSON.stringify(switchedOff.refused)}, value invented: ${switchedOff.poisoned}`);
+check('so once the form enables it the markup goes in as markup',
+    /<strong>/.test(switchedOff.html) && !/&lt;/.test(switchedOff.html),
+    switchedOff.html.slice(0, 70));
 check('detects the autocomplete', widgetKinds.includes('primevue-autocomplete'));
 check('detects the datepicker', widgetKinds.includes('primevue-datepicker'));
 check('detects the inputnumber', widgetKinds.includes('primevue-inputnumber'));
@@ -95,10 +202,10 @@ check('the page heading is picked up either way',
 /* A view is not a field: an inline calendar has no input and mirrors a value
  * another control owns. Counted as a field it is filled, fruitlessly, and can
  * disturb the control it mirrors. */
-/* Two real date controls on the fixture (a date and a time-only), and one
- * inline calendar that must not be counted as a third. */
+/* Four real date controls on the fixture (a date, a year, a time-only and one
+ * that states its own format), and one inline calendar that is none of them. */
 check('ignores an inline calendar',
-    scan.filter(f => f.type === 'date').length === 2
+    scan.filter(f => f.type === 'date').length === 4
     && !scan.some(f => /kalenderansicht/i.test(f.label || '')),
     scan.filter(f => f.type === 'date').map(f => f.label.slice(0, 22)).join(' | '));
 check('detects the rich-text editor',
@@ -156,6 +263,8 @@ check('autocomplete resolved to a suggestion, not raw text',
     ['Anna Becker', 'Petra Schmidt', 'Thomas Fischer', 'Lukas Weber', 'Marie Wagner'].includes(snap.ansprechpartner),
     String(snap.ansprechpartner));
 check('datepicker committed a dd.mm.yyyy date', /^\d{2}\.\d{2}\.\d{4}$/.test(snap.datum || ''), String(snap.datum));
+// A picker whose panel holds a decade and no day still gets a year out of it.
+check('year-only picker committed a year', /^\d{4}$/.test(snap.baujahr || ''), String(snap.baujahr));
 check('controlled number input accepted the value via real events', /^\d+$/.test(snap.kapazitaet), snap.kapazitaet);
 check('input events actually reached the page', snap.acceptedInputEvents > 0, String(snap.acceptedInputEvents));
 check('required checkbox was ticked', snap.agb === true);
@@ -418,6 +527,82 @@ check('and is not mistaken for a panel somebody left open',
 check('the date field beside it still fills',
     !!permanent.datum && !permanent.skipped.includes('Eröffnungsdatum'),
     `Eröffnungsdatum = ${JSON.stringify(permanent.datum)}`);
+
+/* A panel is this control's or it is not; what it happens to show is a second
+ * question. Deciding it had opened only once a day cell appeared meant a
+ * year-scoped picker never counted as open at all: the search ran to its
+ * 1.2-second budget, then the month-paging loop ran to its own, and the value
+ * arrived from typing at the end. Measured at 2.4 seconds a field on a real
+ * device-management form, against 0.2 once the question was asked properly. */
+const yearPicker = await page.evaluate(async () => {
+    const W = globalThis.FormForgeWidgets;
+    const G = globalThis.FormForgeGen;
+    const persona = G.buildPersona('YEAR01', 'de-DE', {});
+    const widget = W.detect(document).find(w => w.root.id === 'baujahr');
+    const input = document.querySelector('#baujahr input');
+    input.value = '';
+    const t0 = Date.now();
+    const written = await W.fill(widget, String(new Date().getFullYear() - 3),
+        {rng: persona._rng, persona, label: 'Baujahr'});
+    return {ms: Date.now() - t0, written, value: input.value};
+});
+check('a year-scoped picker is driven through its own panel',
+    /^\d{4}$/.test(String(yearPicker.value || '')), JSON.stringify(yearPicker.written));
+check('and does not spend a day-cell budget looking for days',
+    yearPicker.ms < 1200, `${yearPicker.ms}ms`);
+
+/* The day grid matches twice over: once as the <td> and once as the day inside
+ * it. Pressing the outer one does nothing — PrimeVue binds the click to the day
+ * — so a pool holding both filled roughly half the date fields and left the rest
+ * empty, differently on every seed. Eight of them, because one proves nothing. */
+const everySeed = await page.evaluate(async () => {
+    const W = globalThis.FormForgeWidgets, G = globalThis.FormForgeGen;
+    const widget = W.detect(document).find(w => w.root.id === 'datum');
+    const input = document.querySelector('#datum input');
+    const missed = [];
+    for (const seed of ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8']) {
+        const persona = G.buildPersona(seed, 'de-DE', {});
+        input.value = '';
+        const written = await W.fill(widget, persona.futureDateLocal, {rng: persona._rng, persona});
+        if (!/^\d{2}\.\d{2}\.\d{4}$/.test(String(written || ''))) missed.push(`${seed}:${written}`);
+    }
+    return missed;
+});
+check('a date picker commits on every seed, not on half of them',
+    everySeed.length === 0, everySeed.join(', ') || '8 of 8');
+
+/* A control closes its own panel rather than leaving it for the end-of-fill
+ * sweep, which gets three presses for whatever it finds: a real location form
+ * with five opening-hour rows ended every fill under a stack of them. This
+ * fixture has one row and closes on the first press either way, so the check
+ * guards the invariant rather than reproducing that form. */
+const timePanel = await page.evaluate(async () => {
+    const W = globalThis.FormForgeWidgets, G = globalThis.FormForgeGen, D = globalThis.FormForgeDom;
+    const persona = G.buildPersona('T1', 'de-DE', {});
+    const widget = W.detect(document).find(w => w.root.id === 'oeffnet');
+    const written = await W.fill(widget, '14:20', {rng: persona._rng, persona});
+    const up = [...document.querySelectorAll('.p-datepicker-panel')]
+        .filter(p => D.visible(p) && !p.closest('.p-datepicker-inline') && !p.dataset.leaving);
+    return {written, up: up.length};
+});
+check('a time picker closes its own panel rather than leaving it to the sweep',
+    timePanel.up === 0 && /^\d{1,2}:\d{2}$/.test(String(timePanel.written || '')),
+    `${timePanel.written}, ${timePanel.up} panel(s) still up`);
+
+/* A control that states its own date format outranks the language the data is
+ * in. A tester filling a German application with English data handed the
+ * booking form's rental date 11/24/2026 — a shape it discards without a word,
+ * leaving a required field empty and the report saying only "wrote nothing". */
+const declaredFmt = await page.evaluate(async () => {
+    const W = globalThis.FormForgeWidgets, G = globalThis.FormForgeGen;
+    const persona = G.buildPersona('FMT1', 'en-US', {});
+    const widget = W.detect(document).find(w => w.root.id === 'vertrag');
+    const written = await W.fill(widget, persona.futureDateLocal, {rng: persona._rng, persona});
+    return {asked: persona.futureDateLocal, written, value: document.getElementById('vertragsdatum').value};
+});
+check('a date goes in the shape the control asks for, not the persona\'s',
+    /^\d{2}\.\d{2}\.\d{4}$/.test(String(declaredFmt.value || '')),
+    `asked ${declaredFmt.asked}, wrote ${JSON.stringify(declaredFmt.value)}`);
 
 /* --------------------------------------------------- a list from a server --
  * The account form's Organization/Location picker: it lists nothing until it

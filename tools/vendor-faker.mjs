@@ -114,10 +114,17 @@ const PLAN = {
     }
 };
 
+/* A committed generated file that changes on every regeneration produces a
+ * five-hundred-line diff that says nothing. Seeded, `npm run vocab` is a
+ * no-op until the plan or the faker version actually changes — which is the
+ * only time anyone wants to read that diff. */
+const SEED = 20260101;
+
 const out = {};
 for (const [loc, spec] of Object.entries(PLAN)) {
     out[loc] = {};
     for (const [key, [fn, want]] of Object.entries(spec.take)) {
+        spec.faker.seed(SEED);
         out[loc][key] = draw(() => fn(spec.faker), want);
     }
     for (const [key, list] of Object.entries(spec.hand)) {

@@ -21,6 +21,9 @@ const FILLER_FILES = [
 ];
 
 const newSeed = () => Math.random().toString(36).slice(2, 8).toUpperCase();
+// Storage that may be unavailable and callbacks nobody listens to share one no-op.
+const ignore = () => {
+};
 
 // ------------------------------------------------------------ worker health ----
 /* A popup that hears "message port closed" cannot tell a crashed worker from a
@@ -34,14 +37,12 @@ const workerErrors = [];
 function noteWorkerError(text) {
     workerErrors.push({at: Date.now(), text: String(text).slice(0, 300)});
     while (workerErrors.length > 5) workerErrors.shift();
-    scratch.set({workerErrors}).catch(() => {
-    });
+    scratch.set({workerErrors}).catch(ignore);
 }
 
 self.addEventListener('error', e => noteWorkerError(e.message || e.error || 'error'));
 self.addEventListener('unhandledrejection', e => noteWorkerError((e.reason && e.reason.message) || e.reason || 'rejection'));
-scratch.set({workerStartedAt: startedAt}).catch(() => {
-});
+scratch.set({workerStartedAt: startedAt}).catch(ignore);
 
 /* Chrome ends a worker it has seen idle for 30s, and waiting on the model is
  * not activity it counts. A cheap extension API call every 20s keeps the worker
@@ -69,6 +70,11 @@ const SYSTEM_PROMPT = [
     'Never output: test, asdf, lorem ipsum, string, N/A, example, or leading/trailing spaces.'
 ].join('\n');
 
+/* The languages a fill can ask for and answer in. Declaring them is what makes
+ * Chrome load the right weights: undeclared, a German form gets English values
+ * back, or a refusal. Keep in step with LOCALES in generator.js. */
+const LANGUAGES = ['en', 'de'];
+
 const RESPONSE_SCHEMA = {
     type: 'object',
     properties: {
@@ -83,6 +89,11 @@ const RESPONSE_SCHEMA = {
     },
     required: ['values']
 };
+
+/* The schema constrains the decoder without being spelled out to the model:
+ * on a small on-device model the prompt length is most of the latency, and the
+ * shape is already stated in the last line of every prompt. */
+const CONSTRAIN = {responseConstraint: RESPONSE_SCHEMA, omitResponseConstraintInput: true};
 
 const BATCH = 12;
 
@@ -169,6 +180,10 @@ async function nanoStatus() {
     const LM = nanoGlobal();
     if (!LM) return 'unsupported';
     try {
+        /* Asked without the language hints on purpose: a build with no German
+         * weights answers "unavailable" for them and would read here as "no
+         * model at all", when an English session is there and works. Which
+         * languages are actually on hand is create()'s problem. */
         if (typeof LM.availability === 'function') return await LM.availability();
         if (typeof LM.capabilities === 'function') {
             const c = await LM.capabilities();
@@ -187,13 +202,18 @@ let sessionBuiltAt = 0;
 let downloading = false;
 
 async function buildSession(LM, withMonitor) {
-    const opts = {initialPrompts: [{role: 'system', content: SYSTEM_PROMPT}]};
+    const opts = {
+        initialPrompts: [{role: 'system', content: SYSTEM_PROMPT}],
+        expectedInputs: [{type: 'text', languages: LANGUAGES}],
+        expectedOutputs: [{type: 'text', languages: LANGUAGES}]
+    };
     if (withMonitor) {
         opts.monitor = (m) => m.addEventListener('downloadprogress', e => {
             chrome.storage.local.set({nanoDownloadProgress: Math.round((e.loaded || 0) * 100)});
         });
     }
-    const session = await LM.create(opts);
+    // An older build of the API rejects the modality hints rather than ignoring them.
+    const session = await LM.create(opts).catch(() => LM.create({initialPrompts: opts.initialPrompts}));
     sessionBuiltAt = Date.now();
     return session;
 }
@@ -234,8 +254,7 @@ async function nanoSessionGet({allowDownload = false} = {}) {
 
 // The first create() after a browser start brings the model into memory; begin it before anyone presses Fill.
 function warmOnStart() {
-    nanoSessionGet({allowDownload: false}).catch(() => {
-    });
+    nanoSessionGet({allowDownload: false}).catch(ignore);
 }
 
 chrome.runtime.onInstalled.addListener(warmOnStart);
@@ -267,8 +286,7 @@ async function generateOnDevice(persona, pageTitle, fields, context, examples, o
             wanted,
             new Promise(r => setTimeout(() => r(null), Math.max(1200, sessionWaitMs || PROMPT_HEADROOM_MS)))
         ]);
-        wanted.catch(() => {
-        });
+        wanted.catch(ignore);
         if (session && tabId != null) {
             chrome.tabs.sendMessage(tabId, {
                     kind: 'model-stage', stage: 'asking',
@@ -300,7 +318,7 @@ async function askBatch(session, persona, pageTitle, group, context, examples) {
     let text = '';
     try {
         try {
-            text = await turn.prompt(prompt, {responseConstraint: RESPONSE_SCHEMA});
+            text = await turn.prompt(prompt, CONSTRAIN);
         } catch (_) {
             text = await turn.prompt(prompt);
         }
@@ -466,8 +484,7 @@ async function generate(payload, tabId) {
 /* "Is the model ready?" answered with a real round trip through the same
  * prompt shape and parser a fill uses. The verdict is whether a usable value
  * came back, never whether it matched a magic word. */
-async function nanoCheck(onStage = () => {
-}) {
+async function nanoCheck(onStage = ignore) {
     const out = {at: Date.now()};
     try {
         out.availability = await nanoStatus();
@@ -484,8 +501,9 @@ async function nanoCheck(onStage = () => {
             out.note = 'no session could be built';
             return out;
         }
-        out.inputUsage = session.inputUsage;
-        out.inputQuota = session.inputQuota;
+        // Renamed with the API; the older pair is still what older Chromes report.
+        out.inputUsage = session.contextUsage ?? session.inputUsage;
+        out.inputQuota = session.contextWindow ?? session.inputQuota;
 
         const probeField = [{id: 0, type: 'text', label: 'City', required: true, maxLength: 40}];
         const probePrompt = buildUserPrompt(
@@ -494,7 +512,7 @@ async function nanoCheck(onStage = () => {
         const {s: turn, temporary} = await statelessSession(session);
         onStage('waiting for the on-device reply');
         const t0 = Date.now();
-        const reply = await turn.prompt(probePrompt, {responseConstraint: RESPONSE_SCHEMA});
+        const reply = await turn.prompt(probePrompt, CONSTRAIN);
         out.replyMs = Date.now() - t0;
         out.reply = String(reply || '').slice(0, 200);
         if (temporary) {
@@ -755,8 +773,7 @@ const PROBE_PERSONA = {fullName: 'Test Person', company: 'Test GmbH', city: 'Kö
 
 async function setupCheck() {
     // Each stage is recorded before it starts, so a worker that dies mid-check leaves its last step behind.
-    const stage = (name) => scratch.set({checkStage: {stage: name, at: Date.now()}}).catch(() => {
-    });
+    const stage = (name) => scratch.set({checkStage: {stage: name, at: Date.now()}}).catch(ignore);
     await stage('reading the settings');
     const cfg = await chrome.storage.local.get(['provider', 'apiKey', 'model', 'backend']);
     const backend = cfg.backend || 'ondevice-first';
@@ -793,8 +810,7 @@ async function setupCheck() {
     }
     // The result is stored as well as sent: a lost port must not lose a finished check.
     out.at = Date.now();
-    await scratch.set({checkResult: out, checkStage: {stage: 'done', at: out.at}}).catch(() => {
-    });
+    await scratch.set({checkResult: out, checkStage: {stage: 'done', at: out.at}}).catch(ignore);
     return out;
 }
 
@@ -826,8 +842,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
     // Answer whether a session already exists, and start building one if not.
     if (msg.kind === 'nano-warm') {
         const ready = !!nanoSession;
-        nanoSessionGet({allowDownload: false}).catch(() => {
-        });
+        nanoSessionGet({allowDownload: false}).catch(ignore);
         respond({ok: true, ready});
         return false;
     }

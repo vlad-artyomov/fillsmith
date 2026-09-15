@@ -10,16 +10,7 @@
     'use strict';
 
     const {
-        note,
-        sleep,
-        visible,
-        textOf,
-        norm,
-        press,
-        key,
-        settle,
-        waitFor,
-        safeQuery,
+        note, sleep, visible, textOf, norm, press, key, settle, safeQuery,
         PLACEHOLDER, dialogOf, neutralSpot
     } = globalThis.FormForgeDom;
 
@@ -83,12 +74,23 @@
         return out.filter(liveOverlay);
     }
 
+    /* "Open" means open *now*. The class that says a panel is leaving sits on the
+     * overlay wrapper, while `aria-controls` names the list inside it — and the
+     * list has no leave class, full opacity of its own, and every option still in
+     * it. Asked only of the element itself, a committed dropdown therefore counted
+     * as open for its whole fade: four hundred milliseconds of Escapes and clicks
+     * at a control that had already closed. */
+    function leaving(el) {
+        for (let n = el; n && n !== document.body; n = n.parentElement) {
+            if (n.getAttribute('aria-hidden') === 'true') return true;
+            const cls = typeof n.className === 'string' ? n.className : (n.getAttribute('class') || '');
+            if (LEAVING.test(cls)) return true;
+        }
+        return false;
+    }
+
     function liveOverlay(el) {
-        if (!el) return false;
-        if (el.getAttribute('aria-hidden') === 'true') return false;
-        const cls = typeof el.className === 'string' ? el.className : (el.getAttribute('class') || '');
-        if (LEAVING.test(cls)) return false;
-        return visible(el);
+        return !!el && !leaving(el) && visible(el);
     }
 
     function optionsIn(overlay, lib) {
@@ -165,16 +167,39 @@
             overlay = await tryFor(1200);
         }
         // Marked so the end-of-fill sweep can close what we opened, and only that.
-        if (overlay) try {
-            overlay.setAttribute('data-formforge-opened', '');
-        } catch (_) {
+        if (overlay) {
+            try {
+                overlay.setAttribute('data-formforge-opened', '');
+            } catch (_) { /* a node the page has already taken back */
+            }
+            widget.opened = overlay;
         }
         return overlay;
     }
 
+    /* Closed — and the mark comes off with it. `data-formforge-opened` means
+     * "ours, and possibly still up"; left on a panel that has gone it lies to
+     * both of its readers: the sweep at the end of a fill, and the scan that
+     * treats a popup's own furniture as something other than a field. */
+    function markClosed(widget) {
+        if (!widget.opened) return true;
+        try {
+            widget.opened.removeAttribute('data-formforge-opened');
+        } catch (_) { /* already gone from the page */
+        }
+        widget.opened = null;
+        return true;
+    }
+
     /* aria-expanded="true" is proof the control is open; "false" is not proof it
      * has closed — a component tidies its attribute on one tick and its overlay
-     * on another, so the DOM decides. */
+     * on another, so the DOM decides.
+     *
+     * Most components close themselves the moment a choice commits, so the first
+     * thing asked is whether anything needs doing at all. When something does,
+     * the click comes before the key: the value is already committed, clicking
+     * away is what a person does, and a component that listens for the outside
+     * click and nothing else used to pay a whole key-press budget first. */
     async function closeOverlay(widget) {
         const el = widget.root.querySelector('input, [tabindex]') || widget.root;
         const stillOpen = () => {
@@ -185,17 +210,20 @@
         };
         const inDialog = !!dialogOf(widget.root);
         for (let i = 0; i < 3; i++) {
-            if (!stillOpen()) return true;
+            if (!stillOpen()) return markClosed(widget);
+            press(neutralSpot(widget.root));                 // inside a dialog, on the dialog; never on the mask
+            if (await settle(() => !stillOpen(), 150)) return markClosed(widget);
             if (!inDialog) {                                 // Escape reaches the dialog's own listener and closes it
                 key(el, 'Escape');
                 key(document.body, 'Escape');
-                if (await settle(() => !stillOpen(), 160)) return true;
+                await settle(() => !stillOpen(), 150);
             }
-            press(neutralSpot(widget.root));
-            await settle(() => !stillOpen(), 180);
         }
-        if (stillOpen()) note(`${widget.id}: its list would not close`);
-        return !stillOpen();
+        if (stillOpen()) {
+            note(`${widget.id}: its list would not close`);
+            return false;
+        }
+        return markClosed(widget);
     }
 
     // ---------------------------------------------------------------- options ----
@@ -244,12 +272,10 @@
         return null;
     }
 
-    // A match if there is one, otherwise a seeded pick.
-    function chooseOption(options, candidates, rng) {
+    // A match if there is one, otherwise a seeded pick. Callers inside a fill always pass the persona's RNG.
+    function chooseOption(options, candidates, rng = Math.random) {
         const texts = options.map(o => o && o.el ? o : asTexts([o])[0]);
-        return matchAmong(texts, candidates)
-            || texts[Math.floor((rng ? rng() : Math.random()) * texts.length)]
-            || null;
+        return matchAmong(texts, candidates) || texts[Math.floor(rng() * texts.length)] || null;
     }
 
     // The element that actually scrolls, found by measurement rather than class name.
@@ -311,9 +337,14 @@
         const scroller = scrollerFor(overlay);
         if (!scroller) return null;
         const start = scroller.scrollTop;
-        scroller.scrollTop = 0;
-        scroller.dispatchEvent(new Event('scroll', {bubbles: true}));
-        await sleep(90);
+        // A window that is already rendered answers on the first check; only a lazy one waits.
+        const rendered = () => optionsIn(overlay, lib).length > 0;
+        const toTop = async () => {
+            scroller.scrollTop = 0;
+            scroller.dispatchEvent(new Event('scroll', {bubbles: true}));
+            await settle(rendered, 90);
+        };
+        await toTop();
 
         // One viewport less a row per step: windows just overlap, so nothing is skipped and little is re-read.
         const step = Math.max(80, Math.floor(scroller.clientHeight - 32));
@@ -321,9 +352,7 @@
 
         const jumped = await jumpToMatch(scroller, overlay, lib, candidates, deadline);
         if (jumped && matchAmong(asTexts(jumped), candidates)) return jumped;
-        scroller.scrollTop = 0;
-        scroller.dispatchEvent(new Event('scroll', {bubbles: true}));
-        await sleep(60);
+        await toTop();
 
         const seenTexts = new Set();
         let stalled = 0, barren = 0, exhausted = false;
@@ -359,7 +388,7 @@
             } else stalled = 0;
         }
         scroller.scrollTop = start;
-        await sleep(40);
+        await settle(rendered, 40);
         huntSawWholeList = exhausted;
         return null;
     }
@@ -379,7 +408,15 @@
     }
 
     // ----------------------------------------------------------- date panels ----
-    // This picker's own panel: the one its input names, else any live panel that is not an inline calendar.
+    /* A calendar rendered into the page is furniture, not a popup: it is there
+     * before the fill and belongs to the form. Libraries mark it on the wrapper
+     * (`p-datepicker-inline`) or on the panel itself (`p-datepicker-panel-inline`),
+     * and a booking form that shows one had every date field spend a second
+     * trying to close the page's own calendar. */
+    const INLINE_CALENDAR = '[class*="datepicker-inline"], [class*="datepicker-panel-inline"], [class*="picker-inline"]';
+    const isInline = (el) => el.matches(INLINE_CALENDAR) || !!el.closest(INLINE_CALENDAR);
+
+    // This picker's own panel: the one its input names, else any live popup panel.
     function ownPanels(widget) {
         const input = widget.root.querySelector('input, [role="combobox"]') || widget.root;
         const id = input.getAttribute && (input.getAttribute('aria-controls') || input.getAttribute('aria-owns'));
@@ -387,7 +424,7 @@
             const n = document.getElementById(id.split(/\s+/)[0]);
             return n && liveOverlay(n) ? [n] : [];
         }
-        return safeQuery(document, PANEL_SELECTOR).filter(el => liveOverlay(el) && !el.closest('.p-datepicker-inline'));
+        return safeQuery(document, PANEL_SELECTOR).filter(el => liveOverlay(el) && !isInline(el));
     }
 
     /* Close a date panel. It opens a tick after the focus that caused it, so wait
@@ -395,11 +432,8 @@
      * a date picker: when a value was just typed, click away instead. */
     async function dismissPanel(widget, opts) {
         const el = widget.root.querySelector('input, [tabindex]') || widget.root;
-        const input = widget.root.querySelector('input');
-        const open = () => {
-            if (input && input.getAttribute('aria-expanded') === 'false') return [];
-            return ownPanels(widget);
-        };
+        // The DOM decides, here as everywhere: aria-expanded="false" is tidied a tick before the panel goes.
+        const open = () => ownPanels(widget);
         try {
             el.blur();
         } catch (_) {

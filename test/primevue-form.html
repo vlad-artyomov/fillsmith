@@ -226,6 +226,24 @@
             cursor: pointer;
         }
 
+        .p-datepicker-year-view {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+        }
+
+        .p-datepicker-year {
+            display: block;
+            padding: 6px 10px;
+            text-align: center;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .p-datepicker-year:hover {
+            background: #eef2f6;
+        }
+
         .p-datepicker-day:hover {
             background: #f1f5f9;
         }
@@ -453,6 +471,30 @@
         <label id="lbl-datum">Eröffnungsdatum</label>
         <div class="p-datepicker p-component" data-pc-name="datepicker" id="datum">
             <input class="p-datepicker-input p-inputtext" aria-labelledby="lbl-datum" readonly placeholder="TT.MM.JJJJ">
+        </div>
+    </div>
+
+    <!-- A DatePicker that states its own format and never opens a panel: the
+         booking form's rental date is one, with `inputmode="none"` and a
+         calendar of the page's own beside it. Filled with English data it was
+         handed 11/24/2026, a shape it discards without a word — so the field
+         read as skipped and nothing said why. -->
+    <div class="field">
+        <label for="vertragsdatum">Vertragsdatum</label>
+        <span class="p-datepicker p-component" data-pc-name="datepicker" id="vertrag"
+              previewdateformat="DD.MM.YYYY">
+            <input id="vertragsdatum" class="p-inputtext p-datepicker-input" name="contractDate" inputmode="none">
+        </span>
+    </div>
+
+    <!-- A DatePicker scoped to years: its panel offers a decade and never a day.
+         Waiting for day cells before believing the panel had opened spent the
+         whole budget on every one of these — 2.4 seconds a field on a real
+         device-management form — and then fell back to typing anyway. -->
+    <div class="field">
+        <label id="lbl-baujahr">Baujahr</label>
+        <div class="p-datepicker p-component" data-pc-name="datepicker" id="baujahr">
+            <input class="p-datepicker-input p-inputtext" aria-labelledby="lbl-baujahr" readonly placeholder="JJJJ">
         </div>
     </div>
 
@@ -1317,12 +1359,52 @@
             const r = root.getBoundingClientRect();
             panel.style.left = (r.left + scrollX) + 'px';
             panel.style.top = (r.bottom + scrollY + 2) + 'px';
-            panel.querySelectorAll('.p-datepicker-day-cell:not(.p-datepicker-other-month)').forEach(td => {
-                td.addEventListener('click', () => {
+            /* The listener is on the day itself, not on the cell around it, exactly
+               as PrimeVue 4 binds it. A press on the <td> therefore does nothing —
+               which is what made a pool holding both the cell and the day inside it
+               leave date fields empty at random. */
+            panel.querySelectorAll('.p-datepicker-day-cell:not(.p-datepicker-other-month) .p-datepicker-day').forEach(day => {
+                const td = day.parentElement;
+                day.addEventListener('click', () => {
                     const d = Number(td.dataset.day);
                     const v = String(d).padStart(2, '0') + '.' + String(month + 1).padStart(2, '0') + '.' + year;
                     input.value = v;
                     model.datum = v;
+                    input.dispatchEvent(new Event('change', {bubbles: true}));
+                    closeOverlays();
+                });
+            });
+        });
+    })();
+
+    // ---- DatePicker scoped to years: a decade grid, no day cells -------------
+    (() => {
+        const root = document.getElementById('baujahr');
+        const input = root.querySelector('input');
+        root.addEventListener('click', () => {
+            if (document.querySelector('.p-datepicker-panel[data-owner="baujahr"]')) {
+                closeOverlays();
+                return;
+            }
+            closeOverlays();
+            const panel = document.createElement('div');
+            panel.className = 'p-datepicker-panel';
+            panel.setAttribute('data-pc-section', 'panel');
+            panel.dataset.owner = 'baujahr';
+            const first = new Date().getFullYear() - 9;
+            panel.innerHTML = '<div class="p-datepicker-header">' + first + ' &ndash; ' + (first + 11) + '</div>' +
+                '<div class="p-datepicker-year-view">' +
+                Array.from({length: 12}, (_, i) =>
+                    '<span class="p-datepicker-year" data-year="' + (first + i) + '">' + (first + i) + '</span>').join('') +
+                '</div>';
+            document.body.appendChild(panel);
+            const r = root.getBoundingClientRect();
+            panel.style.left = (r.left + scrollX) + 'px';
+            panel.style.top = (r.bottom + scrollY + 2) + 'px';
+            panel.querySelectorAll('.p-datepicker-year').forEach(span => {
+                span.addEventListener('click', () => {
+                    input.value = span.dataset.year;
+                    model.baujahr = input.value;
                     input.dispatchEvent(new Event('change', {bubbles: true}));
                     closeOverlays();
                 });
@@ -1430,11 +1512,15 @@
             });
             render();
         };
+        /* The panel goes a beat after the click that dismissed it, the way a leave
+           transition does — so a control that clicks away and returns at once has
+           left its panel on screen for whoever comes next. A real location form
+           with five opening-hour rows ended every fill under a stack of them. */
         const close = () => {
-            if (panel) {
-                panel.remove();
-                panel = null;
-            }
+            if (!panel) return;
+            const going = panel;
+            panel = null;
+            setTimeout(() => going.remove(), 120);
         };
         // Focus is refused and the panel opens from a press, as PrimeVue's does.
         input.addEventListener('focus', () => input.blur());
@@ -1648,6 +1734,7 @@
         ansprechpartner: model.ansprechpartner || null,
         ansprechpartnerTyped: model.ansprechpartner_typed || null,
         datum: model.datum || null,
+        baujahr: model.baujahr || null,
         kapazitaet: model.kapazitaet || '',
         mindestdauer: document.querySelector('#mindestdauer input').value,
         aktiv: !!model.aktiv,

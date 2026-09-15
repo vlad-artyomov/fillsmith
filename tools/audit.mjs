@@ -12,11 +12,12 @@
  *   npm run audit -- --profile .ff-profile # keep a browser profile (log in once)
  *   npm run audit -- --slow-model 1500     # stand in a model that answers slowly
  *   npm run audit -- --no-model
+ *   npm run audit -- --locale en-US --seed ABC123
  *
  * Exit code is the number of findings, so it can gate anything.
  */
 import {chromium} from 'playwright';
-import {mkdirSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
+import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {createServer} from 'node:http';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
@@ -55,8 +56,18 @@ if (!target) {
     target = `http://127.0.0.1:${server.address().port}/form.html`;
 }
 
-// A named profile persists logins between runs; the default is a throwaway.
+/* A named profile persists logins between runs; the default is a throwaway.
+ * Chromium serves an unpacked extension's worker from the profile's script
+ * cache, so a reused profile would audit the build it saw last time. */
 const profile = flag('profile') ? resolve(root, String(flag('profile'))) : mkdtempSync(join(tmpdir(), 'ff-audit-'));
+if (flag('profile')) {
+    try {
+        rmSync(join(profile, 'Default', 'Service Worker'), {recursive: true, force: true});
+    } catch (err) {
+        // A browser still holding the profile; worth saying, not worth stopping for.
+        console.log(`WARN  could not clear the profile's worker cache (${err.code}); it may audit a stale build`);
+    }
+}
 const ctx = await chromium.launchPersistentContext(profile, {
     channel: 'chromium',
     headless: !flag('head'),
@@ -64,8 +75,15 @@ const ctx = await chromium.launchPersistentContext(profile, {
         '--no-sandbox', '--no-first-run', '--no-default-browser-check']
 });
 
-const worker = ctx.serviceWorkers()[0]
-    || await ctx.waitForEvent('serviceworker', {timeout: 20000}).catch(() => null);
+/* A saved profile may carry other extensions, so the worker is found by its
+ * script URL rather than by being the first one Chromium happens to report. */
+const ours = (w) => w.url().endsWith('/src/background.js');
+let worker = ctx.serviceWorkers().find(ours);
+for (let i = 0; !worker && i < 4; i++) {
+    const next = await ctx.waitForEvent('serviceworker', {timeout: 8000}).catch(() => null);
+    if (!next) break;
+    if (ours(next)) worker = next;
+}
 if (!worker) {
     console.log('BUG   the service worker never registered');
     process.exit(1);
@@ -100,14 +118,27 @@ worker.on('console', m => {
     if (m.type() === 'error') swErrors.push(m.text());
 });
 
+/* An application's own console noise is not a finding about FormForge. Errors
+ * are collected with where they came from, and only the ones raised by our own
+ * code count against us; the rest are reported so they are not mistaken for it. */
 const page = await ctx.newPage();
 const pageErrors = [];
-page.on('pageerror', e => pageErrors.push(String(e.message)));
+const theirErrors = [];
+const fileOf = (m) => (m.location && m.location().url) || '';
+const fromUs = (text, where) => /formforge/i.test(where) || /formforge/i.test(text);
+page.on('pageerror', e => (fromUs(String(e.stack || e.message), String(e.stack || ''))
+    ? pageErrors : theirErrors).push(String(e.message)));
 page.on('console', m => {
-    if (m.type() === 'error') pageErrors.push(m.text());
+    if (m.type() !== 'error') return;
+    (fromUs(m.text(), fileOf(m)) ? pageErrors : theirErrors).push(m.text());
 });
 await page.goto(target, {waitUntil: 'domcontentloaded'});
-await page.waitForTimeout(600);
+/* An application renders its form after the bundle and the first queries land.
+ * Wait for controls to exist rather than for a clock to run out. */
+await page.waitForFunction(
+    () => document.querySelectorAll('input, textarea, select, [contenteditable="true"], [role="combobox"]').length > 1,
+    null, {timeout: 20000}).catch(() => console.log('WARN  no form controls appeared within 20s'));
+await page.waitForTimeout(400);
 
 console.log(`\nFormForge audit — ${target}\n`);
 
@@ -152,11 +183,19 @@ const result = await worker.evaluate(async ({files, at}) => {
     const t0 = Date.now();
     const res = await chrome.tabs.sendMessage(tab.id, {
         kind: 'fill', settings: {
-            locale: 'de-DE', useAI: at.useAI, overwrite: true, emailDomain: 'example.com'
+            locale: at.locale, seed: at.seed || undefined,
+            useAI: at.useAI, overwrite: true, emailDomain: 'example.com'
         }
     });
     return {bootSeen: seen, ms: Date.now() - t0, res};
-}, {files: INJECTED, at: {useAI: !flag('no-model')}});
+}, {
+    files: INJECTED,
+    at: {
+        useAI: !flag('no-model'),
+        locale: String(flag('locale', 'de-DE')),
+        seed: flag('seed') === true ? '' : flag('seed')
+    }
+});
 const wall = Date.now() - tFill;
 
 // The bar's width is transitioned and still travelling when the fill returns.
@@ -225,8 +264,13 @@ else ok('everything planned was written', `${r.count} fields`);
 const unnamed = (r.filled || []).filter(f => (String(f.label).match(/\p{L}/gu) || []).length < 2);
 if (unnamed.length) note('warn', 'fields reported without a readable name', unnamed.map(f => f.label).join(', '));
 
-if (pageErrors.length) note('bug', 'the page logged errors', pageErrors.slice(0, 3).join(' | '));
+if (pageErrors.length) note('bug', 'FormForge logged errors on the page', pageErrors.slice(0, 3).join(' | '));
+else ok('nothing from FormForge in the page console');
 if (swErrors.length) note('bug', 'the service worker logged errors', swErrors.slice(0, 3).join(' | '));
+if (theirErrors.length) {
+    console.log(`note  the page logged ${theirErrors.length} error(s) of its own  — ` +
+        theirErrors.slice(0, 2).map(t => t.split('\n')[0].slice(0, 90)).join(' | '));
+}
 
 // ------------------------------------------------------ the toolbar icon --
 const icon = await worker.evaluate(async () => {
