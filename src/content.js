@@ -1049,15 +1049,25 @@
                 H.press(H.neutralSpot(modalScope()));      // inside a dialog, on the dialog; never on the mask
                 await H.settle(() => !stillOpen().length, 150);
             }
-            const open = new Set(stillOpen());
-            /* The sweep closes panels that closeOverlay could not, and the mark has
-             * to come off with them: only closeOverlay was clearing it, so a panel
-             * that got this far stayed marked for the life of the page. */
-            for (const el of document.querySelectorAll('[data-formforge-opened]')) {
-                if (!open.has(el)) el.removeAttribute('data-formforge-opened');
-            }
-            leftOpen = [...open].map(e => String(e.className || e.tagName).slice(0, 80));
+            leftOpen = stillOpen().map(e => String(e.className || e.tagName).slice(0, 80));
             for (const cls of leftOpen) H.note(`left on screen: ${cls}`);
+        } catch (_) {
+        }
+        /* No ownership mark outlives the fill that made it. It means "ours, and
+         * possibly still up", and both of its readers are inside one fill: the
+         * sweep just above, and the scan that treats whatever sits under it as a
+         * popup's own furniture rather than a field. Left behind — by a panel
+         * closeOverlay could not shut, or one that was still mid-leave when the
+         * sweep looked — it made the next fill skip real fields.
+         *
+         * Unconditional, and on its own: the first version of this rode inside
+         * the sweep's try, where a throw from the presses above skipped it and
+         * put the bug back on a slower machine. What is genuinely still open is
+         * already reported in leftOpen and in the notes; the attribute is not
+         * the record of that. */
+        try {
+            document.querySelectorAll('[data-formforge-opened]')
+                .forEach(el => el.removeAttribute('data-formforge-opened'));
         } catch (_) {
         }
 
