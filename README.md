@@ -6,6 +6,7 @@
 
 For QA engineers who fill the same create-form forty times a day.
 
+[![tests](https://github.com/vlad-artyomov/formforge/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/vlad-artyomov/formforge/actions/workflows/test.yml)
 [![Chrome Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-1f6f4f)](manifest.json)
 [![Runtime dependencies: 0](https://img.shields.io/badge/runtime%20dependencies-0-1f6f4f)](package.json)
 [![No build step](https://img.shields.io/badge/build%20step-none-1f6f4f)](#-development)
