@@ -726,6 +726,13 @@
          * disabled at collect time is skipped, and a stale mark then keeps the later
          * passes from seeing it as new once our writes have enabled it. */
         document.querySelectorAll(`[${MARK}]`).forEach(el => el.removeAttribute(MARK));
+        /* And the ownership marks. `data-formforge-opened` says "ours, and possibly
+         * still up"; one left over from a previous fill makes the scan read a
+         * settled part of the page as a popup's own furniture and skip the fields
+         * in it. Anything genuinely on screen is picked up by panelsBefore below,
+         * which is the right way to call it not ours. */
+        document.querySelectorAll('[data-formforge-opened]')
+            .forEach(el => el.removeAttribute('data-formforge-opened'));
 
         // A panel that was on screen before we started (an inline calendar) is not one we opened.
         const panelsBefore = new Set();
@@ -1042,7 +1049,14 @@
                 H.press(H.neutralSpot(modalScope()));      // inside a dialog, on the dialog; never on the mask
                 await H.settle(() => !stillOpen().length, 150);
             }
-            leftOpen = stillOpen().map(e => String(e.className || e.tagName).slice(0, 80));
+            const open = new Set(stillOpen());
+            /* The sweep closes panels that closeOverlay could not, and the mark has
+             * to come off with them: only closeOverlay was clearing it, so a panel
+             * that got this far stayed marked for the life of the page. */
+            for (const el of document.querySelectorAll('[data-formforge-opened]')) {
+                if (!open.has(el)) el.removeAttribute('data-formforge-opened');
+            }
+            leftOpen = [...open].map(e => String(e.className || e.tagName).slice(0, 80));
             for (const cls of leftOpen) H.note(`left on screen: ${cls}`);
         } catch (_) {
         }

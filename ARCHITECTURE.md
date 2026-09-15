@@ -117,9 +117,10 @@ Each of these was a bug on a real form and has a regression check.
 - A day grid matches twice over — once as the cell, once as the day inside it — and the library binds its click to the
   inner one. A pool holding both filled about half the date fields, differently on every seed.
 - A dropdown is opened once per fill. Remember what was committed and restore that.
-- `data-formforge-opened` means "ours, and possibly still up", so it is cleared the moment the panel closes. Left
-  behind it misleads both its readers: the sweep at the end of a fill, and the scan that treats a popup's own
-  furniture as something other than a field.
+- `data-formforge-opened` means "ours, and possibly still up", so it is cleared the moment the panel closes — by
+  whatever closes it. Only `closeOverlay` was taking it off, so a panel that outlived it and was shut by the
+  end-of-fill sweep kept the mark for the life of the page, and the next scan read the fields under it as a popup's
+  own furniture and skipped them. Both readers are misled by a stale one, so a fill clears them at both ends.
 
 **Writing values**
 

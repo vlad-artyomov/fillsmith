@@ -470,11 +470,26 @@ if (worker) {
     });
     check('popup tabs switch panes', tabs.settingsShown && tabs.backToFill);
 
-    // The footer shows the bindings Chrome actually has; a fresh install binds every suggested key.
-    const foot = await pop.evaluate(() => (document.getElementById('shortcuts') || {}).textContent || '');
-    check('the popup footer lists the four shortcuts as bound',
-        /fill/.test(foot) && /this field/.test(foot) && /new data/.test(foot) && /clear/.test(foot) && !/not set/.test(foot),
-        foot.replace(/\s+/g, ' ').trim());
+    /* The footer reports the bindings Chrome actually has, which is the whole
+     * point of it: how many of four suggested keys a fresh profile takes is the
+     * platform's business, not ours. macOS binds all four; a Linux CI runner
+     * binds two and leaves refill and clear unassigned. Pressing an unassigned
+     * one types a character into the page, so what has to hold is that the
+     * footer agrees with chrome.commands and offers a way to set the rest. */
+    const keys = await pop.evaluate(() => new Promise(r => chrome.commands.getAll(cs => r({
+        bound: cs.filter(c => c.name !== '_execute_action').map(c => ({name: c.name, shortcut: c.shortcut})),
+        foot: (document.getElementById('shortcuts') || {}).textContent || '',
+        link: !!document.getElementById('assignKeys')
+    }))));
+    const set = keys.bound.filter(c => c.shortcut);
+    const unset = keys.bound.length - set.length;
+    check('the popup footer reports every shortcut Chrome actually bound',
+        keys.bound.length === 4 && set.every(c => keys.foot.includes(c.shortcut)),
+        `${set.length}/${keys.bound.length} bound — ${keys.foot.replace(/\s+/g, ' ').trim()}`);
+    check('and says how many are unassigned, with a way to set them',
+        unset === 0 ? !/not set/.test(keys.foot)
+            : new RegExp(`${unset} shortcuts? not set`).test(keys.foot) && keys.link,
+        `${unset} unassigned`);
 
     /* A disabled button reading "Filling…" for three seconds says nothing about
      * whether anything is happening. The stages are already being computed, so

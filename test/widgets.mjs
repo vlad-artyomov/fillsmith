@@ -761,6 +761,32 @@ check('the fill lets go of the field it finished on', closing.focus === 'BODY', 
 check('the sweep is scoped to overlays FormForge opened',
     closing.markedWhileOpen === true && closing.marked === 0,
     `marked when open: ${closing.markedWhileOpen}, still marked after: ${closing.marked}`);
+/* Only closeOverlay was taking the mark off. A panel that outlived it and was
+   shut by the end-of-fill sweep instead kept "data-formforge-opened" for the
+   life of the page — which made this check fail about one run in ten, and, far
+   worse than a flaky test, made the next scan read whatever sits under that
+   mark as a popup's own furniture and skip the fields in it. Both ends are
+   covered here: the reset a fill starts with, and the sweep it ends with. */
+await load();
+const marks = await page.evaluate(async () => {
+    const ghost = document.createElement('div');
+    ghost.style.display = 'none';
+    document.body.appendChild(ghost);
+    const before = document.getElementById('name').closest('.field');
+    before.setAttribute('data-formforge-opened', '');          // left by an earlier fill
+    // And one that appears mid-fill, the way a panel the sweep has to close does.
+    setTimeout(() => ghost.setAttribute('data-formforge-opened', ''), 50);
+    await window.__formforge.run({seed: 'MARK1', locale: 'de-DE', useAI: false, overwrite: true});
+    return {
+        left: [...document.querySelectorAll('[data-formforge-opened]')]
+            .map(e => e.id || e.className || e.tagName),
+        underIt: window.__snapshot().name
+    };
+});
+check('a fill clears the ownership marks it starts with and ends with',
+    marks.left.length === 0, marks.left.join(', ') || 'none');
+check('and a stale mark does not hide the field beneath it',
+    !!marks.underIt, `Standortname="${marks.underIt}"`);
 /* "+690 Tokelau" beside a German number reads as a bug in the app, so this
  * picker is one where only a match will do. */
 check('a phone country picker matches the number beside it',
