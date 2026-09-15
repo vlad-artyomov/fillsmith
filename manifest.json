@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "FormForge — AI QA Form Filler",
-  "version": "1.46.1",
+  "version": "1.0.0",
   "description": "Fills any form with coherent QA test data in one click — custom dropdowns, date pickers and editors included. On-device AI.",
   "minimum_chrome_version": "128",
   "permissions": [
@@ -17,6 +17,11 @@
     "service_worker": "src/background.js"
   },
   "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "24": "icons/icon24.png",
+      "32": "icons/icon32.png"
+    },
     "default_popup": "src/popup.html",
     "default_title": "FormForge (Alt+Shift+F fills the form, Alt+Shift+D the focused field)"
   },
@@ -48,6 +53,7 @@
   },
   "icons": {
     "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   }

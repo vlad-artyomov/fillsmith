@@ -803,6 +803,50 @@ if (worker) {
         && contexts['ff-fill-page'].includes('page'),
         `field: [${contexts['ff-fill-field']}]`);
 
+    /* Nano copies the shape of the example it is shown. The schema constrains the
+     * decoder but is never spelled out (omitResponseConstraintInput), so the
+     * skeleton on the last line of the prompt is the only shape the model sees —
+     * and a skeleton holding one {"id":N} got one value back for a batch of
+     * twelve, every time. Eleven fields then read "the model had no answer for
+     * it" and went to the filler. This stub is deliberately as literal-minded as
+     * the real thing: it answers exactly as many fields as the skeleton shows. */
+    step('the prompt asks for one entry per field');
+    const skeleton = await withTimeout(worker.evaluate(async () => {
+        const realGlobal = self.LanguageModel, realSession = nanoSession;
+        nanoSession = null;
+        let seen = '';
+        self.LanguageModel = {
+            availability: async () => 'available',
+            create: async () => ({
+                clone: async function () {
+                    return {...this};
+                },
+                // As many answers as the example shows, in the order the fields were listed.
+                prompt: async (p) => {
+                    seen = p;
+                    const shown = (p.split('\n').pop().match(/\{"id":/g) || []).length;
+                    const ids = [...p.matchAll(/^(\d+) /gm)].map(m => +m[1]);
+                    return JSON.stringify({values: ids.slice(0, shown).map(id => ({id, value: 'Wert ' + id}))});
+                },
+                destroy() {
+                }
+            })
+        };
+        const fields = [];
+        for (let i = 0; i < 12; i++) fields.push({id: i, label: `Feld ${i}`, type: 'text'});
+        const res = await generate({persona: {fullName: 'W'}, pageTitle: 'w', context: {}, examples: [], fields});
+        self.LanguageModel = realGlobal;
+        nanoSession = realSession;
+        return {answered: Object.keys(res.values || {}).length, tail: seen.split('\n').pop()};
+    }).catch(e => ({error: e.message})), 25000, 'skeleton');
+
+    check('a batch of twelve comes back with twelve values',
+        skeleton && !skeleton.error && skeleton.answered === 12,
+        skeleton && skeleton.error ? skeleton.error : `${skeleton && skeleton.answered} answered`);
+    check('and the example the model is shown holds every id, not just one',
+        skeleton && !skeleton.error && (skeleton.tail.match(/\{"id":/g) || []).length === 12,
+        skeleton && skeleton.tail ? skeleton.tail.slice(0, 120) : '');
+
     /* The first create() after the extension loads is where the browser brings a
      * multi-gigabyte model into memory, and it routinely takes longer than any
      * budget a fill can reasonably wait — which is why the first fill after a

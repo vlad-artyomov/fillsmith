@@ -123,7 +123,15 @@ function buildUserPrompt(persona, pageTitle, fields, context, examples) {
         }
         lines.push(bits.join(' '));
     }
-    lines.push('', `JSON: {"values":[{"id":N,"value":"..."}]} with N from: ${fields.map(f => f.id).join(', ')}`);
+    /* One entry per field in the skeleton, never a single {"id":N}. The schema
+     * is deliberately not spelled out to the model (omitResponseConstraintInput
+     * keeps the prompt short), so this line is the only shape it ever sees — and
+     * it copies that shape literally. A one-entry example got exactly one value
+     * back for a batch of twelve, and the other eleven fields fell through to
+     * the filler with "the model had no answer for it". */
+    const ids = fields.map(f => f.id);
+    lines.push('', `Answer all ${ids.length} field${ids.length === 1 ? '' : 's'}, one entry each, in this order: ${ids.join(', ')}`);
+    lines.push(`JSON: {"values":[${ids.map(id => `{"id":${id},"value":"..."}`).join(',')}]}`);
     return lines.join('\n');
 }
 
@@ -688,7 +696,7 @@ function stopSpin(tabId) {
     try {
         chrome.action.setIcon({
                 tabId,
-                path: {16: '/icons/icon16.png', 48: '/icons/icon48.png', 128: '/icons/icon128.png'}
+                path: {16: '/icons/icon16.png', 24: '/icons/icon24.png', 32: '/icons/icon32.png'}
             },
             () => void chrome.runtime.lastError);
     } catch (_) {

@@ -186,6 +186,10 @@ Each of these was a bug on a real form and has a regression check.
   together.
 - "Still loading" and "no model" are different answers and get different advice.
 - Count a model answer where it lands in the form, not where it arrives.
+- The model copies the shape of the example it is shown. The response schema constrains the decoder but is never
+  spelled out in the prompt (`omitResponseConstraintInput`), so the skeleton on the last line is the only shape the
+  model ever sees — and a skeleton holding one `{"id":N}` came back with one value for a batch of twelve, in under
+  two seconds, looking for all the world like a model that simply had nothing to say. List every id.
 
 **Showing the work**
 
@@ -194,3 +198,6 @@ Each of these was a bug on a real form and has a regression check.
 - The indicator's stylesheet starts with `all: initial !important`; every rule in it is important too, run-time values
   travel in custom properties, hiding is a class.
 - One progress bar for the whole job, and it only moves forward.
+- The toolbar mark has one definition, `drawMark()` in the worker, because the icon that sits still and the icon
+  that animates are the same silhouette. `tools/icons.mjs` renders the shipped PNGs from it rather than beside it;
+  a hand-made set drifts from it, and the 128 in this repo was a scaled-up 32 with stair steps on its corners.

@@ -1,6 +1,6 @@
 {
   "name": "formforge",
-  "version": "1.46.1",
+  "version": "1.0.0",
   "private": true,
   "description": "Chrome MV3 extension that fills forms with coherent, reproducible QA test data, including component-library widgets. On-device AI, no SaaS.",
   "scripts": {
@@ -11,7 +11,9 @@
     "test:ext": "node test/extension.mjs",
     "audit": "node tools/audit.mjs",
     "vocab": "node tools/vendor-faker.mjs",
-    "fixture": "python3 -m http.server 8099 --directory test"
+    "fixture": "python3 -m http.server 8099 --directory test",
+    "package": "node tools/package.mjs",
+    "icons": "node tools/icons.mjs"
   },
   "devDependencies": {
     "@faker-js/faker": "^10.6.0",

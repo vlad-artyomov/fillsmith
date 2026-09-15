@@ -562,7 +562,12 @@
     function modelBudget(n, settings) {
         const override = Number(settings && settings.modelTimeout) || 0;
         if (override > 0) return override * 1000;
-        const work = Math.min(8000, 1500 + 600 * n);
+        /* Measured against Gemini Nano: a full batch of twelve answers in four to
+         * eight seconds. The old 8s ceiling was set while the model was replying
+         * to one field per batch and so looked generous; against a batch that
+         * really answers it cuts the reply off. Nothing blocks on this — a longer
+         * budget costs waiting only when the model is the last thing outstanding. */
+        const work = Math.min(12000, 1500 + 600 * n);
         return modelWarm ? work : Math.max(15000, work);
     }
 
