@@ -141,6 +141,9 @@ if (worker) {
         '<label for="n">Full name</label><input id="n" name="fullName" required>' +
         '<label for="e">Email</label><input id="e" name="email" type="email" required>' +
         '<label for="c">Company</label><input id="c" name="company" required></form>');
+    // A page with nothing to fill: the fill still has to end, and say so.
+    pages['/empty.html'] = Buffer.from(
+        '<!doctype html><meta charset="utf-8"><title>Nothing to fill</title><p>No form on this page.</p>');
     const server = createServer((req, res) => {
         const path = (req.url || '').split('?')[0];
         const body = pages[path] || pages['/form.html'];
@@ -152,6 +155,7 @@ if (worker) {
     const origin = `http://127.0.0.1:${server.address().port}`;
     const url = `${origin}/form.html`;
     const fixtureUrl = `${origin}/primevue-form.html`;
+    const emptyUrl = `${origin}/empty.html`;
 
     const page = await ctx.newPage();
     await page.goto(url);
@@ -1371,6 +1375,37 @@ if (worker) {
     check('and the indicator is still styled there',
         strict && !strict.error && strict.hud.up && strict.hud.position === 'fixed',
         strict && !strict.error ? JSON.stringify(strict.hud) : '');
+
+    /* "No fillable fields found on this page" is an ending, and every ending has
+     * to stop the toolbar icon. Only the "filled N fields" path was saying so,
+     * so a fill from the popup that found nothing left the icon animating for
+     * its whole 90-second watchdog — which is exactly what a fill still running
+     * looks like. The shortcut path hid it: send() turns the icon off in a
+     * finally, and the popup does not go through send(). */
+    const nothing = await withTimeout((async () => {
+        const tab = await ctx.newPage();
+        await tab.goto(emptyUrl);
+        const res = await worker.evaluate(async ({files, title}) => {
+            const [t] = await chrome.tabs.query({title});
+            working(t.id, true);                       // as any fill leaves it while it runs
+            await chrome.scripting.executeScript({target: {tabId: t.id, allFrames: true}, files});
+            const r = await chrome.tabs.sendMessage(t.id, {
+                kind: 'fill', settings: {locale: 'en-US', useAI: false, overwrite: true}
+            });
+            // The done signal reaches the worker as a message; give it a moment to land.
+            for (let i = 0; i < 40 && spinTimer; i++) await new Promise(x => setTimeout(x, 50));
+            return {count: r.count, spinning: !!spinTimer, tab: spinTab};
+        }, {files: INJECTED, title: 'Nothing to fill'});
+        await tab.close();
+        return res;
+    })().catch(e => ({error: e.message})), 30000, 'nothing-to-fill');
+
+    check('a page with nothing to fill still reports a finished fill',
+        nothing && !nothing.error && nothing.count === 0,
+        nothing && nothing.error ? nothing.error : `count=${nothing && nothing.count}`);
+    check('and the toolbar icon stops animating',
+        nothing && !nothing.error && nothing.spinning === false && nothing.tab == null,
+        nothing && !nothing.error ? `spinning=${nothing.spinning}, tab=${nothing.tab}` : '');
 
     check('no service worker errors', swErrors.length === 0, swErrors.join(' | '));
 

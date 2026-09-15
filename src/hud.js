@@ -313,9 +313,20 @@
      * left required fields empty must not read as a success — and stays up
      * longer when there is bad news to read. */
     function toast(title, detail) {
+        const d = detail || {};
+        /* The toast is the end of the job by definition, so it is what says so.
+         * Only the "filled N fields" path used to, and every other ending — no
+         * fillable fields, a control we cannot drive, a cleared form — left the
+         * toolbar icon animating until its 90-second watchdog, which reads as a
+         * fill that is still running. Sent before the dismissed guard: the job
+         * finished whether or not the card is still on screen to show it. */
+        ping({
+            stage: 'done', text: title,
+            done: d.filled ? d.filled.length : undefined, total: d.total,
+            aiUsed: d.aiUsed, skipped: d.skipped ? d.skipped.length : undefined, ms: d.ms
+        });
         if (dismissed) return;
         const el = box();
-        const d = detail || {};
         const p = d.persona;
         clearTimeout(hudTimer);
         el.classList.remove('ff-busy');

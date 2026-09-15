@@ -199,6 +199,10 @@ Each of these was a bug on a real form and has a regression check.
 - The indicator's stylesheet starts with `all: initial !important`; every rule in it is important too, run-time values
   travel in custom properties, hiding is a class.
 - One progress bar for the whole job, and it only moves forward.
+- The result toast is what says the job is over, so it is what sends `done` — every ending, not just the happy
+  one. While only "filled N fields" reported it, a fill that found nothing to fill left the toolbar icon animating
+  until its 90-second watchdog, which is indistinguishable from a fill still running. The shortcut path hid it:
+  `send()` turns the icon off in a `finally`, and the popup does not go through `send()`.
 - The toolbar mark has one definition, `drawMark()` in the worker, because the icon that sits still and the icon
   that animates are the same silhouette. `tools/icons.mjs` renders the shipped PNGs from it rather than beside it;
   a hand-made set drifts from it, and the 128 in this repo was a scaled-up 32 with stair steps on its corners.

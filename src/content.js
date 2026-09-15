@@ -1092,11 +1092,7 @@
         }
 
         toast(`Filled ${filled.length} field${filled.length === 1 ? '' : 's'}`,
-            {persona, aiUsed, filled, widgets: widgetCount, skipped, ms: phase.total});
-        ping({
-            stage: 'done', text: `Filled ${filled.length} field${filled.length === 1 ? '' : 's'}`,
-            done: filled.length, total: fields.length, aiUsed, skipped: skipped.length, ms: phase.total
-        });
+            {persona, aiUsed, filled, widgets: widgetCount, skipped, ms: phase.total, total: fields.length});
         return {
             count: filled.length,
             persona: stripRng(persona),
