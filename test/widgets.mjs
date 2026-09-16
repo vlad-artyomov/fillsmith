@@ -33,7 +33,11 @@ page.on('console', m => {
 page.on('pageerror', e => console.log('   pageerror:', e.message));
 
 async function load(query) {
-    await page.goto('file://' + resolve(root, 'test/primevue-form.html') + (query ? '?' + query : ''));
+    await loadPage('test/primevue-form.html', query);
+}
+
+async function loadPage(file, query) {
+    await page.goto('file://' + resolve(root, file) + (query ? '?' + query : ''));
     for (const f of FILLER) await page.addScriptTag({content: src(f)});
 }
 
@@ -792,6 +796,37 @@ check('and a stale mark does not hide the field beneath it',
 check('a phone country picker matches the number beside it',
     closing.country === 'Deutschland' && /^49/.test(closing.phone),
     `${closing.country} / ${closing.phone}`);
+
+/* Rows that arrive with the upload: one per file, each with a checkbox and two
+   text inputs, none of them carrying a name or an id and all of them captioned
+   like the row above. Two things went wrong with that. Their label key was the
+   same key, so four rows read as one field and the later ones were handed the
+   first one's value as though a re-render had eaten theirs. And numbering them
+   by what the pass collected was no better: a later pass only collects what is
+   still empty, so the third row was numbered as the first and copied its value
+   again. Both are visible only on a second fill, which is how it was reported. */
+await load();
+const perFile = await page.evaluate(async () => {
+    const rows = () => window.__snapshot().bilder;
+    const opts = {locale: 'de-DE', useAI: false, overwrite: true, emailDomain: 'example.com'};
+    await window.__formforge.run({...opts, seed: 'UPL1'});
+    await new Promise(r => setTimeout(r, 1200));           // the rows of the first upload
+    const first = rows().map(r => `${r.alt}|${r.src}`);
+    await window.__formforge.run({...opts, seed: 'UPL2'});
+    await new Promise(r => setTimeout(r, 1200));
+    const all = rows();
+    return {first, all, texts: all.map(r => `${r.alt}|${r.src}`)};
+});
+check('an upload row is filled when it arrives',
+    perFile.first.length > 0 && perFile.first.every(t => !/^\|$/.test(t)),
+    `${perFile.first.length} row(s): ${perFile.first.join(', ') || 'none'}`);
+check('a second fill fills the rows it adds, and leaves none empty',
+    perFile.all.length > perFile.first.length
+    && perFile.all.every(r => r.alt !== '' && r.src !== ''),
+    `${perFile.all.length} row(s), ${perFile.all.filter(r => !r.alt || !r.src).length} empty`);
+check('and every row gets its own value, not the first row\'s',
+    new Set(perFile.texts).size === perFile.texts.length,
+    perFile.texts.join(' · '));
 
 /* ------------------------------------------------------------ uploads --
  * The one control a tester always had to fill by hand — and on a form that
@@ -1576,6 +1611,38 @@ const loose = await page.evaluate(() => {
 });
 check('a long candidate does not loosely match a two-letter option', loose.us === null, String(loose.us));
 check('an exact option and a country code still match', loose.de === 'Deutschland' && loose.code === 'Spain', JSON.stringify(loose));
+
+/* An upload is the one thing a fill starts and does not finish, and the fields
+   it brings back — the file's alt text, its source, its "show this one" switch —
+   are fields the fill caused. On a short form the fill is over in eighty
+   milliseconds and the row lands a second later, so they were left for the next
+   run to find: the reported symptom was metadata that only ever appeared on the
+   second pass of the filler, filling the rows the *previous* pass had uploaded.
+   A page with two controls, so the fill cannot accidentally outlast the wait. */
+await loadPage('test/upload-form.html', 'uploadms=1200');
+const upload = await page.evaluate(async () => {
+    const t = Date.now();
+    const r = await window.__formforge.run({seed: 'UPW1', locale: 'en-US', useAI: false, overwrite: true});
+    return {ms: Date.now() - t, rows: window.__rows(), revealed: r.revealed};
+});
+check('a fill waits for an upload it started, and fills what comes back',
+    upload.rows.length === 2 && upload.rows.every(r => r.alt !== '' && r.src !== ''),
+    `${upload.rows.length} row(s) after ${upload.ms}ms, ${upload.rows.filter(r => !r.alt).length} empty`);
+check('and counts those fields as revealed by the fill', upload.revealed >= 6, `${upload.revealed} revealed`);
+
+/* Bounded, like every other wait here: a server that never answers must not
+   hold the fill open. The patience runs from the attach, so a form with plenty
+   left to do pays nothing for it. */
+await loadPage('test/upload-form.html', 'uploadms=30000');
+const never = await page.evaluate(async () => {
+    const t = Date.now();
+    const r = await window.__formforge.run({seed: 'UPW2', locale: 'en-US', useAI: false, overwrite: true});
+    return {ms: Date.now() - t, notes: r.notes || []};
+});
+check('an upload that never comes back does not hold the fill open',
+    never.ms < 12000, `${never.ms}ms`);
+check('and it says so rather than reporting a clean fill',
+    never.notes.some(n => /upload did not come back/.test(n)), never.notes.join(' | ') || '(no note)');
 
 await browser.close();
 console.log(`\n${failures === 0 ? 'All widget checks passed.' : failures + ' check(s) failed.'}`);

@@ -90,7 +90,13 @@
   top:0!important; bottom:0!important; left:0!important; width:100%!important;
   background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent)!important;
   animation:formforge-sheen 1.1s linear infinite!important; }
-#formforge-hud .ff-now{ margin-top:6px!important; font-size:11px!important; color:#5d6672!important; }
+/* Wraps for the same reason the title does: this line is our own sentence, and
+   the default nowrap-with-ellipsis cut it at "16 fields still to i...". Two
+   lines at most, so an unexpectedly long one cannot grow the card. */
+#formforge-hud .ff-now{ margin-top:6px!important; font-size:11px!important; color:#5d6672!important;
+  white-space:normal!important; overflow-wrap:anywhere!important;
+  display:-webkit-box!important; -webkit-box-orient:vertical!important; -webkit-line-clamp:2!important; }
+#formforge-hud .ff-now.ff-off{ display:none!important; }
 #formforge-hud .ff-tags{ display:flex!important; flex-wrap:wrap!important; gap:4px 5px!important;
   margin-top:7px!important; font-size:11px!important; overflow:visible!important; }
 #formforge-hud .ff-tags:empty{ display:none!important; margin-top:0!important; }
@@ -98,16 +104,6 @@
   border-radius:999px!important; background:#f1f3f6!important; color:#5d6672!important; }
 #formforge-hud .ff-tag.ff-ai{ background:#e7f3ed!important; color:#1f6f4f!important; }
 #formforge-hud .ff-tag.ff-miss{ background:#fdf3e3!important; color:#8a5a12!important; }
-#formforge-hud .ff-more{ display:none!important; margin-top:8px!important; padding-top:8px!important;
-  border-top:1px solid #e2e5ea!important; font-size:11px!important; color:#5d6672!important; overflow:visible!important; }
-#formforge-hud.ff-open .ff-more{ display:block!important; }
-#formforge-hud .ff-more div{ margin-top:2px!important; }
-#formforge-hud .ff-seed{ display:inline!important; color:#1f6f4f!important; font-weight:600!important; }
-#formforge-hud .ff-btn{ display:inline-block!important; margin-top:8px!important; padding:3px 8px!important;
-  border:1px solid #e2e5ea!important; border-radius:6px!important; background:transparent!important;
-  color:inherit!important; font:inherit!important; font-size:11px!important; cursor:pointer!important; }
-#formforge-hud .ff-hint{ margin-top:6px!important; font-size:10px!important; color:#9aa3ae!important; }
-#formforge-hud.ff-clickable{ cursor:pointer!important; }
 #formforge-hud .ff-off{ display:none!important; }
 @keyframes formforge-spin{ to{ transform:rotate(360deg) } }
 @keyframes formforge-breathe{ 0%,100%{ --ff-arc:70deg } 50%{ --ff-arc:300deg } }
@@ -118,7 +114,7 @@
 @media (prefers-color-scheme: dark){
   #formforge-hud{ background:#1b2027!important; color:#e9ebef!important; border-color:#2c323a!important;
     box-shadow:0 2px 6px rgba(0,0,0,.35),0 10px 28px rgba(0,0,0,.45)!important; }
-  #formforge-hud .ff-count,#formforge-hud .ff-now,#formforge-hud .ff-more{ color:#98a1ac!important; }
+  #formforge-hud .ff-count,#formforge-hud .ff-now{ color:#98a1ac!important; }
   #formforge-hud.ff-busy .ff-title{ background-image:linear-gradient(90deg,#e9ebef 20%,#6b7684 45%,#e9ebef 70%)!important; }
   #formforge-hud .ff-spin{ background:conic-gradient(from 0deg,
     rgba(53,163,119,0) 0deg, rgba(53,163,119,.2) calc(var(--ff-arc) * .3),
@@ -132,9 +128,6 @@
   #formforge-hud .ff-tag.ff-ai{ background:#16281f!important; color:#59c295!important; }
   #formforge-hud .ff-tag.ff-miss{ background:#2a2115!important; color:#d9a344!important; }
   #formforge-hud .ff-x:hover{ background:#242a32!important; color:#e9ebef!important; }
-  #formforge-hud .ff-more{ border-top-color:#2c323a!important; }
-  #formforge-hud .ff-btn{ border-color:#2c323a!important; }
-  #formforge-hud .ff-seed{ color:#35a377!important; }
 }
 @media (prefers-reduced-motion: reduce){
   #formforge-hud,#formforge-hud .ff-bar i{ transition:none!important; }
@@ -148,11 +141,15 @@
     /* One bar for the whole job, and it only moves forward: each stage owns a
      * band of it. A stage with nothing to count creeps towards the end of its
      * band without arriving. */
+    /* The bar only ever moves forward, so the bands are in fill order. `improve`
+     * sits after `fill` because that is when it happens: the form is complete and
+     * the model is replacing what it finds. */
     const BANDS = {
         read: [0.01, 0.06],
         model: [0.06, 0.22],
-        fill: [0.22, 0.88],
-        repair: [0.88, 0.97],
+        fill: [0.22, 0.80],
+        improve: [0.80, 0.95],
+        repair: [0.95, 0.98],
         done: [1.00, 1.00]
     };
 
@@ -163,11 +160,21 @@
     let lastPing = 0;
     let dismissed = false;
 
+    /* The card shows one line, so it shows the furthest the fill has got. Stages
+     * do not all start in order: the model request is sent before the writing
+     * starts but reports "warming up" a moment after it, which used to land on
+     * top of the stage that had already overtaken it and stay there for the whole
+     * request. The popup keeps a row per stage and can still take them in any
+     * order, so the relay is unconditional; only the card is held forward. */
+    const ORDER = ['read', 'model', 'fill', 'improve', 'repair', 'done'];
+    let shown = -1;
+
     function reset() {
         clearTimeout(hudTimer);
         clearInterval(trickle);
         barAt = 0;
         lastStage = '';
+        shown = -1;
         lastPing = 0;
         dismissed = false;
     }
@@ -204,7 +211,7 @@
             '<span class="ff-title"></span><span class="ff-count"></span>' +
             '<button class="ff-x" type="button" aria-label="Close">×</button></div>' +
             '<div class="ff-bar"><i></i></div>' +
-            '<div class="ff-now"></div><div class="ff-tags"></div><div class="ff-more"></div>';
+            '<div class="ff-now"></div><div class="ff-tags"></div>';
         if (adopted) el.classList.add('ff-in');
         else requestAnimationFrame(() => el.classList.add('ff-in'));
         return el;
@@ -259,9 +266,11 @@
      * count; otherwise the bar creeps. `stage` is an identity the popup keys on. */
     function progress(stage, text, at) {
         if (dismissed) return relay(stage, text, at);
+        const rank = ORDER.indexOf(stage);
+        if (rank >= 0 && rank < shown) return relay(stage, text, at);
+        if (rank > shown) shown = rank;
         const el = box();
         clearTimeout(hudTimer);
-        el.classList.remove('ff-open', 'ff-clickable');
         el.classList.add('ff-busy');
         closable(el);
         el.querySelector('.ff-top').firstChild.className = 'ff-spin';
@@ -290,24 +299,6 @@
     }
 
     const fmtMs = (ms) => ms < 950 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
-
-    function bugReport(p, d) {
-        return [
-            `Test persona (FormForge, seed ${p.seed}, locale ${p.locale})`,
-            `Name:    ${p.fullName}`,
-            `Email:   ${p.email}`,
-            `Phone:   ${p.phone}`,
-            `Company: ${p.company}`,
-            `Address: ${p.street}, ${p.postal} ${p.city}, ${p.country}`,
-            `Page:    ${location.href}`,
-            '',
-            'Fields filled:',
-            ...(d.filled || []).map(f => `  ${f.label}: ${f.value}  [${f.source}]`),
-            ...((d.skipped || []).length
-                ? ['', 'Planned but wrote nothing:', ...d.skipped.map(s => `  ${s.label}  [${s.type}]`)]
-                : [])
-        ].join('\n');
-    }
 
     /* The result, in the same box. It names what did not work — a fill that
      * left required fields empty must not read as a success — and stays up
@@ -370,38 +361,10 @@
             }
         }
 
-        const more = el.querySelector('.ff-more');
-        more.textContent = '';
-        if (p) {
-            el.classList.add('ff-clickable');
-            const line = (t) => {
-                const n = document.createElement('div');
-                n.textContent = t;
-                more.appendChild(n);
-            };
-            line(p.email);
-            line(`${p.street}, ${p.postal} ${p.city}`);
-            const seed = document.createElement('div');
-            seed.append('seed ');
-            const s = document.createElement('b');
-            s.className = 'ff-seed';
-            s.textContent = p.seed;
-            seed.append(s);
-            more.appendChild(seed);
-            const btn = document.createElement('button');
-            btn.className = 'ff-btn';
-            btn.textContent = 'Copy for bug report';
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                navigator.clipboard.writeText(bugReport(p, d));
-                btn.textContent = 'Copied';
-            });
-            more.appendChild(btn);
-            const hint = document.createElement('div');
-            hint.className = 'ff-hint';
-            hint.textContent = 'Click to hide';
-            more.appendChild(hint);
-        }
+        /* No second debug report on the card. Its job is the verdict — how many
+         * fields, how long, what was left — and it takes itself off screen after a
+         * few seconds, which is no place to keep something a tester needs to copy
+         * into a ticket. That lives in the Debug tab now. */
 
         const dismiss = () => {
             el.classList.remove('ff-in');
@@ -414,14 +377,9 @@
         arm(d.skipped && d.skipped.length ? 6000 : 3200);
         el.onmouseenter = () => clearTimeout(hudTimer);
         el.onmouseleave = () => {
-            if (!el.classList.contains('ff-open')) arm(1200);
+            arm(1200);
         };
-        el.onclick = (e) => {
-            if (e.target && e.target.classList && e.target.classList.contains('ff-btn')) return;
-            if (!p) return dismiss();
-            el.classList.toggle('ff-open');
-            if (el.classList.contains('ff-open')) clearTimeout(hudTimer); else arm(1600);
-        };
+        el.onclick = dismiss;
     }
 
     globalThis.FormForgeHud = {reset, progress, toast, ping};

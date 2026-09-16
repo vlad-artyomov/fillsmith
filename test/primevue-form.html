@@ -410,6 +410,17 @@
         <ul id="anhaenge-liste"></ul>
     </div>
 
+    <!-- Per-file rows that exist only once the upload has come back from the
+         server: a checkbox and two text inputs for every file, all of them
+         carrying the same caption as the row above and none of them with a name
+         or an id of its own. The real thing takes a round trip to render them,
+         which is longer than the repair loop's one grace pause. -->
+    <div class="field">
+        <label for="bilder">Images</label>
+        <input id="bilder" name="bilder" type="file" multiple accept="image/png,image/jpeg">
+        <div id="bilder-liste"></div>
+    </div>
+
     <div class="field">
         <label id="lbl-staat">Country</label>
         <div class="p-select p-component" data-pc-name="select" id="staat" aria-labelledby="lbl-staat"
@@ -942,6 +953,30 @@
                 list.appendChild(li);
             }
             input.value = '';                 // the file is ours now; let it be picked again
+        });
+    })();
+
+    /* The uploader whose per-file controls arrive with the server's answer. */
+    (() => {
+        const input = document.getElementById('bilder');
+        const list = document.getElementById('bilder-liste');
+        const delay = 700;                // the server's round trip before the row exists
+        input.addEventListener('change', () => {
+            for (const f of Array.from(input.files)) {
+                setTimeout(() => {
+                    const row = document.createElement('div');
+                    row.className = 'upload-row';
+                    row.dataset.file = f.name;
+                    row.innerHTML =
+                        '<span class="upload-name"></span>' +
+                        '<label><input type="checkbox" class="u-show"> Show in borrower portal</label>' +
+                        '<label>Alternative text <input type="text" class="u-alt"></label>' +
+                        '<label>Source <input type="text" class="u-src"></label>';
+                    row.querySelector('.upload-name').textContent = f.name;
+                    list.appendChild(row);
+                }, delay);
+            }
+            input.value = '';
         });
     })();
 
@@ -1722,6 +1757,11 @@
         typ: model.typ || null,
         regionen: (model.regionen || []).slice(),
         anhaenge: (model.anhaenge || []).slice(),
+        bilder: Array.from(document.querySelectorAll('#bilder-liste .upload-row')).map(r => ({
+            alt: r.querySelector('.u-alt').value,
+            src: r.querySelector('.u-src').value,
+            show: r.querySelector('.u-show').checked
+        })),
         orga: model.orga || null,
         rolle: model.rolle || null,
         team: model.team || null,

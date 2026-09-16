@@ -55,7 +55,9 @@ FormForge drives each control the way a person does — then reads it back to se
   *because* of the fill get filled too; a maximum that exists only in a validation schema is read off the error
   message under the field and obeyed.
 - **Says what went wrong.** A card in the corner reports how many fields were filled, where each value came from,
-  and which ones were left — with a **Copy for bug report** button underneath.
+  and which ones were left. The detail lives in the popup's Debug tab, which is still there after the card has taken
+  itself off screen: every value and where it came from, the model's own prompts, and **Save report** — one text file
+  with the last fill in full and the timings of the fills around it, to attach to a ticket.
 
 <div align="center">
 <img src="docs/popup.png" alt="The FormForge popup: one Fill button, a dry run, a clear, and the last fill listed field by field" width="380">
@@ -92,7 +94,8 @@ For each field, the first step that answers wins:
 2. **Type default** — a number, a date in the locale's format, a time, prose, markup for a rich-text editor.
 3. **Model** — everything left over goes to Chrome's built-in Gemini Nano in one batch, with the persona and the
    page's own heading, so the answers stay coherent with each other.
-4. **Filler** — text named after the field, or a seeded pick among the control's real options.
+4. **Filler** — a short phrase from the persona's own vocabulary, or a seeded pick among the control's real
+   options. Never the field's own caption echoed back: a form full of `Alternative text 27` validates nothing.
 
 Everything derives from a seed, so a fill is reproducible: pin one in **Settings → Repeat data** to get the same
 person twice — what you want when you're reproducing a bug rather than finding one.
@@ -139,6 +142,7 @@ as though it arrived slowly.
 | `activeTab`, `scripting` | The filler is injected **only** when you press Fill. It is not a declared content script and never runs as you browse. |
 | `storage`                | Settings, the last fill's trail, and an API key if you enter one. Local to this browser profile.                       |
 | `contextMenus`           | The right-click entries.                                                                                               |
+| `downloads`              | Only the **Save report** button in the Debug tab: one text file about your own fills.                                    |
 | `<all_urls>`             | A tester's form can be on any host, and the extension can't know which in advance.                                     |
 
 Rules and the on-device model run entirely in your browser. Field labels reach a hosted provider only if you enter

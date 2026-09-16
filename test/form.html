@@ -49,6 +49,15 @@
             <option>Silver</option>
             <option>Gold</option>
         </select>
+        <!-- The shape a prompt takes when it is not an empty value: a sentinel
+             option carrying "0", which passes any filter that only drops "". -->
+        <label for="dw">Delivery window</label>
+        <select id="dw" name="deliveryWindow">
+            <option value="0">(Select a window)</option>
+            <option value="1">Morning</option>
+            <option value="2">Afternoon</option>
+            <option value="3">Evening</option>
+        </select>
         <label for="hc">Expected headcount on site</label><input id="hc" type="number" name="headcount" min="1"
                                                                  max="50">
         <label for="sd">Start date</label><input id="sd" type="date" name="startDate">

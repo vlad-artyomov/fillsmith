@@ -15,7 +15,19 @@
     const H = W.helpers;
     const {progress, toast, ping} = Hud;
 
+    /* Every frame on the page runs this file. A subframe with nothing to fill or
+     * clear has nothing to report either: its "cleared 0 fields" otherwise lands
+     * in the popup on top of the frame that just cleared forty. */
+    const SUBFRAME = (() => {
+        try {
+            return window.top !== window;
+        } catch (_) {
+            return true;                 // cross-origin: not the top frame
+        }
+    })();
+
     const MARK = 'data-formforge-id';
+    const FILLS_KEPT = 10;             // full decision trails in the Debug tab and the report
     const SKIP_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image']);
     const CHOICE_KINDS = new Set(['choice', 'multichoice', 'inline-choice', 'autocomplete', 'radio', 'radio-group', 'select']);
     // Their options are in the page, not behind a popup, so they can be read at collect time.
@@ -192,7 +204,7 @@
     }
 
     function collectFields(opts) {
-        const fields = [];
+        let fields = [];
         const popups = popupSurfaces();
         const scope = modalScope();
         const inPopup = (el) => popups.some(p => p.contains(el)) || (scope && !scope.contains(el));
@@ -208,8 +220,9 @@
             if (CAPTCHA.test(label) || APP_CHROME.test(label)) continue;
             const shown = W.displayedValue(w);
             const filled = shown && !H.PLACEHOLDER.test(shown);
-            if (filled && !opts.overwrite && w.kind !== 'bool') continue;
+            const keepsItsValue = filled && !opts.overwrite && w.kind !== 'bool';
             const f = {
+                keepsItsValue,
                 kind: 'widget', widget: w, el: w.root, type: w.kind, lib: w.id,
                 label, section: sectionOf(w.root),
                 required: looksRequired(w.root, label),
@@ -252,16 +265,28 @@
             const hasValue = type === 'checkbox' || type === 'radio' ? el.checked
                 : type === 'file' ? !!(el.files && el.files.length)
                     : type === 'contenteditable' ? !!textOf(el) : !!el.value;
-            if (hasValue && !opts.overwrite) continue;
+            const keepsItsValue = hasValue && !opts.overwrite;
 
             const f = {
+                keepsItsValue,
                 kind: 'native', el, tag, type, label, section: sectionOf(el),
                 required: el.required || looksRequired(el, label),
                 ...limitsOf(el)
             };
             if (type === 'select') {
+                /* The first option is the control's prompt, not a choice, when it
+                 * carries a sentinel value: "(Select Card Type)", "Month", "Year"
+                 * are all value="0" beside real options, and a seeded pick that
+                 * lands on one writes the empty state as if it were data. Judged
+                 * by the page's own convention rather than by reading the caption,
+                 * which is a different word in every language — and only on a list
+                 * long enough to need a prompt, so a three-row yes/no keeps every
+                 * answer it has. */
+                const SENTINEL = new Set(['', '0', '-1', 'none', 'null']);
+                const prompting = el.options.length >= 4;
                 f.options = Array.from(el.options)
                     .filter(o => o.value !== '' && !o.disabled)
+                    .filter(o => !(prompting && o.index === 0 && SENTINEL.has(String(o.value).trim().toLowerCase())))
                     .map(o => ({value: o.value, text: textOf(o).slice(0, 60)})).slice(0, 40);
             }
             if (type === 'radio') {
@@ -274,6 +299,26 @@
 
         // DOM order: dependent dropdowns (country → region) need the parent committed first.
         inDomOrder(fields);
+        /* Rows a page renders one per item — an uploaded file's alt text, its
+         * source, its "show this one" switch — carry no name and no id, and the
+         * same caption as the row above. Their label key is therefore the same
+         * key, and four rows read as one field: the second gets the first one's
+         * value back as though a re-render had eaten it, and a later one is
+         * passed over as already written. Number them in DOM order. The first of
+         * a group keeps the bare key, so nothing that was unique before moves. */
+        const nth = new Map();
+        for (const f of fields) {
+            const base = baseKey(f);
+            if (base.charCodeAt(0) !== 108) continue;          // 'l:', the label-derived key
+            const n = (nth.get(base) || 0) + 1;
+            nth.set(base, n);
+            if (n > 1) f.nth = n;
+        }
+        /* Numbered over every such row on the page, including the ones this pass
+         * is not going to write. A later pass collects only what is still empty,
+         * so counting the collected fields alone gave the third row the first
+         * row's number — and with it the first row's value. */
+        fields = fields.filter(f => !f.keepsItsValue);
         fields.forEach((f, i) => {
             f.idx = i;
             try {
@@ -303,6 +348,11 @@
     /* A field's identity across re-renders. A framework replaces the node in
      * response to our own write, so identity is name/id, then the caption. */
     function fieldKey(f) {
+        const base = baseKey(f);
+        return f.nth ? `${base}#${f.nth}` : base;
+    }
+
+    function baseKey(f) {
         const el = f.el;
         const named = (el.getAttribute && (el.getAttribute('name') || el.getAttribute('id'))) || '';
         if (named) return `n:${named}`;
@@ -454,6 +504,21 @@
         for (const t of types) el.dispatchEvent(new Event(t, {bubbles: true, composed: true}));
     };
     const filesAttached = new Set();      // by field key: an empty file input is what success looks like
+    /* An upload is the one thing a fill starts and does not finish. The row that
+     * comes back with it — the file's caption, its alt text, its "show this one"
+     * switch — is a field this fill caused, so the fill waits for it. The deadline
+     * runs from the attach, as the model's does from its request: a form with
+     * plenty left to do pays nothing for this. */
+    const UPLOAD_PATIENCE_MS = 5000;
+    const uploads = [];
+    const UPLOAD_ZONE = 'fieldset, section, .field, .p-field, .form-group, [class*="field"], [class*="upload"]';
+    const controlsIn = (zone) => {
+        try {
+            return zone.querySelectorAll('input, textarea, select, [contenteditable]').length;
+        } catch (_) {
+            return 0;
+        }
+    };
 
     // Write one value and return what the control holds afterwards (null = nothing landed).
     async function applyValue(f, rawValue, persona) {
@@ -507,7 +572,16 @@
 
             if (f.type === 'file') {
                 const names = await U.attachFiles(el, persona, fieldKey(f), rng);
-                if (names) filesAttached.add(fieldKey(f));
+                if (names) {
+                    filesAttached.add(fieldKey(f));
+                    /* Only a control that took the files off us can be uploading them:
+                     * a dropzone empties its input, a plain <input type="file"> does
+                     * not. Without that test every form with a file field paid the
+                     * whole patience for a row that was never coming. */
+                    const zone = el.closest(UPLOAD_ZONE) || el.parentElement;
+                    const taken = !el.files || el.files.length === 0;
+                    if (zone && taken) uploads.push({zone, before: controlsIn(zone), until: Date.now() + UPLOAD_PATIENCE_MS});
+                }
                 return names;
             }
 
@@ -559,7 +633,15 @@
      * model into memory, so it is budgeted separately (SESSION_ALLOWANCE_MS) from
      * patience with the model's answer (modelBudget). Later passes in one fill
      * get half the patience, and there are at most two of them. */
-    const SESSION_ALLOWANCE_MS = 20000;
+    /* Bringing the model into memory takes as long as it takes — twenty-eight
+     * seconds, measured, on a cold one. That is not a wait to put in front of
+     * somebody who has just pressed Fill for the first time, so the allowance is
+     * a grace on top of the work the fill is doing anyway, not the model's whole
+     * cold start: a session that comes up while the form is being written costs
+     * nothing, and one that does not is left to finish in the background, ready
+     * for the fill after this one. A first fill without the model is a form
+     * filled from the rules; a first fill that hangs is an uninstall. */
+    const SESSION_ALLOWANCE_MS = 3000;
     const LATER_PASS_SHARE = 0.5;
     let modelWarm = false;
     let modelCalls = 0;
@@ -572,16 +654,32 @@
     let modelLoading = false;
     let modelRequestMs = 0;         // how long the model took, which is not how long the fill waited
     let warmProbe = null;           // "is the session already up?", asked before the form is read
+    /* Answers arriving mid-request: the worker sends each batch as it lands, and
+     * whoever is waiting on a field is woken by it rather than by the whole
+     * request finishing. */
+    let modelBatch = null;
+    let waiters = [];
+
+    function wake() {
+        const w = waiters;
+        waiters = [];
+        for (const r of w) r();
+    }
 
     function modelBudget(n, settings) {
         const override = Number(settings && settings.modelTimeout) || 0;
         if (override > 0) return override * 1000;
-        /* Measured against Gemini Nano: a full batch of twelve answers in four to
-         * eight seconds. The old 8s ceiling was set while the model was replying
-         * to one field per batch and so looked generous; against a batch that
-         * really answers it cuts the reply off. Nothing blocks on this — a longer
-         * budget costs waiting only when the model is the last thing outstanding. */
-        const work = Math.min(12000, 1500 + 600 * n);
+        /* Measured against Gemini Nano: a batch of twelve answers in four to eight
+         * seconds, and the batches of one request run one after another, because
+         * one session answers one prompt at a time. A ceiling of twelve seconds
+         * was therefore below the work on any form of more than two batches: a
+         * form of twenty-eight fields needs about eighteen, so its last batch was
+         * cut off on every fill, for ever, and the fields it held went to the
+         * filler — twenty-four of twenty-eight, three runs out of three.
+         *
+         * Nothing blocks on this window. The form is complete before it opens, so
+         * a longer one costs a better answer arriving later, never a wait. */
+        const work = Math.min(45000, 1500 + 600 * n);
         return modelWarm ? work : Math.max(15000, work);
     }
 
@@ -626,6 +724,25 @@
             r({});
         }
     });
+
+    /* One record per request, and a fill can make more than one: the form's own
+     * fields first, then whatever an upload or a switch revealed. Keeping only
+     * the last one left the Debug tab showing the second prompt and no trace of
+     * the first — which is the half that explains most of the form. The session
+     * and the page context belong to the fill, not to the request, so the first
+     * answer for them stands. */
+    function mergeDebug(before, next) {
+        if (!before) return next;
+        if (!next) return before;
+        return Object.assign({}, before, next, {
+            at: before.at,
+            sessionMs: before.sessionMs != null ? before.sessionMs : next.sessionMs,
+            context: before.context || next.context,
+            examples: before.examples && before.examples.length ? before.examples : next.examples,
+            batches: (before.batches || []).concat(next.batches || []),
+            pending: !!next.pending
+        });
+    }
 
     /* Ask the model about the fields nothing local could answer. Always bounded:
      * whatever has not answered by the deadline is filled by the rules. */
@@ -684,7 +801,7 @@
             modelLoading = false;
             modelRequestMs += Date.now() - tAsk;
             if (res && !res.timedOut) modelWarm = true;
-            if (res && res.debug) modelDebug = res.debug;
+            if (res && res.debug) modelDebug = mergeDebug(modelDebug, res.debug);
             if (res && res.via) modelVia = res.via;
             if (res && res.error) modelError = String(res.error);
             modelWarming = !!(res && res.warming);
@@ -759,7 +876,7 @@
         const fields = collectFields({overwrite: settings.overwrite !== false});
         phase.collect = Date.now() - tCollect;
         if (!fields.length) {
-            toast('No fillable fields found on this page.', null);
+            if (!SUBFRAME) toast('No fillable fields found on this page.', null);
             return {count: 0, persona: stripRng(persona), aiUsed: 0, widgets: 0};
         }
 
@@ -780,19 +897,38 @@
          * blind it invents, and the filler discards the invention and picks a
          * valid option anyway. Both were being asked, and the answers thrown
          * away, on every fill. */
+        /* A list we can already read is a list we can already choose from. The
+         * model adds nothing to "01…12" or "Visa, Master Card, American Express,
+         * Discover" — it is being told what the page already says, and every one
+         * asked costs a slot in a batch and a share of the deadline. It earns a
+         * question only where the right option follows from the persona and no
+         * rule has said which one: a country, a salutation, a language. */
+        const readableList = (f) => CHOICE_KINDS.has(f.type) && !!(f.options && f.options.length)
+            && !REAL_WORLD_CHOICE.test(`${f.label} ${f.autocomplete || ''}`);
         const worthAsking = (f) => {
+            /* The file is generated in the page from the seed, to match the input's
+             * own `accept`. Asked anyway, the model replied "image1.jpeg" and
+             * "Technical specifications.pdf" — two slots in a batch of twelve,
+             * spent on names nothing reads. */
+            if (f.type === 'file') return false;
             if (f.type === 'bool' || f.type === 'checkbox') return false;
-            if (CHOICE_KINDS.has(f.type)) return !!(f.options && f.options.length);
+            if (CHOICE_KINDS.has(f.type)) return !!(f.options && f.options.length) && !readableList(f);
             return true;
         };
-        const askAbout = unresolved.filter(worthAsking).concat(weakly);
+        // A weak rule on such a list is not worth a question either: the control decides between them.
+        const askAbout = unresolved.filter(worthAsking).concat(weakly.filter(f => !readableList(f)));
+        /* Every field asked, over every request in the fill. The first request's
+         * count alone was reported as the denominator while aiUsed counted the
+         * answers from all of them, so a fill that asked again about what an
+         * upload revealed read "answered 14 of 10". */
+        let askedCount = askAbout.length;
         /* The rest of the unresolved decide for themselves, out of what the
          * control offers. That is a decision and the report says so: left to fall
          * through, a toggle the seed set on purpose was listed as a fallback with
          * "the model had no answer for it", which is both untrue and the wrong
          * thing to go looking at when a fill comes out wrong. */
         for (const f of unresolved) {
-            if (!worthAsking(f)) plan.set(f.idx, {value: null, source: 'choice'});
+            if (!worthAsking(f) && picksItsOwn(f)) plan.set(f.idx, {value: null, source: 'choice'});
         }
         const awaiting = new Set(askAbout.map(f => f.idx));
 
@@ -803,20 +939,27 @@
          * pass ends is collected afterwards — on the same deadline, which runs
          * from the request, so overlapping shortens the fill and never extends
          * the patience the setting promises. */
-        let answers = null;
+        const answers = {};                 // grows as each batch lands
+        let modelSettled = false;           // the whole request is done, right or wrong
         let pending = null;
         let modelAsked = false;
         let aiUsed = 0;
+        modelBatch = (values, via) => {
+            Object.assign(answers, values || {});
+            if (via && !modelVia) modelVia = via;      // a request that runs out of time never returns one
+            wake();
+        };
         if (settings.useAI !== false && askAbout.length) {
             modelAsked = true;
             progress('model', `Asking the model about ${askAbout.length} field${askAbout.length === 1 ? '' : 's'}`);
             pending = askModel(askAbout, persona).then(v => {
-                answers = v || {};
+                Object.assign(answers, v || {});
+                modelSettled = true;
+                wake();
             });
         }
 
         const modelAnswer = (f) => {
-            if (!answers) return null;
             const v = answers[String(f.idx)] ?? answers[f.idx];
             return v != null && String(v).trim() !== '' ? v : null;
         };
@@ -834,15 +977,26 @@
             const fromModel = modelAnswer(f);
             if (fromModel != null) return {value: fromModel, source: 'ai'};
             if (plan.has(f.idx)) return plan.get(f.idx);
+            /* A file is not something anything fell back to: the bytes are made in
+             * the page from the seed, to match the input's own accept. Reported as
+             * a fallback it read as "nothing better was available", and sent the
+             * reader of a half-filled form looking in the wrong place. */
+            if (f.type === 'file') return {value: null, source: 'type'};
             f.whyFallback = whyFallback(f);
             return {value: picksItsOwn(f) ? null : G.fallbackText(f, persona), source: 'fallback'};
         };
 
         // First pass: sequential and awaited. Widgets open and close overlays; dependent dropdowns need order.
         progress('fill', 'Filling the form', {done: 0, total: fields.length});
+        const tFirst = Date.now();
         const filled = [];
         const skipped = [];
         const wrote = [];
+        /* A field can be written twice: once with what was available, and again
+         * when the model's answer catches up. The second write replaces the first
+         * everywhere it was recorded rather than appearing beside it. */
+        const seatOf = new Map();
+        const wroteAt = new Map();
         const timings = [];
         let widgetCount = 0;
         let at = 0;
@@ -869,16 +1023,24 @@
                 return;
             }
             // For a choice the plan is null ("pick one"); remember what was committed so a repair restores *that*.
-            wrote.push({
+            const commit = {
                 f,
                 key: fieldKey(f),
                 caption: captionKey(f),
                 value: entry.value == null ? String(written) : entry.value
-            });
-            if (f.kind === 'widget') widgetCount++;
+            };
+            const was = seatOf.get(f.idx);
+            if (was == null) {
+                seatOf.set(f.idx, filled.length);
+                wroteAt.set(f.idx, wrote.length);
+                wrote.push(commit);
+                if (f.kind === 'widget') widgetCount++;
+            } else {
+                wrote[wroteAt.get(f.idx)] = commit;
+            }
             if (entry.source === 'ai') aiUsed++;
             flash(f.el, entry.source !== 'fallback');
-            filled.push({
+            const row = {
                 label: captionOf(f),
                 value: String(written).slice(0, 60),
                 source: f.kind === 'widget' ? `${entry.source}/${f.lib}` : entry.source,
@@ -887,31 +1049,83 @@
                         : entry.source === 'ai' ? 'the model answered'
                             : (f.whyFallback || 'nothing else produced a value'),
                 type: f.type, lib: f.lib || ''
-            });
+            };
+            if (was == null) filled.push(row);
+            else filled[was] = row;                 // the model caught up with a field already written
         }
 
-        const late = [];
+        /* Nothing waits here. Every field is written with the best answer that
+         * exists right now — a rule's, the control's own, or the filler's — so
+         * the form is complete and usable before the model has said anything. */
+        const owed = [];
         for (const f of fields) {
-            // Every field is either planned or waiting on the model; nothing is skipped here.
-            if (pending && !answers && awaiting.has(f.idx)) late.push(f);
-            else await write(f, entryFor(f));
+            if (pending && !modelSettled && awaiting.has(f.idx) && modelAnswer(f) == null) owed.push(f);
+            await write(f, entryFor(f));
         }
+        phase.firstPass = Date.now() - tFirst;
 
-        // Whatever the model still owed when the pass ended: wait out the rest of its budget, then write.
+        /* Then the model catches up. Its answers replace what is already in the
+         * fields as each batch lands — an upgrade, not a wait, which is the whole
+         * difference between "a slow model makes the fill slow" and "a slow model
+         * makes the fill less good". Waiting for the batches instead meant a
+         * twelve-second fill of which twelve seconds were spent looking at a
+         * finished form, and the batches that missed the deadline were thrown
+         * away rather than written a moment late. */
         const tWait = Date.now();
-        if (late.length && pending) {
-            /* The stage on the first line, what it is waiting on underneath, the
-             * way every other stage reads: one sentence carrying both was the
-             * one line a reader needs while nothing on the page is moving, and
-             * it was the line that got cut. */
-            progress('fill', 'Waiting for the model', {
-                done: at, total: fields.length,
-                label: `${late.length} field${late.length === 1 ? '' : 's'} left`
+        phase.firstLate = null;
+        let upgraded = 0;
+        const done = new Set();
+        const catchUp = async () => {
+            for (const f of owed) {
+                if (done.has(f.idx)) continue;
+                const v = modelAnswer(f);
+                if (v == null) continue;
+                done.add(f.idx);
+                if (phase.firstLate == null) phase.firstLate = Date.now() - tWait;
+                if (document.contains(f.el) && isVisible(f.el)) {
+                    await write(f, {value: v, source: 'ai'});
+                    upgraded++;
+                    continue;
+                }
+                /* The node was replaced between the two writes — a framework
+                 * re-rendering the field it had just been given a value. The repair
+                 * loop already knows how to find the replacement, and it restores
+                 * whatever the field was last recorded as holding, so correcting the
+                 * record is what puts the model's answer into the new node. */
+                const seat = wroteAt.get(f.idx);
+                if (seat == null) continue;
+                wrote[seat].value = v;
+                const row = filled[seatOf.get(f.idx)];
+                if (row) {
+                    row.value = String(v).slice(0, 60);
+                    row.source = f.kind === 'widget' ? `ai/${f.lib}` : 'ai';
+                    row.why = 'the model answered, into the node that replaced the one written first';
+                }
+                aiUsed++;
+                upgraded++;
+            }
+        };
+        await catchUp();
+        while (pending && !modelSettled && done.size < owed.length) {
+            /* Named for what is actually happening, and counted against what it is
+             * actually doing. "Improving the form" over a count of filled fields
+             * read as a fill that had stalled at twelve of forty: the form was
+             * finished, and the thing taking the time was the model. So the title
+             * says which, the count is answers received rather than fields written,
+             * and the line underneath says the form is not what is being waited
+             * for. The card's shimmer does the rest — there is no pool of phrases
+             * to cycle through, because every line here has to be true. */
+            const left = owed.length - done.size;
+            progress('improve', 'AI is still answering', {
+                done: done.size, total: owed.length,
+                label: `the form is filled — ${left} field${left === 1 ? '' : 's'} still to improve`
             });
-            await pending;
+            await new Promise(r => waiters.push(r));
+            await catchUp();
         }
+        if (pending) await pending;                 // its own deadline; the form has not waited on it
+        await catchUp();                            // the settle carries the last batch with it
         phase.model = Date.now() - tWait;
-        for (const f of late) await write(f, entryFor(f));
 
         if (modelAsked) {
             ping({
@@ -929,7 +1143,22 @@
          * retry what wrote nothing, fill what our writes revealed (a switch that
          * renders the controls it gates). A field is identified by key, so a node
          * the framework rebuilt gets its original value back rather than a new one. */
-        phase.firstPass = Date.now() - tStart - phase.collect - phase.model;
+        /* Nothing else is happening and a file we attached has not come back. On a
+         * short form the fill is over in eighty milliseconds and the row lands a
+         * second later, so without this the fields it brings are left for the next
+         * fill to find — which is what "the metadata only appears on the second
+         * run" was. Returns whether something arrived. */
+        async function waitForUpload() {
+            const due = uploads.filter(u => Date.now() < u.until && controlsIn(u.zone) <= u.before);
+            if (!due.length) return false;
+            progress('repair', 'Waiting for the upload',
+                {label: `${due.length} file field${due.length === 1 ? '' : 's'}`});
+            const until = Math.max(...due.map(u => u.until));
+            const arrived = await H.settle(() => due.some(u => controlsIn(u.zone) > u.before), until - Date.now(), 120);
+            if (!arrived) H.note('an upload did not come back in time; the fields it brings were left empty');
+            return arrived;
+        }
+
         const tRevealed = Date.now();
         let revealed = 0;
         let repaired = 0;
@@ -1005,12 +1234,16 @@
                 if (needModel.length) {
                     modelAsked = true;
                     lateModelCalls++;
+                    askedCount += needModel.length;
                     const tM = Date.now();
                     Object.assign(lateAnswers, await askModel(needModel, persona));
                     phase.modelLate = (phase.modelLate || 0) + (Date.now() - tM);
                 }
             }
-            if (!fresh.length && !didSomething) break;
+            if (!fresh.length && !didSomething) {
+                if (!await waitForUpload()) break;
+                continue;
+            }
 
             let wroteNow = 0;
             for (const f of fresh) {
@@ -1063,7 +1296,8 @@
                 // One last look a beat later: a re-render provoked by the last write lands after the loop would give up.
                 if (settled) break;
                 settled = true;
-                await H.sleep(250);
+                if (await waitForUpload()) settled = false;     // it arrived; there is work again
+                else await H.sleep(250);
             }
         }
 
@@ -1111,17 +1345,60 @@
         timings.sort((a, b) => b.ms - a.ms);
         const notes = H.takeNotes();
 
-        // Persisted from here, not from the popup, so a keyboard-triggered fill is recorded too.
+        /* A rolling record of what every fill cost, so a run of them can be looked
+         * at together rather than one screenshot at a time: the phases, what the
+         * model did, and the slowest controls with the time each took. Kept small
+         * — no values, no persona beyond the seed — and capped, because this sits
+         * in the profile's storage. The Debug tab saves it as one JSON file. */
+        const stat = {
+            at: Date.now(), url: location.href.slice(0, 200), title: document.title.slice(0, 80),
+            seed: persona.seed, locale: persona.locale,
+            fields: fields.length, filled: filled.length, widgets: widgetCount,
+            revealed, repaired, upgraded, skipped: skipped.length, leftOpen: leftOpen.length,
+            ai: {
+                asked: askedCount, used: aiUsed, via: modelVia, requestMs: modelRequestMs,
+                blockedMs: phase.model, warming: modelWarming, timedOut: modelTimedOut,
+                error: modelError ? modelError.slice(0, 120) : '',
+                batches: ((modelDebug || {}).batches || []).map(b => ({
+                    asked: b.asked, answered: b.answered, ms: b.ms, error: b.error ? b.error.slice(0, 80) : undefined
+                }))
+            },
+            phase,
+            slowest: timings.slice(0, 12),
+            notes
+        };
         try {
-            chrome.storage.local.set({
-                lastFill: {
-                    at: Date.now(), url: location.href.slice(0, 200), title: document.title.slice(0, 80),
-                    count: filled.length, widgets: widgetCount, revealed, repaired, aiUsed,
-                    modelTimedOut, modelWarming, modelVia, modelError, modelAsked, leftOpen, notes,
-                    modelRequestMs, unresolvedCount: askAbout.length,
-                    persona: {fullName: persona.fullName, seed: persona.seed, locale: persona.locale},
-                    filled, skipped, phase, modelDebug
-                }
+            chrome.storage.local.get({fillLog: []}, (got) => {
+                void chrome.runtime.lastError;
+                const log = (got && got.fillLog || []).concat([stat]).slice(-100);
+                chrome.storage.local.set({fillLog: log}, () => void chrome.runtime.lastError);
+            });
+        } catch (_) {
+        }
+
+        /* Persisted from here, not from the popup, so a keyboard-triggered fill is
+         * recorded too — and ten deep, not one. "It worked a minute ago" is a
+         * comparison, and the trail of the fill before the broken one is what
+         * makes it: the report is worth little if it can only ever describe the
+         * run somebody happened to save it after. */
+        const record = {
+            at: Date.now(), url: location.href.slice(0, 200), title: document.title.slice(0, 80),
+            count: filled.length, widgets: widgetCount, revealed, repaired, upgraded, aiUsed,
+            modelTimedOut, modelWarming, modelVia, modelError, modelAsked, leftOpen, notes,
+            modelRequestMs, unresolvedCount: askedCount,
+            // What the bug report names; the Debug tab builds it from here.
+            persona: {
+                fullName: persona.fullName, seed: persona.seed, locale: persona.locale,
+                email: persona.email, phone: persona.phone, company: persona.company,
+                street: persona.street, postal: persona.postal, city: persona.city, country: persona.country
+            },
+            filled, skipped, phase, modelDebug
+        };
+        try {
+            chrome.storage.local.get({fillHistory: []}, (got) => {
+                void chrome.runtime.lastError;
+                const kept = (got && got.fillHistory || []).concat([record]).slice(-FILLS_KEPT);
+                chrome.storage.local.set({fillHistory: kept}, () => void chrome.runtime.lastError);
             });
         } catch (_) {
         }
@@ -1135,6 +1412,7 @@
             widgets: widgetCount,
             revealed,
             repaired,
+            upgraded,
             leftOpen,
             notes,
             modelTimedOut,
@@ -1144,7 +1422,7 @@
             modelDebug,
             modelAsked,
             modelRequestMs,
-            unresolvedCount: askAbout.length,
+            unresolvedCount: askedCount,
             filled,
             skipped,
             phase,
@@ -1286,7 +1564,7 @@
                 }
             }
         });
-        toast(`Cleared ${n} fields`, null);
+        if (n || !SUBFRAME) toast(`Cleared ${n} fields`, null);
         return {count: n};
     }
 
@@ -1334,6 +1612,12 @@
         if (msg.kind === 'fill-one') return exclusive(() => fillOne(msg.settings || {}, {focusFirst: !!msg.focusFirst}), respond);
         if (msg.kind === 'clear') return exclusive(async () => ({ok: true, ...clearAll()}), respond);
         // The worker says when the model has finished loading, so the card can stop saying "warming up".
+        // A batch of answers, ahead of the request it belongs to finishing.
+        if (msg.kind === 'model-batch') {
+            if (modelBatch) modelBatch(msg.values, msg.via);
+            respond({ok: true});
+            return false;
+        }
         if (msg.kind === 'model-stage') {
             if (busy && modelLoading && msg.stage === 'asking') {
                 modelLoading = false;

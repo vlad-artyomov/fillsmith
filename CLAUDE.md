@@ -54,3 +54,6 @@ one. `test/primevue-form.html?latency=slow` makes the fixture's remote pickers s
 - **Keep the persona invisible.** It is machinery for coherence, not a setting a tester should reason about.
 - **Bump the version with every change that lands**, in `manifest.json` and `package.json` together: patch for a fix,
   minor for a feature. A reloaded extension must say which build it is.
+- **Never commit or push unasked.** Finish the work, run the suites, leave it in the working tree, and say what is
+  in it. Recording it in history, and when, is the user's call — and permission for one commit is permission for
+  that commit, not for the ones after it. The version bump above is part of the change, not a reason to commit it.

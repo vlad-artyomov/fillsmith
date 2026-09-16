@@ -228,6 +228,21 @@ body {
     transition: background .12s ease, border-color .12s ease, color .12s ease;
 }
 
+.btn.small {
+    padding: 4px 8px;
+    font-size: 11px;
+}
+
+/* The saved-timings row: two small buttons and how many fills are in the file. */
+.dbg-tools {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+}
+
 .btn:hover {
     border-color: var(--faint);
 }
@@ -516,6 +531,52 @@ details[open] summary {
     margin-bottom: 12px;
 }
 
+/* The trail begins under the setup button, not against it. */
+#debugBody {
+    margin-top: 14px;
+}
+
+/* One line for the page, however long its title: the rest of the card is four
+   short facts, and a title wrapping to three lines buries all of them. */
+.dbg-page {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Ten kept fills, newest first, on a wrapping row: a line of timestamps is
+   enough to find the run before the one that went wrong. It sits between the
+   setup button and the trail below, so it needs air on both sides — pressed
+   against either it reads as part of that one rather than as its own control. */
+.dbg-pick {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 14px 0 16px;
+}
+
+.dbg-pin {
+    font: inherit;
+    font-size: 10px;
+    line-height: 1.4;
+    padding: 3px 9px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--faint);
+    cursor: pointer;
+}
+
+.dbg-pin:hover {
+    color: var(--text);
+}
+
+.dbg-pin.on {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 650;
+}
+
 .dbg-h {
     font-size: 10px;
     font-weight: 650;
@@ -547,8 +608,19 @@ details[open] summary {
     overflow: auto;
 }
 
+/* Two panels stacked under a four-line summary is most of the card's weight
+   spent on things nobody opens unless something went wrong. Inside the Debug
+   tab a disclosure is a line of text, not a box. */
 .dbg-det {
     margin-top: 6px;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    background: transparent;
+}
+
+.dbg-det[open] > summary {
+    margin-bottom: 5px;
 }
 
 .dbg-det > summary {

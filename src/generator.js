@@ -427,6 +427,15 @@
         [/\b(birth\w*|dob|geburt\w*|geboren)\b/i, p => p.birthDate],
         [/\b(iban|bank\s*account|kontonummer|bankverbindung)\b/i, p => p.iban],
         [/\b(vat|ust|tax\s*(id|number)|steuernummer|umsatzsteuer)\b/i, p => p.vatId],
+        /* The browser's own autofill vocabulary — cc-type, cc-name, cc-exp-month —
+         * is on these controls already, and `autocomplete` is matched alongside the
+         * label. Every generated number is a 4111… test card, so the brand beside
+         * it is a fact, not a guess, and the two halves of an expiry date come from
+         * the one the MM/YY rule uses. */
+        [/\b(card\s*type|cardtype|cc-?type|card\s*brand|kartentyp)\b/i, () => ['Visa', 'VISA']],
+        [/\b(cc-?name|name\s*on\s*(the\s*)?card|cardholder|karteninhaber)\b/i, p => p.fullName],
+        [/\bexp(iry|iration)?\s*(month|monat)\b|\bcc-?exp-?month\b/i, p => p.cardExpiry.slice(0, 2)],
+        [/\bexp(iry|iration)?\s*(year|jahr)\b|\bcc-?exp-?year\b/i, p => [`20${p.cardExpiry.slice(-2)}`, p.cardExpiry.slice(-2)]],
         [/\b(card\s*number|cardnumber|pan|kreditkarte|ccnum)\b/i, p => p.cardNumber],
         [/\b(cvc|cvv|security\s*code|prüfziffer)\b/i, p => p.cardCvc],
         [/\b(expir|valid\s*(thru|until)|gültig|mm\s*\/\s*yy)\b/i, p => p.cardExpiry],
@@ -584,21 +593,35 @@
 
     /* The last resort, named after the field it lands in: "Prerequisite 43" in
      * a box labelled Prerequisite is obviously deliberate test data. */
+    /* A value that reads as content. This used to be the field's own caption with a
+     * number after it — "Alternative text 27" — which traces nicely and exercises
+     * nothing: no word boundary, no accent, no length anything would validate, and
+     * a screenshot of a filled form that looks like the filler gave up. The caption
+     * decides nothing about the value now; the Debug tab is where a reader finds
+     * out which field got what.
+     *
+     * Drawn from the product and colour lists, not the noun list: faker's German
+     * nouns are grammar terms and worse, and none of that belongs in a colleague's
+     * test form. The number keeps sibling rows apart — four "Alternative text"
+     * inputs must not all read the same. */
     function fallbackText(field, persona) {
         const max = field.maxLength && field.maxLength > 0 ? field.maxLength : 60;
         const r = persona._rng || Math.random;
-        const n = 1 + Math.floor(r() * 99);
-        const caption = String(field.label || '')
-            .split('|')[0]
-            .replace(/[*:\u00a0]+/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-        const usable = caption
-            && caption.length <= 40
-            && /[a-zA-Z\u00c0-\u024f]{3}/.test(caption)
-            && !/^(name|e-?mail|phone)$/i.test(caption);
-        const base = usable ? `${caption} ${n}` : `${persona.company.split(' ')[0]} ${persona.seed}`;
-        return base.slice(0, max).trim();
+        const loc = persona.locale || 'en-US';
+        const n = String(1 + Math.floor(r() * 99));
+        const products = vocab(loc, 'product');
+        const colour = pick(r, vocab(loc, 'color')) || '';
+        // A narrow field gets the shortest word there is rather than a bare number.
+        const drawn = pick(r, products) || '';
+        const product = drawn.length + 2 <= max ? drawn
+            : (products.filter(w => w.length + 2 <= max).sort((a, b) => a.length - b.length)[0] || '');
+        const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+        // The longest phrase that fits, never a word cut in half.
+        for (const parts of [[colour, product, n], [product, n], [product], [n]]) {
+            const made = parts.filter(Boolean).join(' ').trim();
+            if (made && made.length <= max) return cap(made);
+        }
+        return `${persona.company.split(' ')[0]} ${persona.seed}`.slice(0, max).trim();
     }
 
     globalThis.FormForgeGen = {

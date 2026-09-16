@@ -145,9 +145,18 @@ function chunk(arr, n) {
     return out;
 }
 
-/* Line the reply up with what was asked. Small models renumber ids, so an id
- * we recognise is honoured and anything else is matched by position. */
-function parseValues(text, asked) {
+/* Line the reply up with what was asked.
+ *
+ * The ids are the mapping. Position is a fallback for a model that returns none
+ * at all, and it is only sound when nothing has shifted: a reply one entry short
+ * or one entry long slides every field after the gap into its neighbour's slot,
+ * and a state in the phone box and a PO box in the state reads as data rather
+ * than as a bug — which is the worst thing a filler can produce. So position is
+ * used only when no entry named a recognisable id and the count is exact; an
+ * odd entry among good ones is dropped instead of smeared. The counts go into
+ * the batch's debug entry, so a report says which mapping actually did the work.
+ */
+function parseValues(text, asked, tally) {
     const out = {};
     if (!text) return out;
     let data = null;
@@ -170,16 +179,22 @@ function parseValues(text, asked) {
     const ids = (asked || []).map(f => String(f.id));
     const known = new Set(ids);
     const clean = (v) => v.trim().slice(0, 2000);
-    let positional = 0;
-    for (const item of items) {
-        const id = item.id == null ? null : String(item.id);
-        if (id !== null && known.has(id)) {
-            out[id] = clean(item.value);
-            continue;
-        }
-        while (positional < ids.length && out[ids[positional]] !== undefined) positional++;
-        if (positional < ids.length) out[ids[positional++]] = clean(item.value);
+    const named = items.filter(x => x.id != null && known.has(String(x.id)));
+    const count = (how, n) => {
+        if (tally) tally[how] = n;
+    };
+    if (named.length) {
+        for (const item of named) out[String(item.id)] = clean(item.value);
+        count('byId', named.length);
+        count('dropped', items.length - named.length);
+        return out;
     }
+    if (items.length === ids.length) {
+        items.forEach((item, i) => (out[ids[i]] = clean(item.value)));
+        count('byPosition', items.length);
+        return out;
+    }
+    count('dropped', items.length);
     return out;
 }
 
@@ -271,6 +286,12 @@ function warmOnStart() {
 
 chrome.runtime.onInstalled.addListener(warmOnStart);
 chrome.runtime.onStartup.addListener(warmOnStart);
+/* Not on every start of this worker. Chrome wakes it for every message, and
+ * bringing a multi-gigabyte model into memory alongside whatever woke it made the
+ * browser itself feel slow — including the moment the indicator says "Starting
+ * FormForge". The warm-up belongs where somebody is about to fill: the popup
+ * opening and the fill's own probe both ask for it, and a session that is already
+ * up costs nothing to ask for again. */
 
 // A session remembers every prompt; each batch runs on a clone that starts from the system prompt alone.
 async function statelessSession(session) {
@@ -288,7 +309,7 @@ let lastExchange = null;
 const PROMPT_HEADROOM_MS = 2500;
 
 async function generateOnDevice(persona, pageTitle, fields, context, examples, opts) {
-    const {sessionWaitMs = 0, tabId = null, fieldCount = 0} = opts || {};
+    const {sessionWaitMs = 0, tabId = null, fieldCount = 0, budgetMs = 0} = opts || {};
     const tSession = Date.now();
     let session = nanoSession;
     if (!session) {
@@ -318,21 +339,45 @@ async function generateOnDevice(persona, pageTitle, fields, context, examples, o
         return null;
     }
     // Batches run together: each is its own clone and shares nothing.
+    /* One session answers one prompt at a time, so these do not run together
+     * however they are started: measured on a form of 34 fields, three batches
+     * finished at 6.6s, 11.9s and 17.6s — the total is their sum, not their
+     * maximum. Waiting for all of them before writing any meant twelve fields
+     * that were ready at six seconds went in at seventeen. Each batch is sent to
+     * the tab as it lands, and the fill writes it then. */
     const groups = chunk(fields, BATCH);
-    const results = await Promise.all(groups.map(g => askBatch(session, persona, pageTitle, g, context, examples)));
+    /* The batch carries which backend answered it. A request that runs out of
+     * time never returns, so without this the fill had no way to say where the
+     * values it had already written came from: a report reading "used 24, via
+     * none" is the one place a reader looks to find out whether the model is
+     * working at all. */
+    const send = tabId == null ? null : (values) => {
+        if (!values || !Object.keys(values).length) return;
+        chrome.tabs.sendMessage(tabId, {kind: 'model-batch', via: 'on-device', values},
+            () => void chrome.runtime.lastError);
+    };
+    const results = await Promise.all(groups.map(g => askBatch(session, persona, pageTitle, g, context, examples, budgetMs, send)));
     return Object.assign({}, ...results);
 }
 
-async function askBatch(session, persona, pageTitle, group, context, examples) {
+async function askBatch(session, persona, pageTitle, group, context, examples, budgetMs, onValues) {
     const prompt = buildUserPrompt(persona, pageTitle, group, context, examples);
     const t0 = Date.now();
     const {s: turn, temporary} = await statelessSession(session);
+    /* The caller's deadline, enforced here and not only there. A prompt nobody is
+     * waiting for any more keeps generating, and the one on-device session is
+     * busy for as long as it does: the next fill then queues behind a request
+     * whose answer has already been thrown away, which is what "it just hangs"
+     * looked like. destroy() would abort it too, but the finally below is not
+     * reached until the prompt settles. */
+    const withSignal = (o) => budgetMs > 0 ? Object.assign({}, o, {signal: AbortSignal.timeout(budgetMs)}) : o;
     let text = '';
     try {
         try {
-            text = await turn.prompt(prompt, CONSTRAIN);
-        } catch (_) {
-            text = await turn.prompt(prompt);
+            text = await turn.prompt(prompt, withSignal(CONSTRAIN));
+        } catch (err) {
+            if (err && err.name === 'AbortError') throw err;
+            text = await turn.prompt(prompt, withSignal({}));
         }
     } catch (err) {
         lastExchange.batches.push({prompt, error: String(err && err.message || err), ms: Date.now() - t0});
@@ -345,10 +390,13 @@ async function askBatch(session, persona, pageTitle, group, context, examples) {
             }
         }
     }
-    const parsed = parseValues(text, group);
+    const tally = {};
+    const parsed = parseValues(text, group, tally);
+    if (onValues) onValues(parsed);
     lastExchange.batches.push({
         prompt, reply: String(text || '').slice(0, 4000),
-        answered: Object.keys(parsed).length, asked: group.length, ms: Date.now() - t0
+        answered: Object.keys(parsed).length, asked: group.length, ms: Date.now() - t0,
+        ...tally
     });
     return parsed;
 }
@@ -469,7 +517,8 @@ async function generate(payload, tabId) {
         const local = await generateOnDevice(persona, pageTitle, fields, context, examples, {
             sessionWaitMs,
             tabId,
-            fieldCount: fields.length
+            fieldCount: fields.length,
+            budgetMs: payload.budgetMs || 0
         });
         if (local && Object.keys(local).length) return {ok: true, values: local, via: 'on-device', debug: lastExchange};
         if (backend === 'ondevice-only') return {
@@ -548,6 +597,54 @@ async function nanoCheck(onStage = ignore) {
 // ---------------------------------------------------------------- injecting ----
 async function injectFiller(tabId) {
     await chrome.scripting.executeScript({target: {tabId, allFrames: true}, files: FILLER_FILES});
+}
+
+/* A page is usually more than one frame: an analytics pixel, an ad, an
+ * embedded form. Every frame gets the filler, but a broadcast to the tab
+ * delivers back exactly one answer — whichever frame replied first. A hidden
+ * 0x0 tag-manager frame wins that race often enough to report "cleared 0
+ * fields" over a form that just lost forty. Ask each frame by id instead. */
+async function liveFrames(tabId) {
+    const got = await chrome.scripting.executeScript({
+        target: {tabId, allFrames: true},
+        func: () => !!globalThis.__formforgeListening
+    });
+    return got.filter(r => r && r.result).map(r => r.frameId);
+}
+
+/* The frame that did the most work is the one the tester is looking at, so its
+ * persona and its verdict describe the run; the others only add to the totals. */
+function mergeFrames(answers) {
+    const ok = answers.filter(r => r && r.ok);
+    if (!ok.length) return answers.find(r => r) || {ok: false, error: 'no frame answered'};
+    const busy = ok.filter(r => (r.count || 0) > 0);
+    if (busy.length < 2) return busy[0] || ok[0];
+    const main = busy.reduce((a, b) => (b.count > a.count ? b : a));
+    const out = Object.assign({}, main);
+    for (const r of busy) {
+        if (r === main) continue;
+        out.count += r.count || 0;
+        out.aiUsed = (out.aiUsed || 0) + (r.aiUsed || 0);
+        for (const k of ['filled', 'skipped', 'fields', 'hidden']) {
+            if (Array.isArray(r[k])) out[k] = (out[k] || []).concat(r[k]);
+        }
+        if (Array.isArray(r.widgets)) out.widgets = (out.widgets || []).concat(r.widgets);
+        else if (typeof r.widgets === 'number') out.widgets = (out.widgets || 0) + r.widgets;
+    }
+    return out;
+}
+
+// Nothing is injected until it is wanted, so an empty frame list means "not yet", not "no page".
+async function askPage(tabId, msg) {
+    let ids = await liveFrames(tabId);
+    if (!ids.length) {
+        await injectFiller(tabId);
+        ids = await liveFrames(tabId);
+    }
+    if (!ids.length) return {ok: false, error: 'could not inject'};
+    const answers = await Promise.all(ids.map(frameId =>
+        chrome.tabs.sendMessage(tabId, msg, {frameId}).catch(() => null)));   // a frame can go away mid-flight
+    return mergeFrames(answers);
 }
 
 /* Something on screen before the six files land: the shortcut otherwise does
@@ -721,12 +818,7 @@ async function send(kind, settings, tabId, extra) {
     if (kind !== 'clear') await showBooting(id);
     working(id, true);
     try {
-        try {
-            return await chrome.tabs.sendMessage(id, msg);
-        } catch (_) {
-            await injectFiller(id);
-            return await chrome.tabs.sendMessage(id, msg);
-        }
+        return await askPage(id, msg);
     } catch (err) {
         // A page the extension may not script. Not an error worth a red badge on the extension card.
         return {ok: false, error: String(err && err.message || err)};
@@ -846,6 +938,13 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
             .catch(e => respond({ok: false, error: String(e && e.message || e)}));
         return true;
     }
+    // The popup asks the page through here so one dispatch reaches every frame and comes back as one answer.
+    if (msg.kind === 'to-page') {
+        askPage(msg.tabId, msg.page)
+            .then(respond)
+            .catch(e => respond({ok: false, error: String(e && e.message || e)}));
+        return true;
+    }
     // The one signal every entry point shares; the toolbar icon follows it.
     if (msg.kind === 'fill-progress' && tabId != null) {
         working(tabId, !(msg.step && msg.step.stage === 'done'));
@@ -889,3 +988,4 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
 // Handles for tooling that evaluates inside this worker.
 self.FILLER_FILES = FILLER_FILES;
 self.injectFiller = injectFiller;
+self.askPage = askPage;

@@ -104,14 +104,20 @@ const fallbacks = await page.evaluate(() => {
     return {
         prereq: f('Prerequisite * | Prerequisite | prerequisite'),
         area: f('Area of Responsibility * | contactPersons 0 responsibilityArea'),
-        clipped: f('Prerequisite * | Prerequisite', 8),
+        clipped: f('Prerequisite * | Prerequisite', 10),
         unlabelled: f('')
     };
 });
-check('fallback text names the field it lands in',
-    /^Prerequisite \d+$/.test(fallbacks.prereq), fallbacks.prereq);
-check('fallback uses the caption, not the folded-in name attributes',
-    /^Area of Responsibility \d+$/.test(fallbacks.area), fallbacks.area);
+/* It used to be the caption with a number after it — "Prerequisite 43" — which
+   traces nicely and exercises nothing, and makes a filled form look in a
+   screenshot like the filler gave up. Which field got what is the Debug tab's
+   job, not the value's. */
+check('fallback text reads as content, not as the field\'s own caption',
+    !/prerequisite/i.test(fallbacks.prereq) && /[\p{L}]{3}/u.test(fallbacks.prereq), fallbacks.prereq);
+check('two fields in a row do not get the same text',
+    fallbacks.prereq !== fallbacks.area, `${fallbacks.prereq} / ${fallbacks.area}`);
+check('a field too narrow for a phrase still gets a word, not a bare number',
+    /[\p{L}]{3}/u.test(fallbacks.clipped), fallbacks.clipped);
 check('fallback still respects maxlength', fallbacks.clipped.length <= 8, fallbacks.clipped);
 check('an unlabelled field still gets something', fallbacks.unlabelled.length > 3, fallbacks.unlabelled);
 
@@ -423,6 +429,28 @@ const ring = await page.evaluate(async () => {
 check('written fields carry the touch ring, through a stylesheet rather than inline styles',
     ring.marked > 0 && ring.styled && !ring.inlineOutline, JSON.stringify(ring));
 check('and the ring is gone two seconds later', ring.left === 0, `${ring.left} still marked`);
+
+/* A prompt is not a choice. "(Select Card Type)", "Month", "Year" are all
+ * value="0" beside real options, so a filter that only drops value="" keeps
+ * them, and a seeded pick lands on one every few fills — writing the control's
+ * empty state into the report as if the page had accepted it. Twelve seeds is
+ * enough: with four options one in four picks would be the prompt. */
+const prompted = await page.evaluate(async () => {
+    const offered = window.__formforge.collectFields({overwrite: true})
+        .filter(f => f.el && f.el.id === 'dw')
+        .flatMap(f => (f.options || []).map(o => o.text));
+    const picked = [];
+    for (let i = 0; i < 12; i++) {
+        await window.__formforge.run({seed: `PROMPT${i}`, locale: 'en-US', useAI: false, overwrite: true});
+        picked.push(document.getElementById('dw').value);
+    }
+    return {offered, picked};
+});
+check('a sentinel prompt is not offered as an option',
+    prompted.offered.length === 3 && !prompted.offered.some(t => /select/i.test(t)),
+    prompted.offered.join(' | '));
+check('and no fill ever writes it', prompted.picked.every(v => v !== '0' && v !== ''),
+    `picked ${[...new Set(prompted.picked)].sort().join(',')}`);
 
 // Clear
 await page.evaluate(() => window.__formforge.clearAll());

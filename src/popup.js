@@ -134,7 +134,8 @@ async function load() {
 
     /* A popup is a fresh page every time. Put the last result back so closing it
      * does not throw away the answer to "what did it just do". */
-    chrome.storage.local.get(['lastFill'], ({lastFill}) => {
+    chrome.storage.local.get({fillHistory: []}, ({fillHistory}) => {
+        const lastFill = (fillHistory || [])[(fillHistory || []).length - 1];
         if (!lastFill || !lastFill.filled) return;
         if ($('result').innerHTML) return;          // a fresh fill has already rendered
         const note = lastFill.aiUsed ? `${lastFill.aiUsed} from model`
@@ -226,19 +227,17 @@ async function dispatch(kind, extra) {
     if (id == null) return;
     const {apiKey, ...forPage} = settings();      // the worker reads the key from storage; the page never sees it
     const msg = {kind, settings: Object.assign(forPage, extra || {})};
-    try {
-        return await chrome.tabs.sendMessage(id, msg);
-    } catch (_) {
-        /* Nothing is injected until it is wanted. The background owns the file
-         * list — asking it is what keeps there from being a second copy here. */
-        const r = await chrome.runtime.sendMessage({kind: 'inject', tabId: id});
-        if (!r || !r.ok) return {ok: false, error: (r && r.error) || 'could not inject'};
-        return await chrome.tabs.sendMessage(id, msg);
-    }
+    /* Through the worker, not straight at the tab: it owns the injected file
+     * list, and it is the only side that can address a page's frames one by one
+     * and add up what they answer. A broadcast from here returns one frame's
+     * reply picked at random. */
+    const r = await chrome.runtime.sendMessage({kind: 'to-page', tabId: id, page: msg});
+    return r || {ok: false, error: 'the worker did not answer'};
 }
 
 /* ---------------------------------------------------------- results ---- */
 function panel(title, note, bodyHtml, footHtml) {
+    live = false;
     const box = $('result');
     box.hidden = false;
     box.classList.remove('is-live');
@@ -313,13 +312,22 @@ function section(title, body) {
     return `<div class="dbg-sec"><div class="dbg-h">${esc(title)}</div>${body}</div>`;
 }
 
+/* Which of the kept fills the tab is showing. -1 follows the newest, so a fill
+   made while the tab is open replaces what is on screen; picking one explicitly
+   pins it, which is the point of keeping ten. */
+let debugAt = -1;
+
 function renderDebug() {
     const box = $('debugBody');
-    chrome.storage.local.get(['lastFill'], ({lastFill}) => {
-        if (!lastFill) {
+    chrome.storage.local.get({fillHistory: []}, ({fillHistory}) => {
+        const history = fillHistory || [];
+        if (!history.length) {
+            debugAt = -1;
             box.innerHTML = '<div class="empty">Nothing filled yet. Fill a page and the whole decision trail lands here.</div>';
             return;
         }
+        const at = debugAt >= 0 && debugAt < history.length ? debugAt : history.length - 1;
+        const lastFill = history[at];
         /* A fill that gave up waiting recorded only that it gave up. The worker
          * kept generating, so what the model was about to say usually exists by
          * the time anybody opens this tab — and "it answered 400ms after we
@@ -337,85 +345,113 @@ function renderDebug() {
                 } else {
                     lastFill.modelDebug = Object.assign({}, lastFill.modelDebug, {pending: false});
                 }
-                drawDebug(box, lastFill);
+                drawDebug(box, lastFill, history, at);
             });
             return;
         }
-        drawDebug(box, lastFill);
+        drawDebug(box, lastFill, history, at);
     });
 }
 
 const fmtMs = (ms) => (ms < 950 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`);
 
-/* Where the time went, to scale. The model was once blamed for a 16-second
- * fill it had contributed 9ms to — a list of raw millisecond counts under the
- * variable names they happen to be stored as does not make that obvious, and a
- * bar does. Only the four phases that partition the run are drawn; `recollect`
- * and `modelLate` are counted *inside* secondPass, so adding them to the bar
- * would total more than the fill took. */
+/* Where the time went, to scale and in order. The model was once blamed for a
+ * 16-second fill it had contributed 9ms to, which a list of raw counts under the
+ * variable names they happen to be stored as does not make obvious and a bar
+ * does. In fill order, which is also the order that answers the question people
+ * actually have: the form is finished at the end of "Filling", and everything
+ * after that is the model improving what is already on the page.
+ *
+ * Only the four phases that partition the run are drawn; `recollect` and
+ * `modelLate` are counted *inside* the last one, so adding them would total more
+ * than the fill took. */
 const PHASES = [
-    ['collect', 'Reading the form', 'p-read'],
-    ['model', 'Waiting for the model', 'p-model'],
+    ['collect', 'Reading', 'p-read'],
     ['firstPass', 'Filling', 'p-fill'],
-    ['secondPass', 'Repairing and revealing', 'p-repair']
+    ['model', 'Improving', 'p-model'],
+    ['secondPass', 'Checking', 'p-repair']
 ];
 
+/* A legend row per phase is four rows on a fill where three of them are single
+ * milliseconds — noise sitting where the one number that matters should be. The
+ * slivers keep their place in the bar and share one line underneath. */
 function timingBar(ph) {
     const parts = PHASES.map(([k, name, cls]) => ({name, cls, ms: Math.max(0, ph[k] || 0)}))
         .filter(p => p.ms > 0);
     const sum = parts.reduce((n, p) => n + p.ms, 0) || 1;
+    const worth = (p) => p.ms >= 100 || p.ms / sum >= 0.05;
     const bar = parts.map(p =>
         `<span class="${p.cls}" style="width:${(p.ms / sum * 100).toFixed(2)}%" ` +
         `title="${esc(p.name)} — ${fmtMs(p.ms)}"></span>`).join('');
-    const legend = parts.map(p =>
-        `<div class="tm-row"><span class="tm-key ${p.cls}"></span>` +
-        `<span class="tm-name">${esc(p.name)}</span>` +
-        `<span class="tm-ms">${fmtMs(p.ms)}</span></div>`).join('');
-    /* The two that sit inside a phase rather than beside it. Worth naming: a
-     * second pass that is mostly re-reading the page is a different problem from
-     * one that is mostly writing to it. */
-    const inner = [['recollect', 'of which, re-reading the page'],
-        ['modelLate', 'of which, asking the model again']]
-        .filter(([k]) => ph[k]).map(([k, name]) =>
-            `<div class="tm-row tm-sub"><span class="tm-key"></span>` +
-            `<span class="tm-name">${esc(name)}</span><span class="tm-ms">${fmtMs(ph[k])}</span></div>`).join('');
-    return `<div class="tm-bar">${bar}</div><div class="tm-legend">${legend}${inner}</div>`;
+    const row = (cls, name, ms) =>
+        `<div class="tm-row"><span class="tm-key ${cls}"></span>` +
+        `<span class="tm-name">${esc(name)}</span><span class="tm-ms">${fmtMs(ms)}</span></div>`;
+    const shown = parts.filter(worth);
+    const rest = parts.filter(p => !worth(p));
+    const restMs = rest.reduce((n, p) => n + p.ms, 0);
+    const legend = shown.map(p => row(p.cls, p.name, p.ms)).join('') +
+        (rest.length ? row('', rest.length === 1 ? rest[0].name : 'Everything else', restMs) : '');
+    return `<div class="tm-bar">${bar}</div><div class="tm-legend">${legend}</div>`;
 }
 
-function drawDebug(box, d) {
+function drawDebug(box, d, history, at) {
     const out = [];
 
-    out.push(section('Last fill', `<div class="dbg-kv">
-    <div><b>${d.count}</b> fields · ${d.widgets} widgets · ${d.revealed} revealed · ${d.repaired} repaired</div>
-    <div>${esc(d.title || '')}</div>
+    const kept = history || [d];
+    const here = at == null ? kept.length - 1 : at;
+    /* Ten fills, newest first. A regression is a comparison — the trail of the
+     * fill before the broken one is half of it — and a tab that can only ever
+     * show the most recent run makes that comparison impossible to do. */
+    if (kept.length > 1) {
+        out.push('<div class="dbg-pick">' + kept.map((h, n) =>
+            `<button type="button" class="dbg-pin${n === here ? ' on' : ''}" data-fill="${n}" ` +
+            `title="${esc(h.title || h.url || '')}">${esc(ago(h.at))}</button>`).reverse().join('') + '</div>');
+    }
+
+    /* What happened, then where and who. A zero is not news: "0 widgets · 0
+       revealed · 0 repaired" was three quarters of this line on nearly every
+       fill, and the number that is actually interesting on the odd fill where
+       one of them is not zero was the hardest of the four to pick out. */
+    const counts = [[d.widgets, 'widget'], [d.revealed, 'revealed mid-fill'], [d.repaired, 'repaired']]
+        .filter(([n]) => n > 0).map(([n, what]) => `${n} ${what}`);
+    out.push(section(here === kept.length - 1 ? 'Last fill' : `Fill ${here + 1} of ${kept.length}`,
+        `<div class="dbg-kv">
+    <div><b>${d.count}</b> field${d.count === 1 ? '' : 's'} in ${fmtMs((d.phase || {}).total || 0)}` +
+        (counts.length ? ` · ${esc(counts.join(' · '))}` : '') + `</div>
+    <div class="dbg-page" title="${esc(d.title || d.url || '')}">${esc(d.title || d.url || '')}</div>
     <div class="dim">${ago(d.at)} · ${esc(d.persona ? d.persona.fullName : '')} · seed ${esc(d.persona ? d.persona.seed : '')}</div>
   </div>`));
 
-    out.push(section(`Where the ${fmtMs((d.phase || {}).total || 0)} went`, timingBar(d.phase || {})));
+    out.push(section('Where the time went', timingBar(d.phase || {})));
 
     // The model: asked or not, and what came of it.
     const m = d.modelDebug;
-    const head = !d.modelAsked ? 'Not consulted — every field was answered by the rules'
-        : d.modelWarming ? `Still loading when this fill ran — the first use after a reload pays for it`
-            : d.modelTimedOut ? `Asked for ${d.unresolvedCount} field(s), ran out of time`
-                : d.aiUsed ? `Answered ${d.aiUsed} of ${d.unresolvedCount} field(s) · via ${esc(d.modelVia || '?')}`
-                    : d.modelError ? `Asked for ${d.unresolvedCount} field(s) — ${esc(d.modelError)}`
-                        : `Asked for ${d.unresolvedCount} field(s), answered none`;
+    const asked = d.unresolvedCount || 0;
+    const head = !d.modelAsked ? 'Not consulted — the rules answered every field'
+        : d.modelWarming ? 'Still loading — the first use after a reload pays for it'
+            : d.aiUsed ? `${d.aiUsed} of ${asked} answered · ${esc(d.modelVia || 'unknown')}`
+                + (d.modelTimedOut ? ' · the rest ran past its window' : '')
+                : d.modelTimedOut ? `${asked} asked, none back before the window closed`
+                    : d.modelError ? `${asked} asked — ${esc(d.modelError)}`
+                        : `${asked} asked, none answered`;
     let modelBody = `<div class="dbg-kv"><div>${esc(head)}</div>`;
-    if (m && m.sessionMs != null) modelBody += `<div class="dim">session ready in ${m.sessionMs}ms</div>`;
-    /* The two numbers people confuse. The model is asked before the filling
-       starts and answers in the middle of it, so what it cost the fill is the
-       part still outstanding when the form ran out of fields — usually none. */
+    /* One line for what it cost, and it is not what people assume: the form was
+       finished before any of this, so the time here bought better values in
+       fields that already had one, not a form that arrived later. */
     if (d.modelRequestMs) {
-        modelBody += `<div class="dim">answered in ${fmtMs(d.modelRequestMs)}, of which the fill waited ` +
-            `${fmtMs((d.phase || {}).model || 0)} — the rest of the form was being filled meanwhile</div>`;
+        modelBody += `<div class="dim">${fmtMs(d.modelRequestMs)}` +
+            (d.upgraded ? `, improving ${d.upgraded} field${d.upgraded === 1 ? '' : 's'} already written` : '') +
+            (m && m.sessionMs ? ` · session ready in ${fmtMs(m.sessionMs)}` : '') + '</div>';
     }
     if (m && m.note) modelBody += `<div class="dim">${esc(m.note)}</div>`;
     modelBody += '</div>';
+    // What the model was told about the page. Read once, if ever; folded away until then.
     if (m && m.context) {
-        modelBody += `<div class="dim" style="margin-top:6px">Page context sent:</div><pre class="dbg-pre">` +
+        modelBody += `<details class="dbg-det"><summary>What the model was told about the page</summary>` +
+            `<pre class="dbg-pre">` +
             esc(Object.entries(m.context).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('\n') || '(none)') +
-            (m.examples && m.examples.length ? `\nexisting entries: ${esc(m.examples.join(', '))}` : '') + '</pre>';
+            (m.examples && m.examples.length ? `\nexisting entries: ${esc(m.examples.join(', '))}` : '') +
+            '</pre></details>';
     }
     for (const b of (m && m.batches) || []) {
         modelBody += `<details class="dbg-det"><summary>Prompt — ${b.asked || '?'} field(s), ` +
@@ -459,6 +495,10 @@ function drawDebug(box, d) {
     }
 
     box.innerHTML = out.join('');
+    box.querySelectorAll('[data-fill]').forEach(b => b.addEventListener('click', () => {
+        debugAt = Number(b.dataset.fill);
+        renderDebug();
+    }));
 }
 
 /* ------------------------------------------------------ live activity ---- */
@@ -473,8 +513,19 @@ function drawDebug(box, d) {
    plausible-sounding phrases: a fill has real stages with real numbers, and
    inventing activity to look busy would make the one honest signal in the
    window — "is it stuck?" — worthless. */
-const STAGES = ['read', 'model', 'fill', 'repair', 'done'];
+const STAGES = ['read', 'model', 'fill', 'improve', 'repair', 'done'];
 let stream = [];
+/* The stream is what a run looks like while it runs; the panel is what it
+ * turned out to be. Once the answer is in hand the panel is the truth, and a
+ * ping still in flight — from a hidden frame, or from the run just finished —
+ * must not repaint the window with a line it already superseded. */
+let live = true;
+
+function startStream() {
+    stream = [];
+    live = true;
+    renderStream();
+}
 
 function renderStream() {
     const box = $('result');
@@ -497,6 +548,15 @@ function renderStream() {
 chrome.runtime.onMessage.addListener((msg) => {
     if (!msg || msg.kind !== 'fill-progress' || !msg.step) return;
     const s = msg.step;
+    /* A run that ends elsewhere — a shortcut, the context menu — is still worth
+     * watching, so any stage before the last one revives the stream. Only a
+     * `done` arriving after the panel is ignored: that is the tail of the run
+     * the panel already reports, usually from a frame with nothing to say. */
+    if (!live && s.stage === 'done') return;
+    if (!live) {
+        stream = [];
+        live = true;
+    }
     const prev = stream[stream.length - 1];
     if (prev && prev.stage === s.stage) stream[stream.length - 1] = s;
     else if (!prev || STAGES.indexOf(s.stage) >= STAGES.indexOf(prev.stage)) stream.push(s);
@@ -613,6 +673,175 @@ async function explainClosedPort(box, sent, attempt) {
 }
 
 $('checkModel').addEventListener('click', () => runSetupCheck($('modelCheck')));
+
+/* One report, for both readers. A tester attaches it to a ticket; whoever picks
+   the ticket up needs the same thing plus the timings of the fills around it,
+   and a pattern — a stage that is sometimes slow, a model that sometimes never
+   answers — only shows across several fills. So: plain text, the last fill in
+   full at the top, the run of recent fills underneath, and the prompts last
+   because they are long. Two buttons meant choosing wrongly before knowing
+   which half mattered. */
+const ms = (n) => (n == null ? '?' : n < 950 ? `${n} ms` : `${(n / 1000).toFixed(1)} s`);
+
+/* One fill, whole: what it faced, what it decided, and what it asked the model.
+   Written once and called for each kept fill — a report that could only ever
+   describe the run somebody happened to save it after answers "what changed?"
+   with a single data point, and the nine fills before it are the answer. */
+function fillDetail(d, line) {
+    const p = d.persona || {};
+    const ph = d.phase || {};
+    line(`  ${d.url || ''}`);
+    line(`  ${d.count} field(s) in ${ms(ph.total)} · ${d.widgets || 0} widget(s) · ` +
+        `${d.revealed || 0} appeared mid-fill · ${d.repaired || 0} repaired`);
+    line(`  phases: ` + Object.entries(ph).map(([k, v]) => `${k} ${ms(v)}`).join(' · '));
+    /* Two numbers people confuse, kept apart on purpose: when the form was
+       finished, and how long the model went on improving it afterwards. They used
+       to be the same number, because the fill waited. */
+    line(`  model: asked ${d.unresolvedCount || 0}, used ${d.aiUsed || 0}, via ${d.modelVia || 'none'}, ` +
+        `request ${ms(d.modelRequestMs)}` +
+        (d.modelWarming ? ', still loading' : '') + (d.modelTimedOut ? ', ran past its window' : '') +
+        (d.modelError ? `, error: ${d.modelError}` : ''));
+    line(`  form complete in ${ms(ph.firstPass)}; ${d.upgraded || 0} field(s) upgraded over the ${ms(ph.model)} after it`);
+    line('');
+    line(`  Persona (seed ${p.seed}, locale ${p.locale})`);
+    line(`    ${p.fullName || ''} · ${p.email || ''} · ${p.phone || ''}`);
+    line(`    ${p.company || ''} · ${p.street || ''}, ${p.postal || ''} ${p.city || ''}, ${p.country || ''}`);
+    line('');
+    line('  Fields filled:');
+    for (const f of (d.filled || [])) line(`    ${f.label}: ${f.value}  [${f.source}] ${f.why || ''}`);
+    if ((d.skipped || []).length) {
+        line('');
+        line('  Planned but wrote nothing:');
+        for (const sk of d.skipped) line(`    ${sk.label}  [${sk.type}]`);
+    }
+    if ((d.leftOpen || []).length) {
+        line('');
+        line('  Left on screen: ' + d.leftOpen.join(', '));
+    }
+    if ((d.notes || []).length) {
+        line('');
+        line('  Notes:');
+        for (const n of d.notes) line(`    ${n}`);
+    }
+    const batches = (d.modelDebug && d.modelDebug.batches) || [];
+    if (batches.length) {
+        line('');
+        line(`  Model prompts (${batches.length}):`);
+        for (const b of batches) {
+            line('');
+            line(`    --- asked ${b.asked}, answered ${b.answered != null ? b.answered : 'none'}, ${b.ms} ms ---`);
+            line(String(b.prompt || '').split('\n').map(x => '    ' + x).join('\n'));
+            if (b.reply) {
+                line('    --- reply ---');
+                // Indented line by line: a reply that came back fenced or pretty-printed is several.
+                line(String(b.reply).split('\n').map(x => '    ' + x).join('\n'));
+            }
+            if (b.error) line(`    --- error: ${b.error}`);
+        }
+    }
+}
+
+function reportText(history, log, env) {
+    const out = [];
+    const line = (t) => out.push(t == null ? '' : String(t));
+    line(`FormForge ${env.version} — report`);
+    line(`${env.ua} · popup locale ${env.locale} · on-device model: ${env.model}`);
+    line(`saved ${new Date().toISOString()}`);
+    line('');
+
+    line(`Recent fills (${log.length}):`);
+    line('  when                  total   collect  model   first   repair  fields  ai     page');
+    for (const s of log) {
+        const ph = s.phase || {};
+        const cell = (v, w) => String(v == null ? '?' : v).padEnd(w);
+        line('  ' + cell(new Date(s.at).toISOString().slice(5, 19).replace('T', ' '), 22) +
+            cell(ms(ph.total), 8) + cell(ms(ph.collect), 9) + cell(ms(ph.model), 8) +
+            cell(ms(ph.firstPass), 8) + cell(ms(ph.secondPass), 8) +
+            cell(`${s.filled}/${s.fields}`, 8) + cell(`${(s.ai || {}).used || 0}/${(s.ai || {}).asked || 0}`, 7) +
+            (s.title || s.url || ''));
+    }
+
+    const slow = log.flatMap(s => (s.slowest || []).map(t => ({...t, at: s.at})))
+        .sort((a, b) => b.ms - a.ms).slice(0, 25);
+    if (slow.length) {
+        line('');
+        line('Slowest controls across those fills:');
+        for (const t of slow) line(`  ${String(t.ms).padStart(6)} ms  ${String(t.type || '').padEnd(14)} ${t.lib || ''}  ${t.label || ''}`);
+    }
+
+    const fills = (history || []).slice().reverse();
+    line('');
+    if (!fills.length) {
+        line('No fill recorded in full yet.');
+        return out.join('\n');
+    }
+    line(`${fills.length} fill(s) kept in full, newest first.`);
+    fills.forEach((d, i) => {
+        line('');
+        line(`======== ${i + 1}/${fills.length} · ${new Date(d.at).toISOString().slice(0, 19).replace('T', ' ')}` +
+            ` · ${d.title || d.url || ''} ========`);
+        fillDetail(d, line);
+    });
+    return out.join('\n');
+}
+
+/* Through chrome.downloads, not an <a download> click: a popup closes the moment
+   anything takes focus — the download shelf, the "where to save" dialog — and a
+   download the page started dies with it, which is why the button looked dead
+   while working perfectly in a tab. The browser owns this one. */
+$('saveReport').addEventListener('click', async () => {
+    const got = await new Promise(r => chrome.storage.local.get({fillLog: [], fillHistory: []}, (v) => {
+        void chrome.runtime.lastError;
+        r(v || {});
+    }));
+    let model = 'unknown';
+    try {
+        const s = await new Promise(r => chrome.runtime.sendMessage({kind: 'nano-status'}, (v) => {
+            void chrome.runtime.lastError;
+            r(v);
+        }));
+        if (s && s.status) model = s.status;
+    } catch (_) {
+    }
+    const env = {
+        version: chrome.runtime.getManifest().version,
+        ua: (navigator.userAgent.match(/Chrome\/[\d.]+/) || ['Chrome ?'])[0] + ' on ' + navigator.platform,
+        locale: chrome.i18n && chrome.i18n.getUILanguage ? chrome.i18n.getUILanguage() : navigator.language,
+        model
+    };
+    const text = reportText(got.fillHistory || [], got.fillLog || [], env);
+    const url = URL.createObjectURL(new Blob([text], {type: 'text/plain'}));
+    const filename = `formforge-report-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.txt`;
+    const done = (ok) => {
+        $('saveReport').textContent = ok ? 'Saved' : 'Could not save';
+        setTimeout(() => ($('saveReport').textContent = 'Save report'), 1800);
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+    };
+    if (chrome.downloads && chrome.downloads.download) {
+        chrome.downloads.download({url, filename, saveAs: false},
+            (id) => done(!chrome.runtime.lastError && id != null));
+        return;
+    }
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    done(true);
+});
+
+/* Clear empties what the tab shows, not only the log behind it: leaving the
+   decision trail of a fill nobody is looking at any more is the same clutter the
+   button exists to remove. */
+$('clearLog').addEventListener('click', () => {
+    chrome.storage.local.set({fillLog: [], fillHistory: []}, () => {
+        void chrome.runtime.lastError;
+        debugAt = -1;
+        $('modelCheck').textContent = '';
+        renderDebug();
+    });
+});
 $('checkSetup').addEventListener('click', () => runSetupCheck($('setupCheck')));
 
 /* ------------------------------------------------------------ wiring ---- */
@@ -667,13 +896,15 @@ async function withBusy(btn, label, fn) {
 /* Fill, then move on to the next set of values, so pressing Fill again gives
  * different data rather than rewriting the same thing. */
 $('fill').addEventListener('click', () => withBusy($('fill'), 'Starting…', async () => {
-    stream = [];
-    renderStream();
+    startStream();
     report(await dispatch('fill'));
     nextData();
 }));
 
-$('clear').addEventListener('click', async () => report(await dispatch('clear')));
+$('clear').addEventListener('click', async () => {
+    startStream();
+    report(await dispatch('clear'));
+});
 
 /* Dry run: what would be filled, and which widget adapter claimed each
  * control. The fastest way to find out why a field on a real app was
