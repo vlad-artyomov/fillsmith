@@ -1,6 +1,6 @@
 {
   "name": "formforge",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "private": true,
   "description": "Chrome MV3 extension that fills forms with coherent, reproducible QA test data, including component-library widgets. On-device AI, no SaaS.",
   "scripts": {

@@ -441,19 +441,19 @@ async function askBatch(session, persona, pageTitle, group, context, examples, b
 const PROVIDERS = {
     anthropic: {
         model: 'claude-sonnet-5',
-        request: (cfg, model, prompt) => ({
+        // Short structured values: low effort keeps the round trip quick — on a model that takes it.
+        options: {output_config: {effort: 'low'}},
+        request: (cfg, model, prompt, options) => ({
             url: 'https://api.anthropic.com/v1/messages',
             headers: {
                 'x-api-key': cfg.apiKey,
                 'anthropic-version': '2023-06-01',
                 'anthropic-dangerous-direct-browser-access': 'true'
             },
-            // Short structured values: low effort keeps the round trip quick.
-            body: {
+            body: Object.assign({
                 model, max_tokens: 4000, system: SYSTEM_PROMPT,
-                output_config: {effort: 'low'},
                 messages: [{role: 'user', content: prompt}]
-            }
+            }, options)
         }),
         text: (j) => (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('')
     },
@@ -485,9 +485,32 @@ const PROVIDERS = {
 };
 
 // The API's own words for what went wrong, not a status code alone.
+const apiMessage = (body) => String(body && (body.error && (body.error.message || body.error.type) || body.message) || '');
+
 function apiErrorText(provider, status, body) {
-    const msg = body && (body.error && (body.error.message || body.error.type) || body.message);
-    return `${provider} answered HTTP ${status}${msg ? `: ${String(msg).slice(0, 200)}` : ''}`;
+    const msg = apiMessage(body);
+    return `${provider} answered HTTP ${status}${msg ? `: ${msg.slice(0, 200)}` : ''}`;
+}
+
+/* An extra a model does not take comes back as a 400 that names it — Haiku 4.5
+ * answers "This model does not support the effort parameter" to the effort the
+ * current models are asked for. The model is a string the tester types, so a
+ * table here of which ones accept what would be a second place to go stale:
+ * the API is asked instead, and its refusal is remembered for that model so it
+ * is paid once rather than on every batch. */
+const optionsRefused = new Set();
+
+// The words an API would use for what we added: the keys themselves, nested ones included.
+function namesAnOption(msg, options) {
+    const keys = [];
+    const walk = (o) => {
+        for (const [k, v] of Object.entries(o || {})) {
+            keys.push(k);
+            if (v && typeof v === 'object' && !Array.isArray(v)) walk(v);
+        }
+    };
+    walk(options);
+    return keys.some(k => msg.includes(k));
 }
 
 // One request to a hosted provider, parsed the way a fill parses it.
@@ -499,8 +522,8 @@ async function remoteCall(cfg, group, prompt) {
     const model = cfg.model || provider.model;
     const t0 = Date.now();
     const out = {model, ms: 0, status: null, text: '', parsed: {}, error: null};
-    try {
-        const req = provider.request(cfg, model, prompt);
+    const send = async (options) => {
+        const req = provider.request(cfg, model, prompt, options);
         const r = await fetch(req.url, {
             method: 'POST',
             headers: Object.assign({'content-type': 'application/json'}, req.headers),
@@ -508,7 +531,16 @@ async function remoteCall(cfg, group, prompt) {
             signal: AbortSignal.timeout(REMOTE_CAP_MS)
         });
         out.status = r.status;
-        const j = await r.json().catch(() => ({}));
+        return {r, body: await r.json().catch(() => ({}))};
+    };
+    try {
+        const options = optionsRefused.has(model) ? null : provider.options;
+        let {r, body: j} = await send(options);
+        // Refused for the extra rather than for the request: send the request without it.
+        if (!r.ok && r.status === 400 && options && namesAnOption(apiMessage(j), options)) {
+            optionsRefused.add(model);
+            ({r, body: j} = await send(null));
+        }
         if (!r.ok) throw new Error(apiErrorText(cfg.provider, r.status, j));
         out.text = provider.text(j);
         out.parsed = parseValues(out.text, group);

@@ -237,6 +237,10 @@ Each of these was a bug on a real form and has a regression check.
 - Ask it, then get on with the form. The deadline runs from the request rather than from the moment somebody starts
   waiting, so overlapping the request with the writing shortens a fill and never lengthens the patience the setting
   promises.
+- A hosted request's extras are the model's to accept. Anthropic takes `output_config.effort` on the current models
+  and answers HTTP 400 naming it on Haiku 4.5 — and the model is a string the tester types, so a table here of which
+  ones accept what would be a second place to go stale. The option goes out, a refusal that names it drops it and
+  sends the request again, and the refusal is remembered for that model so it is paid once, not once per batch.
 - Declare the languages a fill uses when creating the session; undeclared, a German form gets English values back.
 - Standing instructions live in the session; each batch runs on a `clone()` so requests do not grow; batches run
   together.

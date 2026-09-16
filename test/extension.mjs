@@ -495,6 +495,52 @@ if (worker) {
     }), 5000, 'hung provider');
     check('a hosted call that never answers ends with a verdict', hung && /no answer from anthropic within/.test(hung.error || '') && hung.ms < 2000,
         JSON.stringify({error: hung && hung.error, ms: hung && hung.ms}));
+
+    /* The bug this guards: every Anthropic request asked for low effort, which
+     * the current models take and Haiku 4.5 answers with "This model does not
+     * support the effort parameter" — so a tester who typed a Haiku model got
+     * HTTP 400 and no values at all, for an option that only buys a quicker
+     * round trip. The model is typed by hand, so which ones accept what is the
+     * API's to say: the refusal drops the option, and is remembered. */
+    const effort = await withTimeout(worker.evaluate(async () => {
+        const realFetch = self.fetch;
+        const sent = [];
+        self.fetch = async (url, o) => {
+            const body = JSON.parse(o.body);
+            sent.push(body);
+            if (body.output_config) return new Response(JSON.stringify({
+                type: 'error',
+                error: {type: 'invalid_request_error', message: 'This model does not support the effort parameter.'}
+            }), {status: 400});
+            return new Response(JSON.stringify({
+                content: [{type: 'text', text: '{"values":[{"id":0,"value":"Köln"}]}'}]
+            }), {status: 200});
+        };
+        const cfg = {provider: 'anthropic', apiKey: 'k', model: 'claude-haiku-4-5-20251001'};
+        const field = [{id: 0, type: 'text', label: 'City'}];
+        try {
+            optionsRefused.delete(cfg.model);
+            const first = await remoteCall(cfg, field, 'p');
+            const afterFirst = sent.length;
+            const second = await remoteCall(cfg, field, 'p');
+            return {
+                first: {value: first.parsed['0'], error: first.error, status: first.status},
+                second: {value: second.parsed['0'], error: second.error},
+                triesFirst: afterFirst, triesSecond: sent.length - afterFirst,
+                asked: sent.map(b => !!b.output_config)
+            };
+        } finally {
+            self.fetch = realFetch;
+            optionsRefused.delete(cfg.model);
+        }
+    }).catch(e => ({error: e.message})), 10000, 'effort');
+
+    check('a model that refuses the effort option is asked again without it',
+        effort.first && effort.first.value === 'Köln' && !effort.first.error && effort.triesFirst === 2,
+        JSON.stringify(effort.first));
+    check('and the refusal is remembered, so the next batch asks once',
+        effort.triesSecond === 1 && effort.second && effort.second.value === 'Köln',
+        JSON.stringify({tries: effort.triesSecond, asked: effort.asked}));
     check('a closed port is explained by the stage the worker reached',
         /stopped while waiting for the on-device reply/.test(closed.text) && /running since|restarted/.test(closed.text),
         closed.text.slice(0, 160));
