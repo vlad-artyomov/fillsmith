@@ -375,12 +375,34 @@ check('each dropdown is opened exactly once',
 /* A rich-text editor is there to hold formatting; filling it with a flat
  * paragraph exercises none of what makes it different from a textarea. */
 check('editor received real markup, not flat text',
-    /<(strong|em|ul|li|p)\b/i.test(snap.hinweiseHtml),
+    /<(strong|em|li)\b[^>]*>\s*\S/i.test(snap.hinweiseHtml),
     (snap.hinweiseHtml || '').slice(0, 60));
 
 check('editor received prose through real input events',
     snap.hinweise.length > 20 && /\s/.test(snap.hinweise) && !/^Brightmoor/.test(snap.hinweise),
     snap.hinweise.slice(0, 48));
+
+/* The bug this guards: markup was written straight into the editor's DOM, and
+ * an editor keeps a model rather than whatever DOM it is handed — Quill has no
+ * <ul>, so it rebuilt the editor without one on its next tick and the field was
+ * empty. The filler had already read it back, in the same tick, and reported it
+ * filled; two rich-text fields on a real form were reported as answered by the
+ * model and were blank on screen. Markup goes in as a paste, which the editor
+ * converts, and the readback happens after the editor's own pass. */
+const heldItems = [...(snap.hinweiseHtml || '').matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi)]
+    .map(m => m[1].replace(/<[^>]*>/g, '').trim())
+    .filter(Boolean);
+check('a list survives the editor rather than emptying it',
+    heldItems.length >= 2 && heldItems.every(t => snap.hinweise.includes(t)),
+    `${heldItems.length} item(s): ${heldItems.map(t => t.slice(0, 20)).join(' · ')}`);
+check('and it is in the editor\'s own shape, not the one we sent',
+    /<ol\b/i.test(snap.hinweiseHtml) && !/<ul\b/i.test(snap.hinweiseHtml),
+    (snap.hinweiseHtml || '').slice(-80));
+
+const editorRow = (res.filled || []).find(f => /Hinweise zur Ausleihe/.test(f.label || ''));
+check('and what was reported for it is what the page holds',
+    !!editorRow && snap.hinweise.startsWith(String(editorRow.value).slice(0, 40)),
+    `reported ${JSON.stringify((editorRow || {}).value || '').slice(0, 50)}`);
 check('read-only select was left untouched', snap.zeiteinheitText === 'Tage', snap.zeiteinheitText);
 check('language switcher was left untouched', snap.spracheText === 'Deutsch', snap.spracheText);
 

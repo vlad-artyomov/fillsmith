@@ -1677,14 +1677,47 @@
     })();
 
     // ---- Editor (Quill-shaped) -------------------------------------------------
-    // Quill only ever updates from real input events, never from assignment.
+    /* Quill only ever updates from real input events, never from assignment —
+     * and it keeps a model of its own rather than whatever DOM it is handed.
+     * Both halves are copied here from Quill 2.0.3, because between them they
+     * are why an <ul> written into the real editor vanished a tick later:
+     *
+     *  - A paste is converted: Quill has no <ul> blot, it renders a bullet list
+     *    as <ol><li data-list="bullet">, and that is what a pasted <ul> becomes.
+     *  - Anything else is policed: on the next tick Quill rebuilds the editor
+     *    from the tags it knows, and content in a tag it does not know is gone.
+     */
     (() => {
         const ed = document.querySelector('.ql-editor');
         if (!ed) return;
-        ed.addEventListener('input', () => {
+        const KNOWN = new Set(['P', 'BR', 'STRONG', 'EM', 'U', 'S', 'A', 'OL', 'LI', 'SPAN', 'H1', 'H2', 'H3']);
+        const sync = () => {
             model.hinweise = (ed.innerText || '').trim();
             model.hinweiseHtml = ed.innerHTML;
+        };
+        let ours = false;
+        const put = (html) => {
+            ours = true;
+            ed.innerHTML = html;
+            sync();
+            Promise.resolve().then(() => (ours = false));
+        };
+        ed.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const html = (e.clipboardData && e.clipboardData.getData('text/html')) || '';
+            const text = (e.clipboardData && e.clipboardData.getData('text/plain')) || '';
+            if (!html) return put('<p>' + text.replace(/[<>]/g, '') + '</p>');
+            // A bullet list becomes the editor's own bullets; nothing else changes shape.
+            put(html.replace(/<ul>/gi, '<ol>').replace(/<\/ul>/gi, '</ol>')
+                .replace(/<li>/gi, '<li data-list="bullet">'));
         });
+        new MutationObserver(() => {
+            if (ours) return;
+            const bad = [...ed.querySelectorAll('*')].some(n => !KNOWN.has(n.tagName));
+            if (bad) put('<p><br></p>');
+            else sync();
+        }).observe(ed, {childList: true, subtree: true, characterData: true});
+        ed.addEventListener('input', sync);
     })();
 
     // ---- RadioButton group -----------------------------------------------------

@@ -91,6 +91,38 @@
         return true;
     }
 
+    // The words of a fragment of markup, for an editor that would not take the markup.
+    const plainText = (html) => String(html)
+        .replace(/<\/(p|li|div|h[1-6]|tr)>/gi, '\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+
+    /* Markup's own door into an editor. An editor converts what is pasted into
+     * the model it keeps and polices anything else: Quill renders a bullet list
+     * as `<ol><li data-list="bullet">`, so a `<ul>` written straight into the DOM
+     * was a shape it could not name and it deleted the lot on its next pass —
+     * measured at 7ms, one tick after the filler had read the field back as
+     * full. Pasted, the same list arrives as the editor's own bullets.
+     *
+     * A handler that took the paste called preventDefault; nothing handled it
+     * means a plain contenteditable, which the caller writes to directly. */
+    function pasteInto(el, str) {
+        try {
+            const data = new DataTransfer();
+            data.setData('text/html', str);
+            data.setData('text/plain', plainText(str));
+            return !el.dispatchEvent(new ClipboardEvent('paste', {
+                bubbles: true, cancelable: true, clipboardData: data
+            }));
+        } catch (_) {
+            return false;
+        }
+    }
+
     /* Type into a framework-controlled input. execCommand('insertText') produces
      * real beforeinput/input events, which Vue/React/Quill models accept; a bare
      * `.value =` is reverted by the next render. Falls back to the native setter.
@@ -127,11 +159,10 @@
             }
             // Markup goes in as markup, or the editor shows the tags literally.
             const html = /^\s*<[a-z][\s\S]*>\s*$/i.test(str);
-            let done = false;
+            let done = html && pasteInto(el, str);
             try {
-                done = focused && document.execCommand(html ? 'insertHTML' : 'insertText', false, str);
+                done = done || (focused && document.execCommand(html ? 'insertHTML' : 'insertText', false, str));
             } catch (_) {
-                done = false;
             }
             if (!done) {
                 if (html) el.innerHTML = str; else el.textContent = str;
@@ -167,6 +198,22 @@
         }
         el.dispatchEvent(new Event('change', {bubbles: true}));
         return el.value;
+    }
+
+    /* Writing into an editor and finding out what it kept. The editor's own pass
+     * runs after the write rather than during it, so the value is read on the
+     * far side of it: reading in the same tick reported a field as filled that
+     * the editor had emptied a moment later. An editor that kept nothing is
+     * given the words without the markup, which every editor keeps. */
+    async function typeIntoRich(el, text) {
+        const str = String(text);
+        typeInto(el, str);
+        await sleep(0);                                  // the editor's turn, not a wait for a duration
+        const held = () => (el.innerText || el.textContent || '').trim();
+        if (held() || !/<[a-z]/i.test(str)) return held() || null;
+        typeInto(el, plainText(str));
+        await sleep(0);
+        return held() || null;
     }
 
     // Poll a condition instead of sleeping for a fixed time; most waits then cost one tick.
@@ -247,7 +294,7 @@
 
     globalThis.FormForgeDom = {
         note, takeNotes, dialogOf, neutralSpot,
-        sleep, visible, textOf, norm, press, key, setNativeValue, typeInto,
+        sleep, visible, textOf, norm, press, key, setNativeValue, typeInto, typeIntoRich, plainText,
         commit, settle, waitFor, safeQuery, PLACEHOLDER
     };
 })();

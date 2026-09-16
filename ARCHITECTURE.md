@@ -213,6 +213,13 @@ Each of these was a bug on a real form and has a regression check.
 - An autocomplete asks its shortest query first and its full candidate last; a panel that says "no results" has
   answered.
 
+- A rich-text editor keeps a model of its content, not the DOM it is handed. Quill has no `<ul>` — it renders a
+  bullet list as `<ol><li data-list="bullet">` — so markup written in with `insertHTML` was a shape it could not
+  name and it rebuilt the editor without it on its next tick, 7ms later, after the filler had already read the
+  field back as full. Markup goes in as a **paste**, which is the door an editor converts rather than the one it
+  polices, and the readback happens on the far side of the editor's own pass. An editor that kept nothing is given
+  the words without the markup. `test/primevue-form.html` models both halves of Quill so the suite can see it.
+
 **The model**
 
 - Never block on the model, and that includes bringing it up. A cold `create()` takes as long as it takes —

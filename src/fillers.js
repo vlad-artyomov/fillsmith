@@ -10,7 +10,7 @@
 
     const {
         note, takeNotes, sleep, visible, textOf, norm, press, key, typeInto, setNativeValue,
-        commit, settle, waitFor, safeQuery, PLACEHOLDER, neutralSpot
+        commit, settle, waitFor, safeQuery, PLACEHOLDER, neutralSpot, typeIntoRich
     } = globalThis.FormForgeDom;
     const {detect, claimed, labelFor, displayedValue, radioLabel} = globalThis.FormForgeAdapters;
     const O = globalThis.FormForgeOverlays;
@@ -712,8 +712,10 @@
         const v = Array.isArray(value) ? value[0] : value;
         if (v == null || String(v) === '') return null;      // "null" is not test data
 
+        // An editor keeps what it can model and drops the rest, so what it kept is read back, not what was sent.
+        if (input.isContentEditable) return await typeIntoRich(input, v);
+
         const written = typeInto(input, v);
-        if (input.isContentEditable) return written;
 
         commit(input);
         await settle(() => String(input.value || '') !== '', 180);

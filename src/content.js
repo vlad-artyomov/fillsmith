@@ -585,7 +585,7 @@
                 return names;
             }
 
-            if (f.type === 'contenteditable') return H.typeInto(el, String(value)) || null;
+            if (f.type === 'contenteditable') return await H.typeIntoRich(el, String(value));
 
             value = String(G.constrain(shapeFor(f, value, persona), f));
             const written = H.typeInto(el, value);
