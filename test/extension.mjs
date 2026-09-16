@@ -714,6 +714,84 @@ if (worker) {
     check('each batch gets a fresh context rather than a growing one',
         sessions && sessions.clones === 3, `clones=${JSON.stringify(sessions)}`);
 
+    /* The bug this guards: a cold create() takes about half a minute, the fill
+     * waits three seconds for it, and Chrome stops a worker it has seen idle for
+     * thirty — so the build the fill walked away from was killed before it
+     * finished, and the next fill started another one from zero. The model
+     * answered only when somebody clicked Fill four or five times in a row, fast
+     * enough that the clicks themselves kept the worker awake. A build must
+     * outlive the fill that gave up on it, and the session it produces must
+     * still be there when the next fill asks. */
+    step('letting a build the fill gave up on finish anyway');
+    const survived = await withTimeout(worker.evaluate(async () => {
+        const ask = (sessionWaitMs) => generate({
+            persona: PROBE_PERSONA, pageTitle: 'FormForge self-check', fields: PROBE_FIELD,
+            context: {}, examples: [], sessionWaitMs, budgetMs: 4000
+        }, null);
+        const real = self.LanguageModel;
+        let creates = 0;
+        self.LanguageModel = {
+            async availability() {
+                return 'available';
+            },
+            async create() {
+                creates++;
+                await new Promise(r => setTimeout(r, 2500));  // a cold build, in miniature
+                const fake = {
+                    inputUsage: 1, inputQuota: 99,
+                    async prompt() {
+                        return '{"values":[{"id":0,"value":"Köln"}]}';
+                    },
+                    async clone() {
+                        return fake;
+                    },
+                    destroy() {
+                    }
+                };
+                return fake;
+            }
+        };
+        nanoSession = null;
+        awakeJobs = 0;
+        awakeUntil = 0;
+        if (awakeTimer) clearInterval(awakeTimer);
+        awakeTimer = null;
+
+        const first = await ask(300);                        // gives up long before the build lands
+        const heldWhileBuilding = !!awakeTimer && awakeJobs > 0;
+        await new Promise(r => setTimeout(r, 2500));
+        const built = !!nanoSession;
+        const heldAfter = awakeUntil - Date.now();
+
+        const second = await ask(0);                          // the next fill, on the session the first one paid for
+        self.LanguageModel = real;
+        nanoSession = null;
+        const out = {
+            creates, heldWhileBuilding, built, heldAfter,
+            firstVia: first.via, firstWarming: !!first.warming, firstWarmingMs: first.warmingMs,
+            secondVia: second.via, secondValue: second.values && second.values['0']
+        };
+        // The ticker must also stop: a hold that never expires is a worker that never sleeps.
+        awakeJobs = 0;
+        awakeUntil = 0;
+        awakeTick();
+        out.stops = awakeTimer === null;
+        return out;
+    }).catch(e => ({error: e.message})), 20000, 'survived');
+
+    check('a fill that gives up on the model says so, and says for how long it has been loading',
+        survived.firstVia === 'none' && survived.firstWarming === true && survived.firstWarmingMs >= 0,
+        JSON.stringify(survived));
+    check('the worker holds itself up while the session is being built',
+        survived.heldWhileBuilding === true, JSON.stringify(survived.heldWhileBuilding));
+    check('the build the fill walked away from finishes anyway',
+        survived.built === true && survived.creates === 1, `built=${survived.built} creates=${survived.creates}`);
+    check('the session it produced is held for the fill after it',
+        survived.heldAfter > 60000 && survived.secondVia === 'on-device' && survived.secondValue === 'Köln',
+        JSON.stringify({heldAfter: survived.heldAfter, via: survived.secondVia, value: survived.secondValue}));
+    check('the hold expires rather than keeping the worker up for ever',
+        survived.stops === true, JSON.stringify(survived.stops));
+
     /* The parser is the thing under test and it lives in the service worker, so
      * test it there — no page needed. */
     step('reconciling a reply whose ids do not match the request');

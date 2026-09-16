@@ -224,9 +224,16 @@ Each of these was a bug on a real form and has a regression check.
   keeps generating for an answer the fill has already thrown away, and the single on-device session is busy until it
   finishes — so the next fill queues behind it and reads as a hang.
 - The model is unloaded once no session is alive, and the worker Chrome stops after half a minute idle takes the
-  session with it. So the worker warms on *every* start, not only on install and browser start: the popup opening, a
-  shortcut and a menu click each wake it, and each is a chance to have the model ready before Fill is pressed.
+  session with it. A build nobody holds up is therefore killed before it finishes — waiting on `create()` is not
+  activity Chrome counts — and "the next fill has it" was false: every fill started a build from zero and the model
+  answered only when somebody pressed Fill four or five times in a row, fast enough that the presses themselves kept
+  the worker awake. So the build holds the worker up while it runs, and the session it produces holds it up for ten
+  minutes after the last use. One ticker does both; a hold that never expires is a worker that never sleeps.
+- The worker warms wherever somebody is about to fill — the popup opening, a shortcut, a menu click — rather than on
+  every start: bringing the model into memory alongside whatever woke the worker made the browser itself feel slow.
   Nothing is downloaded on that path — a model that is not on disk is left alone.
+- How long a session has been coming up is reported, not just that it is. The number rising from one fill to the
+  next is a build on its way; the same number twice is one that is starting over.
 - Ask it, then get on with the form. The deadline runs from the request rather than from the moment somebody starts
   waiting, so overlapping the request with the writing shortens a fill and never lengthens the patience the setting
   promises.

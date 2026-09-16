@@ -15,6 +15,11 @@ const randomSeed = () => globalThis.FormForgeGen.newSeed();
 const esc = (s) => String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/* How long the session has been coming up. The build outlives the fill that
+ * started it, so this number rising from one fill to the next is a model on its
+ * way, and the same number twice is one that is starting over. */
+const loadFor = (d) => (d && d.modelWarmingMs > 1000) ? ` (${Math.round(d.modelWarmingMs / 1000)}s so far)` : '';
+
 /* ------------------------------------------------------------ data ---- */
 /* Every fill invents a fresh, self-consistent set of values: the email follows
  * the name, the postcode follows the city, the phone follows the country. That
@@ -288,7 +293,7 @@ function report(res) {
      * was asked and did not answer — which looks identical from the outside. */
     const note = res.aiUsed ? `${res.aiUsed} from model`
         : res.modelError ? 'model error — rules used'
-            : res.modelWarming ? 'model still loading — rules used'
+            : res.modelWarming ? `model still loading${loadFor(res)} — rules used`
                 : res.modelTimedOut ? 'model too slow — rules used'
                     : 'rules only';
     let foot = `${p.fullName} · seed <b style="color:var(--accent)">${esc(p.seed)}</b>`;
@@ -428,7 +433,7 @@ function drawDebug(box, d, history, at) {
     const m = d.modelDebug;
     const asked = d.unresolvedCount || 0;
     const head = !d.modelAsked ? 'Not consulted — the rules answered every field'
-        : d.modelWarming ? 'Still loading — the first use after a reload pays for it'
+        : d.modelWarming ? `Still loading${loadFor(d)} — the next fill has it`
             : d.aiUsed ? `${d.aiUsed} of ${asked} answered · ${esc(d.modelVia || 'unknown')}`
                 + (d.modelTimedOut ? ' · the rest ran past its window' : '')
                 : d.modelTimedOut ? `${asked} asked, none back before the window closed`
@@ -699,7 +704,7 @@ function fillDetail(d, line) {
        to be the same number, because the fill waited. */
     line(`  model: asked ${d.unresolvedCount || 0}, used ${d.aiUsed || 0}, via ${d.modelVia || 'none'}, ` +
         `request ${ms(d.modelRequestMs)}` +
-        (d.modelWarming ? ', still loading' : '') + (d.modelTimedOut ? ', ran past its window' : '') +
+        (d.modelWarming ? `, still loading${loadFor(d)}` : '') + (d.modelTimedOut ? ', ran past its window' : '') +
         (d.modelError ? `, error: ${d.modelError}` : ''));
     line(`  form complete in ${ms(ph.firstPass)}; ${d.upgraded || 0} field(s) upgraded over the ${ms(ph.model)} after it`);
     line('');

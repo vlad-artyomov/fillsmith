@@ -651,6 +651,7 @@
     let modelVia = '';
     let modelError = '';
     let modelWarming = false;
+    let modelWarmingMs = 0;         // how long the session has been coming up, which outlives this fill
     let modelLoading = false;
     let modelRequestMs = 0;         // how long the model took, which is not how long the fill waited
     let warmProbe = null;           // "is the session already up?", asked before the form is read
@@ -805,6 +806,7 @@
             if (res && res.via) modelVia = res.via;
             if (res && res.error) modelError = String(res.error);
             modelWarming = !!(res && res.warming);
+            modelWarmingMs = (res && res.warmingMs) || 0;
             if (res && res.timedOut) {
                 modelTimedOut = true;
                 // The worker keeps generating; the popup collects the late answer for the Debug tab.
@@ -838,6 +840,7 @@
         modelVia = '';
         modelError = '';
         modelWarming = false;
+        modelWarmingMs = 0;
         modelCalls = 0;
         modelRequestMs = 0;
         filesAttached.clear();
@@ -1357,7 +1360,7 @@
             revealed, repaired, upgraded, skipped: skipped.length, leftOpen: leftOpen.length,
             ai: {
                 asked: askedCount, used: aiUsed, via: modelVia, requestMs: modelRequestMs,
-                blockedMs: phase.model, warming: modelWarming, timedOut: modelTimedOut,
+                blockedMs: phase.model, warming: modelWarming, warmingMs: modelWarmingMs, timedOut: modelTimedOut,
                 error: modelError ? modelError.slice(0, 120) : '',
                 batches: ((modelDebug || {}).batches || []).map(b => ({
                     asked: b.asked, answered: b.answered, ms: b.ms, error: b.error ? b.error.slice(0, 80) : undefined
@@ -1384,7 +1387,7 @@
         const record = {
             at: Date.now(), url: location.href.slice(0, 200), title: document.title.slice(0, 80),
             count: filled.length, widgets: widgetCount, revealed, repaired, upgraded, aiUsed,
-            modelTimedOut, modelWarming, modelVia, modelError, modelAsked, leftOpen, notes,
+            modelTimedOut, modelWarming, modelWarmingMs, modelVia, modelError, modelAsked, leftOpen, notes,
             modelRequestMs, unresolvedCount: askedCount,
             // What the bug report names; the Debug tab builds it from here.
             persona: {
@@ -1417,6 +1420,7 @@
             notes,
             modelTimedOut,
             modelWarming,
+            modelWarmingMs,
             modelVia,
             modelError,
             modelDebug,

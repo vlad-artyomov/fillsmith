@@ -46,13 +46,34 @@ scratch.set({workerStartedAt: startedAt}).catch(ignore);
 
 /* Chrome ends a worker it has seen idle for 30s, and waiting on the model is
  * not activity it counts. A cheap extension API call every 20s keeps the worker
- * up for as long as the work runs. */
+ * up: while work nobody else is counting runs, and for a while after it, so what
+ * that work built is still there when the next fill asks for it. One ticker
+ * serves both — several intervals would wake the worker several times over. */
+let awakeJobs = 0;
+let awakeUntil = 0;
+let awakeTimer = null;
+
+function awakeTick() {
+    if (!awakeJobs && Date.now() >= awakeUntil) {
+        clearInterval(awakeTimer);
+        awakeTimer = null;
+        return;
+    }
+    chrome.runtime.getPlatformInfo(() => void chrome.runtime.lastError);
+}
+
+function keepAwake(ms) {
+    if (ms > 0) awakeUntil = Math.max(awakeUntil, Date.now() + ms);
+    if (!awakeTimer) awakeTimer = setInterval(awakeTick, 20000);
+}
+
 async function keptAlive(promise) {
-    const tick = setInterval(() => chrome.runtime.getPlatformInfo(() => void chrome.runtime.lastError), 20000);
+    awakeJobs++;
+    keepAwake(0);
     try {
         return await promise;
     } finally {
-        clearInterval(tick);
+        awakeJobs--;
     }
 }
 
@@ -245,32 +266,45 @@ async function buildSession(LM, withMonitor) {
     return session;
 }
 
+/* A session costs a cold create() — twenty-eight seconds, measured — and dies
+ * with the worker, which Chrome stops half a minute after the fill that asked
+ * for it gave up waiting. So the build outlived nothing: every fill started one
+ * from zero, and only a burst of them, clicked fast enough to keep the worker
+ * awake between clicks, ever saw the model answer. The build holds the worker
+ * up while it runs, and what it built holds it up for a while after. */
+const MODEL_HOLD_MS = 10 * 60 * 1000;
+
 /* Only touch the model when it is already on disk: create() on a downloadable
  * model starts a multi-gigabyte download and does not settle until it ends.
  * The download is opt-in from the popup. */
 async function nanoSessionGet({allowDownload = false} = {}) {
     const LM = nanoGlobal();
     if (!LM) return null;
-    if (nanoSession) return nanoSession;
+    if (nanoSession) {
+        keepAwake(MODEL_HOLD_MS);
+        return nanoSession;
+    }
     if (nanoPending) return nanoPending;
 
     nanoBuilding = true;
     nanoBuildStarted = Date.now();
-    nanoPending = (async () => {
+    nanoPending = keptAlive((async () => {
         const status = await nanoStatus();
         if (status === 'available') {
             nanoSession = await buildSession(LM, false);
+            keepAwake(MODEL_HOLD_MS);
             return nanoSession;
         }
         if (!allowDownload || downloading) return null;
         downloading = true;
         try {
             nanoSession = await buildSession(LM, true);
+            keepAwake(MODEL_HOLD_MS);
             return nanoSession;
         } finally {
             downloading = false;
         }
-    })();
+    })());
     try {
         return await nanoPending;
     } finally {
@@ -312,6 +346,7 @@ async function generateOnDevice(persona, pageTitle, fields, context, examples, o
     const {sessionWaitMs = 0, tabId = null, fieldCount = 0, budgetMs = 0} = opts || {};
     const tSession = Date.now();
     let session = nanoSession;
+    if (session) keepAwake(MODEL_HOLD_MS);   // a session in use is one worth keeping
     if (!session) {
         // The caller says how long it will wait for the model to come up, separately from the answer.
         const wanted = nanoSessionGet({allowDownload: false});
@@ -333,8 +368,9 @@ async function generateOnDevice(persona, pageTitle, fields, context, examples, o
         // "Still loading" and "no model" call for opposite advice.
         const warming = nanoBuilding || !!nanoPending;
         lastExchange.warming = warming;
+        lastExchange.warmingMs = warming ? Date.now() - nanoBuildStarted : 0;
         lastExchange.note = warming
-            ? `the model is still loading (${Math.round((Date.now() - nanoBuildStarted) / 1000)}s so far) — the first use after a reload pays for it`
+            ? `the model is still loading (${Math.round(lastExchange.warmingMs / 1000)}s so far) — it keeps loading after this fill, and the next one has it`
             : 'no on-device session available';
         return null;
     }
@@ -526,6 +562,7 @@ async function generate(payload, tabId) {
             values: {},
             via: 'none',
             warming: !!lastExchange.warming,
+            warmingMs: lastExchange.warmingMs || 0,
             debug: lastExchange
         };
     }
@@ -539,7 +576,7 @@ async function generate(payload, tabId) {
             debug: lastExchange
         };
     }
-    return {ok: true, values: {}, via: 'none', warming: !!lastExchange.warming, debug: lastExchange};
+    return {ok: true, values: {}, via: 'none', warming: !!lastExchange.warming, warmingMs: lastExchange.warmingMs || 0, debug: lastExchange};
 }
 
 /* "Is the model ready?" answered with a real round trip through the same
