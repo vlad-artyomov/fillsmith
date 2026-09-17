@@ -14,6 +14,7 @@ npm run test:complete   # one fill on a clean page leaves nothing empty
 npm run test:ext        # unpacked extension + popup in Chromium (slowest)
 npm run audit           # drive the real extension and judge the page
 npm run vocab           # regenerate src/vocab.js (only when changing tools/vendor-faker.mjs)
+npm run release -- patch # move the version on in manifest.json and package.json together
 ```
 
 `npm test` runs the four suites in parallel (about a minute and a half; the extension suite is the long pole). While
@@ -52,8 +53,13 @@ one. `test/primevue-form.html?latency=slow` makes the fixture's remote pickers s
   first, then fix.
 - **Comments say why**, in one to four lines. The history of a fix belongs in git, not in the file.
 - **Keep the persona invisible.** It is machinery for coherence, not a setting a tester should reason about.
-- **Bump the version with every change that lands**, in `manifest.json` and `package.json` together: patch for a fix,
-  minor for a feature. A reloaded extension must say which build it is.
+- **One version per commit, decided just before it.** Do not bump while iterating: the number is what a reloaded
+  extension says it is, so a version nobody ever built is noise. When the work is ready to land, take the version
+  at `HEAD` — not whatever the tree drifted to — judge the whole change set, and **propose patch or minor and wait
+  for a yes** before committing and pushing. `npm run release -- patch|minor` writes `manifest.json` and
+  `package.json` together. A commit that changes nothing the package carries — tooling, suites, docs, fixtures —
+  leaves the version where it is and drops the version from its subject: there is no new build to name. A `v1.0.1`
+  tag — matching the manifest — is what publishes it; nothing else does.
 - **Never commit or push unasked.** Finish the work, run the suites, leave it in the working tree, and say what is
   in it. Recording it in history, and when, is the user's call — and permission for one commit is permission for
   that commit, not for the ones after it. The version bump above is part of the change, not a reason to commit it.

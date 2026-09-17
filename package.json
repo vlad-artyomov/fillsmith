@@ -13,6 +13,7 @@
     "vocab": "node tools/vendor-faker.mjs",
     "fixture": "python3 -m http.server 8099 --directory test",
     "package": "node tools/package.mjs",
+    "release": "node tools/release.mjs",
     "icons": "node tools/icons.mjs"
   },
   "devDependencies": {

@@ -224,18 +224,25 @@ npm run test:widgets        # just the widget layer (fast)
 npm run fixture             # serve test/ at :8099: demo-form.html to try by hand, primevue-form.html for the hard cases
 npm run audit               # fill the fixture with the real extension and judge the page
 npm run audit -- --url URL  # the same against any page you can reach
+npm run release -- patch    # move the version on, in both files that carry it
 npm run package             # the store ZIP: manifest, src and icons, nothing else
 npm run icons               # redraw icons/ from the mark the worker animates
 ```
 
 Two workflows, both real: [`test.yml`](.github/workflows/test.yml) runs the four suites on every push and pull
-request, and [`release.yml`](.github/workflows/release.yml) runs them again on a `v*` tag, refuses a tag that does
+request, and [`release.yml`](.github/workflows/release.yml) runs them again on a `v*` tag, refuses one that does
 not match `manifest.json`, then attaches the ZIP to a GitHub release with notes generated from the commits since the
-last one. Publishing is therefore one command:
+last one. So a release is: move the version, land it with the change it belongs to, tag it.
 
 ```bash
-git tag v1.0.0 && git push origin v1.0.0
+npm run release -- patch          # or minor, major, or an exact 1.2.3
+git commit -am "FormForge 1.0.1: what landed"
+git push origin main
+git tag v1.0.1 && git push origin v1.0.1
 ```
+
+`release` only touches the two files that carry the version, and refuses to go backwards or over a tag that
+already exists — the commit subject is this project's changelog, so it stays yours to write.
 
 The suites judge the **page**, not FormForge's own report: `test/complete.mjs` presses Fill once on a clean form and
 asks the page whether every required control now holds a value, and `tools/audit.mjs` watches the indicator, the
