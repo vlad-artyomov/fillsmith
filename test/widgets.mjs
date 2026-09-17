@@ -1674,6 +1674,15 @@ console.log('\nThe demo page:');
 await loadPage('test/demo-form.html');
 const demo = await page.evaluate(async () => {
     const res = await window.__formforge.run({seed: 'DEMO01', locale: 'en-US', useAI: false, overwrite: true});
+    // The card this fill put up, read before anything else replaces it.
+    const hud = document.getElementById('formforge-hud');
+    const card = hud && {
+        title: (hud.querySelector('.ff-title') || {}).textContent || '',
+        sources: [...hud.querySelectorAll('.ff-tag')]
+            .filter(t => !t.classList.contains('ff-side'))
+            .map(t => t.textContent),
+        aside: [...hud.querySelectorAll('.ff-tag.ff-side')].map(t => t.textContent)
+    };
     const plan = await window.__formforge.run({
         seed: 'DEMO01',
         locale: 'en-US',
@@ -1685,6 +1694,7 @@ const demo = await page.evaluate(async () => {
         sources: Object.fromEntries((res.filled || []).map(f => [f.label, f.source])),
         count: (res.filled || []).length,
         asked: plan.unresolvedCount,
+        card,
         snap: window.__snapshot()
     };
 });
@@ -1721,6 +1731,20 @@ check('the date it picked is not in the past',
 check('the generated image decoded, and the page previewed it',
     demo.snap.screenshotPreview === '1200x800', demo.snap.screenshotPreview || '(no preview)');
 check('and nothing was left open over the form', demo.snap.overlays === 0, String(demo.snap.overlays));
+/* The card puts a total over a row of counts, so a reader adds the row up. It
+ * has to come to the total: "25 from rules" and "20 from the model" over
+ * "Filled 58 fields" left thirteen fields in the gap — the ones the control
+ * itself chose, which had no chip of their own. Widgets are the same fields
+ * counted a second way, so that chip is set apart and not part of the sum. */
+const cardTotal = Number((/(\d+)/.exec(demo.card && demo.card.title) || [])[1]);
+const cardSum = (demo.card ? demo.card.sources : [])
+    .reduce((n, t) => n + Number((/^(\d+)/.exec(t) || [])[1] || 0), 0);
+check('the card\'s counts add up to the total it shows',
+    !!demo.card && cardSum === cardTotal && cardTotal === 8,
+    `${(demo.card ? demo.card.sources : []).join(' + ')} = ${cardSum}, card says ${cardTotal}`);
+check('and it answers one question, not two — no widget count among the sources',
+    !!demo.card && demo.card.aside.length === 0 && !demo.card.sources.some(t => /widget/.test(t)),
+    (demo.card ? demo.card.sources.concat(demo.card.aside).join(' · ') : '(no card)'));
 
 await browser.close();
 console.log(`\n${failures === 0 ? 'All widget checks passed.' : failures + ' check(s) failed.'}`);

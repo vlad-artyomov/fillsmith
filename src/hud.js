@@ -348,10 +348,17 @@
             const how = String(f.source || '').split('/')[0];
             by[how] = (by[how] || 0) + 1;
         }
+        /* One row, one question: where the values came from. The chips come to
+         * the total above them, so the arithmetic the card invites is arithmetic
+         * that works — a row reading 25 and 20 over "Filled 58 fields" lost the
+         * thirteen the control itself chose, which had no chip. How many of
+         * those fields were widgets is a second question about the same fields,
+         * and the answer is a line down in the popup and in the report; on a
+         * card four words wide it reads as another number to add. */
         if (by.rule || by.type) tag(`${(by.rule || 0) + (by.type || 0)} from rules`);
         if (by.ai) tag(`${by.ai} from the model`, 'ff-ai');
+        if (by.choice) tag(`${by.choice} chosen`);
         if (by.fallback) tag(`${by.fallback} filler`);
-        if (d.widgets) tag(`${d.widgets} widget${d.widgets === 1 ? '' : 's'}`);
         if (d.skipped && d.skipped.length) {
             tag(`${d.skipped.length} left empty`, 'ff-miss');
             const names = d.skipped.slice(0, 2).map(s => s.label).filter(Boolean).join(', ');

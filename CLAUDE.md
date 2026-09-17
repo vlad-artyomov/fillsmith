@@ -60,6 +60,9 @@ one. `test/primevue-form.html?latency=slow` makes the fixture's remote pickers s
   `package.json` together. A commit that changes nothing the package carries — tooling, suites, docs, fixtures —
   leaves the version where it is and drops the version from its subject: there is no new build to name. A `v1.0.1`
   tag — matching the manifest — is what publishes it; nothing else does.
-- **Never commit or push unasked.** Finish the work, run the suites, leave it in the working tree, and say what is
-  in it. Recording it in history, and when, is the user's call — and permission for one commit is permission for
-  that commit, not for the ones after it. The version bump above is part of the change, not a reason to commit it.
+- **Never commit or push unasked, and they are two separate asks.** Finish the work, run the suites, leave it in
+  the working tree, and say what is in it. Recording it in history, and when, is the user's call — and permission
+  for one commit is permission for that commit, not for the ones after it. "Commit" is not "push": a commit stays
+  local until asked for in so many words, because a push is the first step anybody else can see. A tag is a third
+  ask again — pushing one publishes a release. The version bump above is part of the change, not a reason to
+  commit it.
