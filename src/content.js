@@ -580,7 +580,11 @@
                      * whole patience for a row that was never coming. */
                     const zone = el.closest(UPLOAD_ZONE) || el.parentElement;
                     const taken = !el.files || el.files.length === 0;
-                    if (zone && taken) uploads.push({zone, before: controlsIn(zone), until: Date.now() + UPLOAD_PATIENCE_MS});
+                    if (zone && taken) uploads.push({
+                        zone,
+                        before: controlsIn(zone),
+                        until: Date.now() + UPLOAD_PATIENCE_MS
+                    });
                 }
                 return names;
             }
@@ -1146,6 +1150,7 @@
          * retry what wrote nothing, fill what our writes revealed (a switch that
          * renders the controls it gates). A field is identified by key, so a node
          * the framework rebuilt gets its original value back rather than a new one. */
+
         /* Nothing else is happening and a file we attached has not come back. On a
          * short form the fill is over in eighty milliseconds and the row lands a
          * second later, so without this the fields it brings are left for the next

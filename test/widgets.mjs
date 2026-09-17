@@ -53,7 +53,7 @@ scan.forEach(f => console.log(`  ${String(f.kind).padEnd(7)} ${String(f.type).pa
 console.log('');
 
 const widgetKinds = scan.filter(f => f.kind === 'widget').map(f => f.lib);
-// Land, Country, Stadt, Standorttyp, the phone country picker, and the
+// Country, Country of registration, City, Location type, the phone country picker, and the
 // remote-backed Organization/Location one.
 check('detects the single selects', widgetKinds.filter(k => k === 'primevue-select').length === 6, widgetKinds.filter(k => k === 'primevue-select').length + '');
 check('detects the multiselect', widgetKinds.includes('primevue-multiselect'));
@@ -180,8 +180,8 @@ check('groups the radio buttons into one field',
 /* A control the app disabled or marked read-only is not ours to write; a
  * readonly attribute on a Select's hidden input is not that signal. */
 check('skips the read-only select',
-    !scan.some(f => (f.label || '').includes('Zeiteinheit')),
-    scan.filter(f => (f.label || '').includes('Zeiteinheit')).length + ' picked up');
+    !scan.some(f => (f.label || '').includes('Time unit')),
+    scan.filter(f => (f.label || '').includes('Time unit')).length + ' picked up');
 /* Filling the language switcher would rewrite every label mid-run. */
 check('skips the app language switcher',
     !scan.some(f => /localeSwitcher|Switch language/i.test(f.label || '')));
@@ -197,7 +197,7 @@ const ctx = await page.evaluate(() => {
     return {inside, outside};
 });
 check('a dialog contributes its own title as context',
-    /Buchungsvoraussetzung/.test(ctx.inside.dialog), ctx.inside.dialog || '(none)');
+    /booking prerequisite/i.test(ctx.inside.dialog), ctx.inside.dialog || '(none)');
 check('a field outside any dialog reports no dialog context',
     ctx.outside.dialog === '', ctx.outside.dialog);
 check('the page heading is picked up either way',
@@ -217,12 +217,12 @@ check('detects the rich-text editor',
     scan.filter(f => f.lib === 'primevue-editor').map(f => f.label).join(''));
 /* The Editor's caption exists only as a `label` attribute on the root. */
 check('labels the editor from its label attribute',
-    scan.some(f => f.lib === 'primevue-editor' && /Hinweise zur Ausleihe/.test(f.label || '')),
+    scan.some(f => f.lib === 'primevue-editor' && /Usage notes/.test(f.label || '')),
     (scan.find(f => f.lib === 'primevue-editor') || {}).label || '');
 check('still sees the plain inputs', scan.filter(f => f.kind === 'native').length >= 3,
     scan.filter(f => f.kind === 'native').length + ' native');
 check('does not double-count widget-owned inputs',
-    !scan.some(f => f.kind === 'native' && /Kapazität|Regionen|Ansprechpartner/.test(f.label)));
+    !scan.some(f => f.kind === 'native' && /Capacity|Regions|Contact person/.test(f.label)));
 
 const res = await page.evaluate(() => window.__formforge.run({
     seed: 'WID001', locale: 'de-DE', useAI: false, overwrite: true, emailDomain: 'example.com'
@@ -246,7 +246,7 @@ check('every filled field is reported by a readable name',
     captions.filter(c => (String(c).match(/\p{L}/gu) || []).length < 2
         || /^(select|multiselect|choice)$/i.test(String(c).trim())).join(', ') || 'all named');
 check('and by the name its own label gives it',
-    ['Land', 'Stadt', 'Standorttyp'].every(n => captions.includes(n)),
+    ['Country', 'City', 'Location type'].every(n => captions.includes(n)),
     captions.slice(0, 6).join(' · '));
 
 const LAENDER = ['Deutschland', 'Österreich', 'Schweiz', 'Niederlande'];
@@ -287,7 +287,7 @@ check('no overlay was left open', snap.openOverlays === 0, String(snap.openOverl
 check('a placeholder is not a value',
     snap.orga && snap.orga !== 'Choose organization or location', String(snap.orga));
 check('and a control another field unlocks is filled in the same fill',
-    ['Admin MZ', 'Super Teacher', 'Teacher'].includes(snap.rolle), String(snap.rolle));
+    ['Administrator', 'Editor', 'Viewer'].includes(snap.rolle), String(snap.rolle));
 
 check('run reports the widgets it drove', (res.widgets || 0) >= 7, `widgets=${res.widgets} count=${res.count}`);
 
@@ -339,9 +339,9 @@ check('no field was filled with the literal string null',
     Object.entries(snap).filter(([, v]) => v === 'null' || v === 'undefined').map(([k]) => k).join(',') || 'none');
 /* A caption must come from the control's own wrapper, never a neighbour's. */
 check('editor label is not polluted by a neighbouring field',
-    !/Standortname/.test((scan.find(f => f.lib === 'primevue-editor') || {}).label || ''),
+    !/Location name/.test((scan.find(f => f.lib === 'primevue-editor') || {}).label || ''),
     (scan.find(f => f.lib === 'primevue-editor') || {}).label || '');
-/* Prose, not the generic one-line filler: "Hinweise"/"Information" labels are
+/* Prose, not the generic one-line filler: "Notes"/"Information" labels are
  * notes fields, and a rich-text editor is a textarea with a toolbar. */
 /* A time-only picker takes no typing: its input refuses focus and the value
  * is written by the component from its spinners. Typing looked like it worked
@@ -399,11 +399,11 @@ check('and it is in the editor\'s own shape, not the one we sent',
     /<ol\b/i.test(snap.hinweiseHtml) && !/<ul\b/i.test(snap.hinweiseHtml),
     (snap.hinweiseHtml || '').slice(-80));
 
-const editorRow = (res.filled || []).find(f => /Hinweise zur Ausleihe/.test(f.label || ''));
+const editorRow = (res.filled || []).find(f => /Usage notes/.test(f.label || ''));
 check('and what was reported for it is what the page holds',
     !!editorRow && snap.hinweise.startsWith(String(editorRow.value).slice(0, 40)),
     `reported ${JSON.stringify((editorRow || {}).value || '').slice(0, 50)}`);
-check('read-only select was left untouched', snap.zeiteinheitText === 'Tage', snap.zeiteinheitText);
+check('read-only select was left untouched', snap.zeiteinheitText === 'Days', snap.zeiteinheitText);
 check('language switcher was left untouched', snap.spracheText === 'Deutsch', snap.spracheText);
 
 // The group must commit exactly one option, and the same seed must commit the
@@ -441,7 +441,7 @@ const radioNamed = await page.evaluate(async () => {
     const W = globalThis.FormForgeWidgets;
     const persona = g.buildPersona('XX1', 'de-DE', {});
     const widget = W.detect(document).find(w => w.kind === 'radio-group');
-    await W.fill(widget, 'Manuell', {rng: persona._rng, persona});
+    await W.fill(widget, 'Manual', {rng: persona._rng, persona});
     return window.__model.bookingConfirmation;
 });
 check('a named option is honoured over a seeded pick', radioNamed === 'MANUAL', radioNamed);
@@ -551,8 +551,8 @@ check('and is not mistaken for a panel somebody left open',
 /* It must also not stop the real date field from working — the picker beside
  * it has to find its own panel among the two. */
 check('the date field beside it still fills',
-    !!permanent.datum && !permanent.skipped.includes('Eröffnungsdatum'),
-    `Eröffnungsdatum = ${JSON.stringify(permanent.datum)}`);
+    !!permanent.datum && !permanent.skipped.includes('Opening date'),
+    `Opening date = ${JSON.stringify(permanent.datum)}`);
 
 /* A panel is this control's or it is not; what it happens to show is a second
  * question. Deciding it had opened only once a day cell appeared meant a
@@ -659,8 +659,8 @@ const remote = await page.evaluate(async () => {
     };
 });
 
-const ORGS = ['NRW KMZ', 'Medienzentrum Köln', 'Medienzentrum Bonn', 'Kreis Düren',
-    'Stadt Aachen', 'Schulamt Essen', 'Sonnenfeld Systeme GmbH'];
+const ORGS = ['Zentrale Nord', 'Niederlassung Köln', 'Niederlassung Bonn', 'Kreisstelle Aachen',
+    'Stadtbüro Essen', 'Regionalstelle West', 'Sonnenfeld Systeme GmbH'];
 /* The list is empty for a moment after it opens, because it comes over the
  * network. `openOverlay` accepts an empty panel — that is how it tells a
  * dependent select with nothing to offer from one that never opened — so the
@@ -812,7 +812,7 @@ const marks = await page.evaluate(async () => {
 check('a fill clears the ownership marks it starts with and ends with',
     marks.left.length === 0, marks.left.join(', ') || 'none');
 check('and a stale mark does not hide the field beneath it',
-    !!marks.underIt, `Standortname="${marks.underIt}"`);
+    !!marks.underIt, `Location name="${marks.underIt}"`);
 /* "+690 Tokelau" beside a German number reads as a bug in the app, so this
  * picker is one where only a match will do. */
 check('a phone country picker matches the number beside it',
@@ -1171,7 +1171,7 @@ for (const locale of ['de-DE', 'en-US']) {
      * the *run result*, not on the dom module, or the seam is not covered. */
     if (locale === 'en-US') {
         check('[en-US] the fill result carries the note about the country',
-            dep.notes.some(n => /^Land: no "United States" among \d+ option/.test(n)),
+            dep.notes.some(n => /^Country: no "United States" among \d+ option/.test(n)),
             dep.notes.join(' | ') || '(no notes on the result)');
     }
     check(`[${locale}] no single control costs more than a second`,
@@ -1223,18 +1223,18 @@ const keyed = await page.evaluate(async () => {
     };
 });
 check('the shortcut fills the focused field, not the last right-clicked one',
-    /farbe/i.test(keyed.first || ''), String(keyed.first));
+    /colour/i.test(keyed.first || ''), String(keyed.first));
 check('the caret stays in the field, and pressing again gives another value',
     keyed.stillFocused && keyed.v1 && keyed.v2 && keyed.v1 !== keyed.v2 && keyed.held === keyed.v2,
     `${keyed.v1} -> ${keyed.v2}, focused=${keyed.stillFocused}`);
 
 check('filling one field writes that field and no other',
     one.native && one.native.ok && one.native.count === 1
-    && /\d/.test(one.nativeHeld) && one.native.filled[0].label === 'Straße und Hausnummer',
+    && /\d/.test(one.nativeHeld) && one.native.filled[0].label === 'Street and house number',
     `${one.native && one.native.filled[0] && one.native.filled[0].label} = "${one.nativeHeld}"`);
 check('right-clicking inside a widget fills the widget, not the span',
     one.widget && one.widget.ok && one.widget.widgets === 1
-    && one.widget.filled[0].label === 'Land',
+    && one.widget.filled[0].label === 'Country',
     one.widget && one.widget.filled && one.widget.filled[0]
         ? `${one.widget.filled[0].label} = ${one.widget.filled[0].value}` : (one.widget || {}).error);
 check('and pointing at the page rather than a field says so',
@@ -1564,7 +1564,7 @@ check('clearing the organization locks the role template again',
 await load();
 const limited = await page.evaluate(async () => {
     const res = await window.__formforge.run({seed: 'LIMIT1', locale: 'de-DE', useAI: false, overwrite: true});
-    const entry = (res.filled || []).find(x => /Voraussetzung/.test(x.label)) || {};
+    const entry = (res.filled || []).find(x => /Prerequisite description/.test(x.label)) || {};
     return {
         value: window.__snapshot().voraussetzung, why: entry.why || '',
         complaint: !document.getElementById('voraussetzung-fehler').hidden
@@ -1598,7 +1598,7 @@ const modalFill = await page.evaluate(async () => {
     return out;
 });
 check('a fill inside a modal dialog leaves the dialog open', modalFill.open === true, JSON.stringify(modalFill));
-check('and fills what the dialog holds', modalFill.input.length > 0 && modalFill.labels.includes('Anzeigestatus')
+check('and fills what the dialog holds', modalFill.input.length > 0 && modalFill.labels.includes('Display status')
     && ['Sichtbar', 'Versteckt', 'Archiviert'].includes(modalFill.status), `input="${modalFill.input}" status=${modalFill.status}`);
 check('and touches nothing under the mask', modalFill.search === '' && modalFill.labels.every(l => !/search/i.test(l)),
     `search="${modalFill.search}" filled: ${modalFill.labels.join(', ')}`);
@@ -1665,6 +1665,62 @@ check('an upload that never comes back does not hold the fill open',
     never.ms < 12000, `${never.ms}ms`);
 check('and it says so rather than reporting a clean fill',
     never.notes.some(n => /upload did not come back/.test(n)), never.notes.join(' | ') || '(no note)');
+
+/* The demo page — the one the repository's GIF is recorded on — claims one
+ * control per way a value is chosen. A claim on a page nobody checks is a claim
+ * that quietly stops being true: a rule renamed, a label that starts matching
+ * something else, and the GIF shows a filler phrase where it says "rule". */
+console.log('\nThe demo page:');
+await loadPage('test/demo-form.html');
+const demo = await page.evaluate(async () => {
+    const res = await window.__formforge.run({seed: 'DEMO01', locale: 'en-US', useAI: false, overwrite: true});
+    const plan = await window.__formforge.run({
+        seed: 'DEMO01',
+        locale: 'en-US',
+        useAI: true,
+        overwrite: true,
+        dryRun: true
+    });
+    return {
+        sources: Object.fromEntries((res.filled || []).map(f => [f.label, f.source])),
+        count: (res.filled || []).length,
+        asked: plan.unresolvedCount,
+        snap: window.__snapshot()
+    };
+});
+const WANT = {
+    'Contact person': 'rule',
+    'Work email': 'rule',
+    'Office country': 'rule/primevue-select',
+    'Go-live date': 'type/primevue-datepicker',
+    'Screenshot': 'type',
+    'Needs sign-off before release': 'choice/primevue-checkbox',
+    // With no model these two are the filler's and the weak rule's; with one they are the model's.
+    'Internal ticket': 'fallback',
+    'Release notes': 'rule/primevue-editor'
+};
+const wrong = Object.entries(WANT).filter(([label, want]) => demo.sources[label] !== want);
+check('every one of the eight is filled', demo.count === 8, `${demo.count} of 8`);
+check('and each by the source the page is there to show',
+    wrong.length === 0,
+    wrong.map(([l, want]) => `${l}: ${demo.sources[l] || 'not filled'} ≠ ${want}`).join(' · ') || 'all eight as documented');
+check('the two the model owns are the two it is offered',
+    demo.asked === 2, `${demo.asked} asked`);
+/* A go-live date in the past would be the first thing anybody watching the GIF
+ * noticed. The picker refuses the days before today, as a real one does. */
+check('the date it picked is not in the past',
+    (() => {
+        const [d, m, y] = String(demo.snap.golive).split('.').map(Number);
+        const picked = new Date(y, m - 1, d);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return picked >= today;
+    })(), demo.snap.golive);
+/* The page previews what it was handed, from the File itself — so a preview
+ * with real dimensions is the page saying the upload decoded as an image. */
+check('the generated image decoded, and the page previewed it',
+    demo.snap.screenshotPreview === '1200x800', demo.snap.screenshotPreview || '(no preview)');
+check('and nothing was left open over the form', demo.snap.overlays === 0, String(demo.snap.overlays));
 
 await browser.close();
 console.log(`\n${failures === 0 ? 'All widget checks passed.' : failures + ' check(s) failed.'}`);

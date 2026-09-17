@@ -7,17 +7,16 @@
 For QA engineers who fill the same create-form forty times a day.
 
 [![tests](https://github.com/vlad-artyomov/formforge/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/vlad-artyomov/formforge/actions/workflows/test.yml)
+[![latest release](https://img.shields.io/github/v/release/vlad-artyomov/formforge?color=1f6f4f&label=release)](https://github.com/vlad-artyomov/formforge/releases/latest)
 [![Chrome Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-1f6f4f)](manifest.json)
 [![Runtime dependencies: 0](https://img.shields.io/badge/runtime%20dependencies-0-1f6f4f)](package.json)
 [![No build step](https://img.shields.io/badge/build%20step-none-1f6f4f)](#-development)
 [![AI: on-device](https://img.shields.io/badge/AI-on--device-1f6f4f)](#-the-model-is-optional-and-never-in-the-way)
 [![License: MIT](https://img.shields.io/badge/license-MIT-1f6f4f)](LICENSE)
 
-<img src="docs/filled-form.png" alt="A form filled in one press: selects, a dependent dropdown, a phone country picker, a file upload — with a card in the corner reporting 39 fields" width="820">
+<img src="docs/filled-form.png" alt="A form filled in one press: selects, a dependent dropdown, a phone country picker, a file upload — with a card in the corner reporting what it filled">
 
 </div>
-
----
 
 ## 🤔 Why another form filler
 
@@ -33,7 +32,7 @@ FormForge drives each control the way a person does — then reads it back to se
 | `<input>`, `<select>`, radios | ✅                                  | ✅                                                                     |
 | Component-library dropdowns   | ❌ the component reverts the write  | ✅ opens the popup, picks a real option, waits if the list is remote   |
 | Date & time pickers           | ❌ text the component rejects       | ✅ clicks a day, or types in the locale's format; drives time spinners |
-| Rich-text editors             | ❌ plain text, or nothing           | ✅ real markup through the editor's own input events                   |
+| Rich-text editors             | ❌ plain text, or nothing           | ✅ real markup, pasted so the editor keeps it                          |
 | File inputs                   | ❌ skipped                          | ✅ a PNG, PDF, CSV or JSON generated to match `accept`                 |
 | The data                      | 🎲 random, field by field           | 🧑 one invented person: email matches name, postcode matches city      |
 | IBAN / VAT id / card number   | ❌ fail their checksums             | ✅ pass                                                                |
@@ -60,15 +59,18 @@ FormForge drives each control the way a person does — then reads it back to se
   with the last fill in full and the timings of the fills around it, to attach to a ticket.
 
 <div align="center">
-<img src="docs/popup.png" alt="The FormForge popup: one Fill button, a dry run, a clear, and the last fill listed field by field" width="380">
+<img src="docs/demo.gif" alt="One press filling a form: a name and an email that belong to the same person, a country picked from the dropdown's own options, a date chosen in the calendar, a generated PNG previewed, and two fields the model answers a moment later">
 </div>
 
 ## 📦 Install
 
-1. Clone this repository.
-2. Open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked**, pick the folder.
+Either take the packaged build from [**Releases**](https://github.com/vlad-artyomov/formforge/releases/latest) —
+`formforge-<version>.zip`, unzipped — or clone this repository. Then:
 
-Chrome 128+. Nothing to build, nothing to sign up for.
+Open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked**, pick the folder.
+
+Chrome 128+. Nothing to build, nothing to sign up for. The ZIP is built by CI from the tag, holds the manifest,
+`src/` and `icons/` and nothing else, and is the same archive a store upload would get.
 
 ## 🖱 Use
 
@@ -92,8 +94,9 @@ For each field, the first step that answers wins:
    against label, name, id and placeholder. `zip` → a postcode, `iban` → a valid IBAN, `country` → the persona's
    country tried against the dropdown's real options, under every spelling that country has.
 2. **Type default** — a number, a date in the locale's format, a time, prose, markup for a rich-text editor.
-3. **Model** — everything left over goes to Chrome's built-in Gemini Nano in one batch, with the persona and the
-   page's own heading, so the answers stay coherent with each other.
+3. **Model** — everything left over goes to Chrome's built-in Gemini Nano in batches of twelve, with the persona
+   and the page's own heading, so the answers stay coherent with each other. Each batch is written the moment it
+   lands, not when the last one does.
 4. **Filler** — a short phrase from the persona's own vocabulary, or a seeded pick among the control's real
    options. Never the field's own caption echoed back: a form full of `Alternative text 27` validates nothing.
 
@@ -106,31 +109,37 @@ person twice — what you want when you're reproducing a bug rather than finding
 immediately; a field the model owns is written the moment its answer lands, and only what's *still* outstanding at
 the end is waited for.
 
-One `npm run audit` against the bundled fixture — 39 fields, 24 of them component-library widgets, three of the
-dropdowns answering from a simulated server:
+One `npm run audit` against the bundled fixture — 46 fields, 24 of them component-library widgets, three of the
+dropdowns answering from a simulated server, and no on-device model in headless Chromium, so this is the rules and
+the filler alone:
 
 ```
-collect        11 ms   reading the form
+collect        14 ms   reading the form
 model           0 ms   time the fill actually spent waiting for the model
-firstPass    5956 ms   driving 39 controls (1036 ms of it the page's own loaders)
-recollect       3 ms   looking again for what the fill revealed
-secondPass    284 ms   re-checking, and writing what it found
-total        6251 ms
+firstPass    6021 ms   driving 46 controls (1030 ms of it the page's own loaders)
+recollect       7 ms   looking again for what the fill revealed
+secondPass    289 ms   re-checking, and writing what it found
+total        6335 ms
 ```
 
 `model` is the only number a model can inflate, and it's the time the fill **blocked**, not the time the model took.
-In the suite, a stand-in that needs 2.5 seconds to answer costs a fill zero milliseconds — the form is written while
-it thinks — and the Debug tab reports both numbers so they're never confused.
+In the suite, a stand-in that takes 5.5 seconds a batch — 16.5 seconds over three — costs a fill zero
+milliseconds: the form is complete 19 ms in, and all thirty answers still land, each written as it arrives. The
+Debug tab reports both numbers so they're never confused.
 
 Every wait in the code is a condition with a budget, never a fixed sleep: a list that arrives at once isn't paid for
 as though it arrived slowly.
 
-## 🧠 The model is optional, and never in the way
+## 🧠 The model is optional and never in the way
 
 - **On-device by default.** Chrome's built-in Gemini Nano runs locally — no key, no account, and after its one-time
   download, no network. Without it, the rules still fill every recognised field.
 - **Bounded, always.** Loading it, downloading it and answering each have their own budget. A missing, slow or
   wedged model changes how *good* the values are, never whether they arrive.
+- **Warm when you get back to it.** A cold `create()` takes about half a minute, which no fill waits for: the first
+  fill after Chrome has had the extension idle for a while is answered by the rules while the model comes up in the
+  background, and the fills after it have it. The report says how long a load has been running, so a model on its
+  way reads differently from one that isn't coming.
 - **Your own key, if you want one.** Anthropic, OpenAI or Gemini, used only for what the on-device model couldn't
   answer. *On-device only* keeps everything offline; *key only* skips Nano. **Test this setup** makes one real
   request and shows the provider's own answer — or its own error text.
@@ -142,7 +151,7 @@ as though it arrived slowly.
 | `activeTab`, `scripting` | The filler is injected **only** when you press Fill. It is not a declared content script and never runs as you browse. |
 | `storage`                | Settings, the last fill's trail, and an API key if you enter one. Local to this browser profile.                       |
 | `contextMenus`           | The right-click entries.                                                                                               |
-| `downloads`              | Only the **Save report** button in the Debug tab: one text file about your own fills.                                    |
+| `downloads`              | Only the **Save report** button in the Debug tab: one text file about your own fills.                                  |
 | `<all_urls>`             | A tester's form can be on any host, and the extension can't know which in advance.                                     |
 
 Rules and the on-device model run entirely in your browser. Field labels reach a hosted provider only if you enter
@@ -212,11 +221,20 @@ src/
 npm install                 # Playwright and faker, dev only
 npm test                    # all four suites, in parallel
 npm run test:widgets        # just the widget layer (fast)
-npm run fixture             # serve test/ at :8099 to try it by hand
+npm run fixture             # serve test/ at :8099: demo-form.html to try by hand, primevue-form.html for the hard cases
 npm run audit               # fill the fixture with the real extension and judge the page
 npm run audit -- --url URL  # the same against any page you can reach
 npm run package             # the store ZIP: manifest, src and icons, nothing else
 npm run icons               # redraw icons/ from the mark the worker animates
+```
+
+Two workflows, both real: [`test.yml`](.github/workflows/test.yml) runs the four suites on every push and pull
+request, and [`release.yml`](.github/workflows/release.yml) runs them again on a `v*` tag, refuses a tag that does
+not match `manifest.json`, then attaches the ZIP to a GitHub release with notes generated from the commits since the
+last one. Publishing is therefore one command:
+
+```bash
+git tag v1.0.0 && git push origin v1.0.0
 ```
 
 The suites judge the **page**, not FormForge's own report: `test/complete.mjs` presses Fill once on a clean form and

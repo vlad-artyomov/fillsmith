@@ -248,6 +248,11 @@ Each of these was a bug on a real form and has a regression check.
   and answers HTTP 400 naming it on Haiku 4.5 — and the model is a string the tester types, so a table here of which
   ones accept what would be a second place to go stale. The option goes out, a refusal that names it drops it and
   sends the request again, and the refusal is remembered for that model so it is paid once, not once per batch.
+- The fixture reads in English and its option lists stay German, on purpose: the labels are what a screenshot and a
+  reader see, the options are what a persona has to match — the country list is alphabetical, 240 long and German
+  only, as the application's is. A German *label* is checked in `test/run.mjs` instead, against `matchRule` directly,
+  so the German half of every rule pattern keeps a test: that check is what found `\btelefon\b` never reaching
+  "Telefonnummer".
 - Declare the languages a fill uses when creating the session; undeclared, a German form gets English values back.
 - Standing instructions live in the session; each batch runs on a `clone()` so requests do not grow; batches run
   together.

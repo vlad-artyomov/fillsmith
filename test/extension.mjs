@@ -1925,9 +1925,11 @@ if (worker) {
             func: () => {
                 const all = [...document.querySelectorAll('input')];
                 const hud = document.getElementById('formforge-hud');
-                return {empty: all.filter(i => !i.value).length, total: all.length,
+                return {
+                    empty: all.filter(i => !i.value).length, total: all.length,
                     fromModel: all.filter(i => /^Vom Modell/.test(i.value)).length,
-                    hud: hud ? hud.innerText.replace(/\s+/g, ' ').trim() : ''};
+                    hud: hud ? hud.innerText.replace(/\s+/g, ' ').trim() : ''
+                };
             }
         });
         const res = await fill;

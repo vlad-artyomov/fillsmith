@@ -59,6 +59,41 @@ check('city rule beats the generic address rule', ruleCases.city === ruleCases.w
 check('country rule beats the generic address rule', ruleCases.country === ruleCases.want.country, ruleCases.country);
 check('street still resolves to a street', ruleCases.street === ruleCases.want.street, ruleCases.street);
 check('"Contact Person" resolves to a person, not a company', ruleCases.person === ruleCases.want.full, ruleCases.person);
+/* Every rule carries its German spellings beside its English ones, and those
+ * spellings used to be covered end to end by the PrimeVue fixture's own labels.
+ * The fixture reads in English now — a German label has to be checked here, or
+ * the alternatives are a branch nothing ever walks. */
+const german = await page.evaluate(() => {
+    const G = globalThis.FormForgeGen;
+    const p = G.buildPersona('DE001', 'de-DE', {});
+    const ask = (label) => {
+        const v = G.matchRule(label, p);
+        return Array.isArray(v) ? v[0] : v;
+    };
+    return {
+        got: {
+            'Straße und Hausnummer': ask('Straße und Hausnummer'),
+            'PLZ': ask('PLZ'),
+            'Stadt': ask('Stadt'),
+            'Land': ask('Land'),
+            'Firma': ask('Firma'),
+            'Telefonnummer': ask('Telefonnummer'),
+            'Rufnummer': ask('Rufnummer'),
+            'Ansprechpartner': ask('Ansprechpartner'),
+            'E-Mail-Adresse': ask('E-Mail-Adresse')
+        },
+        want: {
+            'Straße und Hausnummer': p.street, 'PLZ': p.postal, 'Stadt': p.city, 'Land': p.country,
+            'Firma': p.company, 'Telefonnummer': p.phone, 'Rufnummer': p.phone, 'Ansprechpartner': p.fullName,
+            'E-Mail-Adresse': p.email
+        }
+    };
+});
+const germanMisses = Object.keys(german.want).filter(k => german.got[k] !== german.want[k]);
+check('a German label reaches the same rule as its English twin',
+    germanMisses.length === 0,
+    germanMisses.map(k => `${k} → ${JSON.stringify(german.got[k])}`).join(', ') || 'all nine matched');
+
 // Dates for widgets travel in the locale's format; a birth date must not become a future date.
 const dates = await page.evaluate(() => {
     const G = globalThis.FormForgeGen;

@@ -402,7 +402,7 @@
         // The country picker of an international phone input, before the phone rules claim it.
         [/countrylist|countrycode|phonecountry/i, p => [p.country, p.countryEn, ...(p.countryNames || []), p.countryCode]],
         [/\b(mobile|cell|handy)\b/i, p => p.phone],
-        [/\b(phone|tel|telefon|telephone|fax)\b/i, p => p.phone],
+        [/\b(phone|tel|telefon(nummer)?|rufnummer|telephone|fax)\b/i, p => p.phone],
         // A floor, not an answer: the model knows real makes, and the persona's company is the fallback.
         [/\b(manufacturer|hersteller|brand|marke|vendor|lieferant|supplier)\b/i, p => p.company, WEAK],
         [/\b(company|organisation|organization|employer|firma|unternehmen)\b/i, p => p.company],
@@ -593,6 +593,7 @@
 
     /* The last resort, named after the field it lands in: "Prerequisite 43" in
      * a box labelled Prerequisite is obviously deliberate test data. */
+
     /* A value that reads as content. This used to be the field's own caption with a
      * number after it — "Alternative text 27" — which traces nicely and exercises
      * nothing: no word boundary, no accent, no length anything would validate, and

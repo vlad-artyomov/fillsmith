@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Standort anlegen — Fixture</title>
+    <title>New location — FormForge fixture</title>
     <style>
         body {
             font: 14px system-ui, sans-serif;
@@ -261,460 +261,950 @@
             align-items: center;
             gap: 8px;
         }
+
+        /* ---- Presentation. Everything above is the DOM contract this fixture
+           stands in for; everything below is only what a reader (and a
+           screenshot) sees, and no rule here changes how a control behaves. ---- */
+        :root {
+            --ff-bg: #f4f6f9;
+            --ff-card: #fff;
+            --ff-line: #dde3ec;
+            --ff-edge: #ccd4e0;
+            --ff-text: #0f1729;
+            --ff-muted: #667085;
+            --ff-accent: #1f6f4f;
+        }
+
+        body {
+            margin: 0;
+            padding: 40px 20px 80px;
+            max-width: none;
+            background: var(--ff-bg);
+            color: var(--ff-text);
+            font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+        }
+
+        .page {
+            max-width: 960px;
+            margin: 0 auto;
+        }
+
+        .page-head {
+            margin: 0 0 22px 2px;
+        }
+
+        .page-head h1 {
+            margin: 0;
+            font-size: 27px;
+            line-height: 1.2;
+            letter-spacing: -.015em;
+        }
+
+        .page-head .sub {
+            margin: 7px 0 0;
+            color: var(--ff-muted);
+            font-size: 13px;
+        }
+
+        /* Two columns, because the point of a screenshot of this page is how much
+           of it one press fills: a single column showed eight fields at a time.
+           Every field is a grid item of its own, and the ones that are not a
+           caption over one control — a heading, the editor, the radio row, the
+           per-file upload cards, a revealed block — take the full width. */
+        #form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px 24px;
+            align-items: start;
+            background: var(--ff-card);
+            border: 1px solid var(--ff-line);
+            border-radius: 14px;
+            padding: 18px 28px 26px;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 10px 30px -20px rgba(15, 23, 42, .25);
+        }
+
+        /* The gap owns the spacing between fields now. */
+        #form > .field, #form > .p-editor {
+            margin-bottom: 0;
+            min-width: 0;
+        }
+
+        #form > h2.sec,
+        #form > .p-editor,
+        #form > #bestaetigung,
+        #form > #satimes,
+        #form > .p-datepicker-inline,
+        #form > #sprachwahl,
+        #form > #dlg-open,
+        #form > .field:has(> textarea),
+        #form > .field:has(> input[type=file][multiple]) {
+            grid-column: 1 / -1;
+        }
+
+        #form > #sprachwahl {
+            justify-self: end;
+        }
+
+        #form > #dlg-open, #form > .p-datepicker-inline {
+            justify-self: start;
+        }
+
+        /* A revealed block is a stack of fields, not one field. */
+        #satimes {
+            gap: 4px;
+        }
+
+        #satimes label {
+            margin-top: 8px;
+        }
+
+        /* PrimeVue gives every radio its own root and the caption is a sibling
+           label[for], so the group is a caption and then pairs — laid out as a
+           row of pairs rather than the column a plain .field would stack them in. */
+        #bestaetigung {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+        }
+
+        #lbl-best {
+            flex: 1 0 100%;
+            margin-bottom: 2px;
+        }
+
+        #bestaetigung label:not(#lbl-best) {
+            margin-right: 16px;
+            font-weight: 400;
+        }
+
+        /* Sized by its options, not by the cell it sits in. */
+        .p-selectbutton {
+            justify-self: start;
+            width: max-content;
+        }
+
+        /* Small, because it is a view of a value another control owns. */
+        .p-datepicker-inline .p-datepicker-day {
+            width: 26px;
+            height: 26px;
+            line-height: 26px;
+            font-size: 13px;
+            color: var(--ff-muted);
+        }
+
+        h2.sec {
+            margin: 14px 0 0;
+            padding-bottom: 9px;
+            border-bottom: 1px solid var(--ff-line);
+            color: var(--ff-accent);
+            font-size: 11.5px;
+            font-weight: 600;
+            letter-spacing: .085em;
+            text-transform: uppercase;
+        }
+
+        #form > h2.sec:first-child {
+            margin-top: 0;
+        }
+
+        label, #lbl-team {
+            color: #334155;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        #lbl-team {
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .field {
+            margin-bottom: 18px;
+            gap: 6px;
+        }
+
+        .field.inline {
+            margin-bottom: 14px;
+            gap: 10px;
+        }
+
+        .req {
+            color: #b42318;
+        }
+
+        /* One width and one box for every control, whether it is an input or a
+           widget's shell. Inline widths (the phone country picker) still win. */
+        .p-select, .p-multiselect, .p-autocomplete, .p-datepicker, .p-inputnumber,
+        input.p-inputtext.standalone, textarea.p-inputtext.standalone,
+        #form input[type=text], #form input[type=tel], #form input[type=file], #team {
+            width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+            min-height: 40px;
+            border: 1px solid var(--ff-edge);
+            border-radius: 9px;
+            background: #fff;
+            font: inherit;
+            color: inherit;
+        }
+
+        .p-select, .p-multiselect, .p-autocomplete, .p-datepicker, .p-inputnumber {
+            padding: 0 11px;
+        }
+
+        #form input[type=text], #form input[type=tel], input.p-inputtext.standalone {
+            padding: 9px 11px;
+        }
+
+        textarea.p-inputtext.standalone {
+            padding: 9px 11px;
+            line-height: 1.5;
+            resize: vertical;
+        }
+
+        #form input[type=file] {
+            padding: 8px 11px;
+            color: var(--ff-muted);
+            font-size: 13px;
+        }
+
+        #form input[type=text]:focus, #form input[type=tel]:focus,
+        input.p-inputtext.standalone:focus, textarea.p-inputtext.standalone:focus {
+            outline: 0;
+            border-color: var(--ff-accent);
+            box-shadow: 0 0 0 3px rgba(31, 111, 79, .13);
+        }
+
+        .p-select:hover, .p-multiselect:hover, .p-autocomplete:hover,
+        .p-datepicker:hover, .p-inputnumber:hover, #team:hover {
+            border-color: #aeb9c9;
+        }
+
+        .p-select-label, .p-multiselect-label {
+            padding: 8px 0;
+        }
+
+        .p-placeholder {
+            color: #94a3b8;
+        }
+
+        /* Buttons: the team combobox reads as a control, the dialog opener as a button. */
+        /* A button whose own text is its value, so it cannot be styled as a
+           placeholder: once filled, the prompt colour would read as unfilled. */
+        #team {
+            text-align: left;
+            padding: 0 11px;
+            cursor: pointer;
+        }
+
+        #dlg-open {
+            margin: 0;
+            padding: 9px 15px;
+            border: 1px solid var(--ff-edge);
+            border-radius: 9px;
+            background: #fff;
+            font: inherit;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        #dlg-open:hover {
+            border-color: #aeb9c9;
+            background: #fafbfc;
+        }
+
+        /* The editor's caption arrives as an attribute, never as an element — the
+           adapter is tested on exactly that — so it is drawn from the attribute. */
+        .p-editor {
+            display: block;
+            margin: 0 0 18px;
+        }
+
+        .p-editor::before {
+            content: attr(label);
+            display: block;
+            margin-bottom: 6px;
+            color: #334155;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .p-editor-toolbar {
+            border: 1px solid var(--ff-edge);
+            border-bottom: 0;
+            border-radius: 9px 9px 0 0;
+            background: #f8fafc;
+            padding: 6px 8px;
+        }
+
+        .p-editor-toolbar button {
+            width: 28px;
+            height: 26px;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            background: transparent;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .p-editor-toolbar button:hover {
+            border-color: var(--ff-edge);
+            background: #fff;
+        }
+
+        .p-editor-content {
+            border: 1px solid var(--ff-edge);
+            border-radius: 0 0 9px 9px;
+            background: #fff;
+        }
+
+        .ql-editor {
+            min-height: 96px;
+            padding: 10px 11px;
+            outline: 0;
+        }
+
+        .ql-editor p {
+            margin: 0 0 8px;
+        }
+
+        .ql-editor ol, .ql-editor ul {
+            margin: 0 0 8px;
+            padding-left: 22px;
+        }
+
+        /* Page chrome, so it sits at the edge rather than in the column of fields. */
+        #sprachwahl {
+            width: auto;
+            min-width: 150px;
+            min-height: 34px;
+            margin: 0;
+        }
+
+        /* An inline calendar is part of the page: in the flow, not floating over
+           whatever follows it. */
+        .p-datepicker-inline {
+            width: auto;
+            min-width: 0;
+            margin: 0;
+            padding: 0;
+            border: 0;
+            min-height: 0;
+        }
+
+        .p-datepicker-inline .p-datepicker-panel {
+            position: static;
+            box-shadow: none;
+            border-radius: 9px;
+        }
+
+        .p-dialog {
+            min-width: 340px;
+            border-radius: 14px;
+            background: #fff;
+            border: 1px solid var(--ff-line);
+            padding: 18px 20px 20px;
+            box-shadow: 0 24px 60px -20px rgba(15, 23, 42, .45);
+        }
+
+        .p-dialog-title {
+            margin: 0 0 14px;
+            font-size: 17px;
+        }
+
+        .p-dialog label {
+            display: block;
+            margin: 12px 0 5px;
+        }
+
+        .p-dialog #dlg-input {
+            width: 100%;
+            box-sizing: border-box;
+            min-height: 38px;
+            padding: 8px 11px;
+            border: 1px solid var(--ff-edge);
+            border-radius: 9px;
+            font: inherit;
+        }
+
+        .p-dialog #dlg-cancel {
+            margin-top: 18px;
+            padding: 8px 14px;
+            border: 1px solid var(--ff-edge);
+            border-radius: 9px;
+            background: #fff;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        /* What an upload came back as: a list of names for the dropzone, and for
+           the per-file uploader a small card of controls per file. Each row's
+           captions are plain labels carrying no id or name of their own — that is
+           the shape being stood in for, so the layout is done without touching it:
+           the name and the checkbox take a full row, the two text fields share one. */
+        #anhaenge-liste, #bilder-liste {
+            margin: 8px 0 0;
+            padding: 0;
+            list-style: none;
+            color: var(--ff-muted);
+            font-size: 13px;
+        }
+
+        #anhaenge-liste li {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 3px 0;
+        }
+
+        #anhaenge-liste button {
+            width: 22px;
+            height: 22px;
+            border: 1px solid var(--ff-edge);
+            border-radius: 6px;
+            background: #fff;
+            font: inherit;
+            line-height: 1;
+            color: var(--ff-muted);
+            cursor: pointer;
+        }
+
+        .upload-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px 14px;
+            margin: 10px 0 0;
+            padding: 13px 14px 14px;
+            border: 1px solid var(--ff-line);
+            border-radius: 10px;
+            background: #fbfcfe;
+        }
+
+        .upload-row .upload-name,
+        .upload-row > label:first-of-type {
+            grid-column: 1 / -1;
+        }
+
+        .upload-row .upload-name {
+            color: var(--ff-text);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .upload-row > label {
+            display: grid;
+            gap: 5px;
+            min-width: 0;
+        }
+
+        .upload-row > label:first-of-type {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .upload-row input[type=text] {
+            min-height: 36px;
+        }
+
+        .upload-row input[type=checkbox] {
+            width: 15px;
+            height: 15px;
+            margin: 0;
+            accent-color: var(--ff-accent);
+        }
+
+        .p-error {
+            color: #b42318;
+            font-size: 12.5px;
+        }
+
+        .p-select-option-selected, .p-multiselect-option-selected {
+            background: #e7f3ec;
+        }
     </style>
 </head>
 <body>
-<h1>Standort anlegen</h1>
-<form id="form">
-    <div class="field">
-        <label for="name">Standortname</label>
-        <input id="name" name="name" class="p-inputtext standalone" autocomplete="off">
-    </div>
-
-    <div class="field">
-        <label for="strasse">Straße und Hausnummer</label>
-        <input id="strasse" name="street" class="p-inputtext standalone" autocomplete="off">
-    </div>
-
-    <div class="field">
-        <!-- Marked required with an asterisk and nothing else, which is how most
-             applications do it. Reading only `required`/`aria-required` called
-             this optional, and "a wrong country is worse than none" then left it
-             blank on a form that cannot be submitted without one. -->
-        <label id="lbl-land">Land <span class="req" aria-hidden="true">*</span></label>
-        <!-- Required, like the real one, and with a city select depending on it.
-             "A wrong country is worse than none" is right for an optional field
-             and inverts here: leaving it empty leaves the form unsubmittable and
-             the city list with nothing to offer. -->
-        <div class="p-select p-component" data-pc-name="select" id="land" aria-labelledby="lbl-land">
-            <span class="p-select-label p-select-label-empty">Bitte wählen</span>
-            <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
-            <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false" readonly>
+<div class="page">
+    <header class="page-head">
+        <h1>New location</h1>
+        <p class="sub">Device and location management · the widget suite's fixture</p>
+    </header>
+    <form id="form">
+        <h2 class="sec">Location</h2>
+        <div class="field">
+            <label for="name">Location name</label>
+            <input id="name" name="name" class="p-inputtext standalone" autocomplete="off">
         </div>
-    </div>
 
-    <!-- The one the real app has and this fixture did not: 240 entries behind a
-         virtual scroller, with a filter input. Only a dozen rows are ever in the
-         DOM, so a match has to be hunted for — and that hunt has a budget, which
-         is where a required Country came to be left empty "often, but not every
-         time". -->
-    <!-- A select whose list lives on a server: it shows nothing until you type,
-         says "No results found" for a query it cannot match, and needs a moment
-         to come back when the box is cleared. The account form's
-         Organization/Location picker is one, and a value that matched nothing —
-         the model's answer for a field with no rule — left it empty with the
-         query still sitting in the box. -->
-    <div class="field">
-        <label id="lbl-org">Organization/Location</label>
-        <div class="p-select p-component" data-pc-name="select" id="orga" aria-labelledby="lbl-org"
-             aria-required="true">
-            <span class="p-select-label p-placeholder">Choose organization or location</span>
-            <span class="p-select-clear-icon" data-pc-section="clearicon" id="orga_clear" style="display:none">×</span>
-            <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
-            <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox"
-                   aria-controls="orga_list" aria-expanded="false" readonly>
+        <div class="field">
+            <label for="strasse">Street and house number</label>
+            <input id="strasse" name="street" class="p-inputtext standalone" autocomplete="off">
         </div>
-    </div>
 
-    <!-- The control the organization above unlocks. Disabled until something is
-         chosen there, which is the shape every dependent field has: it exists in
-         the page from the start, it is required, and it cannot be filled until
-         the fill itself has made it fillable. Three fills in a row were needed on
-         the real form because of this one — the first left the organization
-         empty, the second filled it and left this empty, the third found it
-         already enabled and worked. -->
-    <div class="field">
-        <label id="lbl-rolle">Selected role template</label>
-        <div class="p-select p-component p-disabled" data-pc-name="select" id="rolle"
-             aria-labelledby="lbl-rolle" aria-required="true" aria-disabled="true">
-            <span class="p-select-label p-placeholder">Choose role template</span>
-            <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
-            <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox"
-                   aria-controls="rolle_list" aria-expanded="false" disabled readonly>
-        </div>
-    </div>
-
-    <!-- A picker from no library in particular: no class we recognise, no
-         component name, nothing but the ARIA a combobox is supposed to carry.
-         Its popup is the point — a floating box holding a search field, which is
-         the widget's own furniture, and a listbox, which is the control. A scan
-         that can only skip the search boxes of libraries it has heard of is no
-         use pointed at an application nobody here has seen. -->
-    <div class="field">
-        <span id="lbl-team">Team</span>
-        <button type="button" id="team" role="combobox" aria-haspopup="listbox"
-                aria-expanded="false" aria-controls="team-list" aria-labelledby="lbl-team">
-            Choose a team
-        </button>
-    </div>
-
-    <!-- A phone number and the country picker beside it, the pair the real app
-         has. The picker shows a flag and no text, its list is long, and — the
-         part that matters here — it sets aria-expanded="false" whenever it loses
-         focus while leaving the panel itself mounted. A close check that trusts
-         that attribute therefore reports success over a list still on screen. -->
-    <div class="field">
-        <label id="lbl-tel">Telefonnummer</label>
-        <div style="display:flex;gap:6px">
-            <div class="p-select p-component" data-pc-name="select" id="telland" aria-labelledby="lbl-tel"
-                 style="width:92px">
-                <span class="p-select-label">🇩🇪</span>
+        <div class="field">
+            <!-- Marked required with an asterisk and nothing else, which is how most
+                 applications do it. Reading only `required`/`aria-required` called
+                 this optional, and "a wrong country is worse than none" then left it
+                 blank on a form that cannot be submitted without one. -->
+            <label id="lbl-land">Country <span class="req" aria-hidden="true">*</span></label>
+            <!-- Required, like the real one, and with a city select depending on it.
+                 "A wrong country is worse than none" is right for an optional field
+                 and inverts here: leaving it empty leaves the form unsubmittable and
+                 the city list with nothing to offer. -->
+            <div class="p-select p-component" data-pc-name="select" id="land" aria-labelledby="lbl-land">
+                <span class="p-select-label p-select-label-empty">Please select</span>
                 <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
-                <input class="p-hidden-accessible" role="combobox" name="phoneCountryList"
-                       aria-haspopup="listbox" aria-expanded="false" readonly>
+                <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false"
+                       readonly>
             </div>
-            <input id="tel" name="phone" type="tel" aria-labelledby="lbl-tel" style="flex:1">
         </div>
-    </div>
 
-    <!-- Categories the vendored vocabulary unlocked: each of these went to the
-         model before, because nothing local could answer them. -->
-    <div class="field">
-        <label for="farbe">Farbe</label>
-        <input id="farbe" name="farbe" type="text">
-    </div>
-    <div class="field">
-        <label for="geraet">Gerätebezeichnung</label>
-        <input id="geraet" name="geraet" type="text">
-    </div>
-    <div class="field">
-        <label for="funktion">Funktion</label>
-        <input id="funktion" name="funktion" type="text">
-    </div>
-    <!-- A limit that lives only in the page's validation: no maxlength, just the
-         complaint the form shows after a write. -->
-    <div class="field">
-        <label for="voraussetzung">Beschreibung der Voraussetzung</label>
-        <input id="voraussetzung" name="voraussetzung" type="text">
-        <small id="voraussetzung-fehler" class="p-error" role="alert" hidden></small>
-    </div>
-
-    <!-- Uploads. The one control a tester always had to fill by hand, and on a
-         form that requires one, the whole form blocked. -->
-    <div class="field">
-        <label for="foto">Foto</label>
-        <input id="foto" name="foto" type="file" accept="image/png,image/jpeg" required>
-    </div>
-    <div class="field">
-        <label for="vertrag">Vertrag (PDF)</label>
-        <input id="vertrag" name="vertrag" type="file" accept=".pdf">
-    </div>
-    <!-- A dropzone, the way real ones behave: it takes the files out of the
-         input, keeps its own list, and clears the input so the same file can be
-         chosen again. An empty file input is therefore what *success* looks like
-         here — which is the opposite of what it means for every other control,
-         and is why this field was uploaded three times. -->
-    <div class="field">
-        <label for="anhaenge">Anhänge</label>
-        <input id="anhaenge" name="anhaenge" type="file" multiple>
-        <ul id="anhaenge-liste"></ul>
-    </div>
-
-    <!-- Per-file rows that exist only once the upload has come back from the
-         server: a checkbox and two text inputs for every file, all of them
-         carrying the same caption as the row above and none of them with a name
-         or an id of its own. The real thing takes a round trip to render them,
-         which is longer than the repair loop's one grace pause. -->
-    <div class="field">
-        <label for="bilder">Images</label>
-        <input id="bilder" name="bilder" type="file" multiple accept="image/png,image/jpeg">
-        <div id="bilder-liste"></div>
-    </div>
-
-    <div class="field">
-        <label id="lbl-staat">Country</label>
-        <div class="p-select p-component" data-pc-name="select" id="staat" aria-labelledby="lbl-staat"
-             aria-required="true">
-            <span class="p-select-label p-select-label-empty">Bitte wählen</span>
-            <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
-            <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false" readonly>
+        <!-- The one the real app has and this fixture did not: 240 entries behind a
+             virtual scroller, with a filter input. Only a dozen rows are ever in the
+             DOM, so a match has to be hunted for — and that hunt has a budget, which
+             is where a required Country came to be left empty "often, but not every
+             time". -->
+        <!-- A select whose list lives on a server: it shows nothing until you type,
+             says "No results found" for a query it cannot match, and needs a moment
+             to come back when the box is cleared. The account form's
+             Organization/Location picker is one, and a value that matched nothing —
+             the model's answer for a field with no rule — left it empty with the
+             query still sitting in the box. -->
+        <h2 class="sec">Access and roles</h2>
+        <div class="field">
+            <label id="lbl-org">Organization/Location</label>
+            <div class="p-select p-component" data-pc-name="select" id="orga" aria-labelledby="lbl-org"
+                 aria-required="true">
+                <span class="p-select-label p-placeholder">Choose organization or location</span>
+                <span class="p-select-clear-icon" data-pc-section="clearicon" id="orga_clear"
+                      style="display:none">×</span>
+                <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
+                <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox"
+                       aria-controls="orga_list" aria-expanded="false" readonly>
+            </div>
         </div>
-    </div>
 
-    <div class="field">
-        <label id="lbl-stadt">Stadt</label>
-        <div class="p-select p-component" data-pc-name="select" id="stadt" aria-labelledby="lbl-stadt">
-            <span class="p-select-label p-select-label-empty">Bitte wählen</span>
-            <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
-            <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false" readonly>
+        <!-- The control the organization above unlocks. Disabled until something is
+             chosen there, which is the shape every dependent field has: it exists in
+             the page from the start, it is required, and it cannot be filled until
+             the fill itself has made it fillable. Three fills in a row were needed on
+             the real form because of this one — the first left the organization
+             empty, the second filled it and left this empty, the third found it
+             already enabled and worked. -->
+        <div class="field">
+            <label id="lbl-rolle">Selected role template</label>
+            <div class="p-select p-component p-disabled" data-pc-name="select" id="rolle"
+                 aria-labelledby="lbl-rolle" aria-required="true" aria-disabled="true">
+                <span class="p-select-label p-placeholder">Choose role template</span>
+                <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
+                <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox"
+                       aria-controls="rolle_list" aria-expanded="false" disabled readonly>
+            </div>
         </div>
-    </div>
 
-    <div class="field">
-        <label id="lbl-typ">Standorttyp</label>
-        <div class="p-select p-component" data-pc-name="select" id="typ" aria-labelledby="lbl-typ">
-            <span class="p-select-label p-select-label-empty">Bitte wählen</span>
-            <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
-            <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false" readonly>
+        <!-- A picker from no library in particular: no class we recognise, no
+             component name, nothing but the ARIA a combobox is supposed to carry.
+             Its popup is the point — a floating box holding a search field, which is
+             the widget's own furniture, and a listbox, which is the control. A scan
+             that can only skip the search boxes of libraries it has heard of is no
+             use pointed at an application nobody here has seen. -->
+        <div class="field">
+            <span id="lbl-team">Team</span>
+            <button type="button" id="team" role="combobox" aria-haspopup="listbox"
+                    aria-expanded="false" aria-controls="team-list" aria-labelledby="lbl-team">
+                Choose a team
+            </button>
         </div>
-    </div>
 
-    <div class="field">
-        <label id="lbl-regionen">Regionen</label>
-        <div class="p-multiselect p-component" data-pc-name="multiselect" id="regionen" aria-labelledby="lbl-regionen">
-            <span class="p-multiselect-label p-multiselect-label-empty">Regionen wählen</span>
-            <div class="p-multiselect-dropdown" data-pc-section="dropdown">▾</div>
-            <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false" readonly>
+        <!-- A phone number and the country picker beside it, the pair the real app
+             has. The picker shows a flag and no text, its list is long, and — the
+             part that matters here — it sets aria-expanded="false" whenever it loses
+             focus while leaving the panel itself mounted. A close check that trusts
+             that attribute therefore reports success over a list still on screen. -->
+        <h2 class="sec">Contact</h2>
+        <div class="field">
+            <label id="lbl-tel">Phone number</label>
+            <div style="display:flex;gap:6px">
+                <div class="p-select p-component" data-pc-name="select" id="telland" aria-labelledby="lbl-tel"
+                     style="width:92px">
+                    <span class="p-select-label">🇩🇪</span>
+                    <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
+                    <input class="p-hidden-accessible" role="combobox" name="phoneCountryList"
+                           aria-haspopup="listbox" aria-expanded="false" readonly>
+                </div>
+                <input id="tel" name="phone" type="tel" aria-labelledby="lbl-tel" style="flex:1">
+            </div>
         </div>
-    </div>
 
-    <div class="field">
-        <label id="lbl-ap">Ansprechpartner</label>
-        <div class="p-autocomplete p-component" data-pc-name="autocomplete" id="ansprechpartner">
-            <input class="p-autocomplete-input p-inputtext" role="combobox" aria-haspopup="listbox"
-                   aria-expanded="false" aria-labelledby="lbl-ap" autocomplete="off">
+        <!-- Categories the vendored vocabulary unlocked: each of these went to the
+             model before, because nothing local could answer them. -->
+        <h2 class="sec">Equipment</h2>
+        <div class="field">
+            <label for="farbe">Colour</label>
+            <input id="farbe" name="farbe" type="text">
         </div>
-    </div>
-
-    <!-- The other kind of autocomplete: one that always drops a panel, empty
-         when its backend has nothing. Most real ones do, and a panel that is up
-         and empty is an answer — waiting out the rest of the search budget for
-         it to change its mind was the dearest thing the filler did. -->
-    <div class="field">
-        <label id="lbl-lief">Lieferant</label>
-        <div class="p-autocomplete p-component" data-pc-name="autocomplete" id="lieferant">
-            <input class="p-autocomplete-input p-inputtext" role="combobox" aria-haspopup="listbox"
-                   aria-expanded="false" aria-labelledby="lbl-lief" autocomplete="off">
+        <div class="field">
+            <label for="geraet">Device name</label>
+            <input id="geraet" name="geraet" type="text">
         </div>
-    </div>
-
-    <div class="field">
-        <label id="lbl-datum">Eröffnungsdatum</label>
-        <div class="p-datepicker p-component" data-pc-name="datepicker" id="datum">
-            <input class="p-datepicker-input p-inputtext" aria-labelledby="lbl-datum" readonly placeholder="TT.MM.JJJJ">
+        <div class="field">
+            <label for="funktion">Job title</label>
+            <input id="funktion" name="funktion" type="text">
         </div>
-    </div>
+        <!-- A limit that lives only in the page's validation: no maxlength, just the
+             complaint the form shows after a write. -->
+        <div class="field">
+            <label for="voraussetzung">Prerequisite description</label>
+            <input id="voraussetzung" name="voraussetzung" type="text">
+            <small id="voraussetzung-fehler" class="p-error" role="alert" hidden></small>
+        </div>
 
-    <!-- A DatePicker that states its own format and never opens a panel: the
-         booking form's rental date is one, with `inputmode="none"` and a
-         calendar of the page's own beside it. Filled with English data it was
-         handed 11/24/2026, a shape it discards without a word — so the field
-         read as skipped and nothing said why. -->
-    <div class="field">
-        <label for="vertragsdatum">Vertragsdatum</label>
-        <span class="p-datepicker p-component" data-pc-name="datepicker" id="vertrag"
-              previewdateformat="DD.MM.YYYY">
+        <!-- Uploads. The one control a tester always had to fill by hand, and on a
+             form that requires one, the whole form blocked. -->
+        <h2 class="sec">Documents and images</h2>
+        <div class="field">
+            <label for="foto">Photo</label>
+            <input id="foto" name="foto" type="file" accept="image/png,image/jpeg" required>
+        </div>
+        <div class="field">
+            <label for="vertrag">Contract (PDF)</label>
+            <input id="vertrag" name="vertrag" type="file" accept=".pdf">
+        </div>
+        <!-- A dropzone, the way real ones behave: it takes the files out of the
+             input, keeps its own list, and clears the input so the same file can be
+             chosen again. An empty file input is therefore what *success* looks like
+             here — which is the opposite of what it means for every other control,
+             and is why this field was uploaded three times. -->
+        <div class="field">
+            <label for="anhaenge">Attachments</label>
+            <input id="anhaenge" name="anhaenge" type="file" multiple>
+            <ul id="anhaenge-liste"></ul>
+        </div>
+
+        <!-- Per-file rows that exist only once the upload has come back from the
+             server: a checkbox and two text inputs for every file, all of them
+             carrying the same caption as the row above and none of them with a name
+             or an id of its own. The real thing takes a round trip to render them,
+             which is longer than the repair loop's one grace pause. -->
+        <div class="field">
+            <label for="bilder">Images</label>
+            <input id="bilder" name="bilder" type="file" multiple accept="image/png,image/jpeg">
+            <div id="bilder-liste"></div>
+        </div>
+
+        <h2 class="sec">Registration</h2>
+        <div class="field">
+            <label id="lbl-staat">Country of registration</label>
+            <div class="p-select p-component" data-pc-name="select" id="staat" aria-labelledby="lbl-staat"
+                 aria-required="true">
+                <span class="p-select-label p-select-label-empty">Please select</span>
+                <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
+                <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false"
+                       readonly>
+            </div>
+        </div>
+
+        <div class="field">
+            <label id="lbl-stadt">City</label>
+            <div class="p-select p-component" data-pc-name="select" id="stadt" aria-labelledby="lbl-stadt">
+                <span class="p-select-label p-select-label-empty">Please select</span>
+                <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
+                <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false"
+                       readonly>
+            </div>
+        </div>
+
+        <div class="field">
+            <label id="lbl-typ">Location type</label>
+            <div class="p-select p-component" data-pc-name="select" id="typ" aria-labelledby="lbl-typ">
+                <span class="p-select-label p-select-label-empty">Please select</span>
+                <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
+                <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false"
+                       readonly>
+            </div>
+        </div>
+
+        <div class="field">
+            <label id="lbl-regionen">Regions</label>
+            <div class="p-multiselect p-component" data-pc-name="multiselect" id="regionen"
+                 aria-labelledby="lbl-regionen">
+                <span class="p-multiselect-label p-multiselect-label-empty">Select regions</span>
+                <div class="p-multiselect-dropdown" data-pc-section="dropdown">▾</div>
+                <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false"
+                       readonly>
+            </div>
+        </div>
+
+        <div class="field">
+            <label id="lbl-ap">Contact person</label>
+            <div class="p-autocomplete p-component" data-pc-name="autocomplete" id="ansprechpartner">
+                <input class="p-autocomplete-input p-inputtext" role="combobox" aria-haspopup="listbox"
+                       aria-expanded="false" aria-labelledby="lbl-ap" autocomplete="off">
+            </div>
+        </div>
+
+        <!-- The other kind of autocomplete: one that always drops a panel, empty
+             when its backend has nothing. Most real ones do, and a panel that is up
+             and empty is an answer — waiting out the rest of the search budget for
+             it to change its mind was the dearest thing the filler did. -->
+        <div class="field">
+            <label id="lbl-lief">Supplier</label>
+            <div class="p-autocomplete p-component" data-pc-name="autocomplete" id="lieferant">
+                <input class="p-autocomplete-input p-inputtext" role="combobox" aria-haspopup="listbox"
+                       aria-expanded="false" aria-labelledby="lbl-lief" autocomplete="off">
+            </div>
+        </div>
+
+        <h2 class="sec">Dates and capacity</h2>
+        <div class="field">
+            <label id="lbl-datum">Opening date</label>
+            <div class="p-datepicker p-component" data-pc-name="datepicker" id="datum">
+                <input class="p-datepicker-input p-inputtext" aria-labelledby="lbl-datum" readonly
+                       placeholder="DD.MM.YYYY">
+            </div>
+        </div>
+
+        <!-- A DatePicker that states its own format and never opens a panel: the
+             booking form's rental date is one, with `inputmode="none"` and a
+             calendar of the page's own beside it. Filled with English data it was
+             handed 11/24/2026, a shape it discards without a word — so the field
+             read as skipped and nothing said why. -->
+        <div class="field">
+            <label for="vertragsdatum">Contract date</label>
+            <span class="p-datepicker p-component" data-pc-name="datepicker" id="vertrag"
+                  previewdateformat="DD.MM.YYYY">
             <input id="vertragsdatum" class="p-inputtext p-datepicker-input" name="contractDate" inputmode="none">
         </span>
-    </div>
-
-    <!-- A DatePicker scoped to years: its panel offers a decade and never a day.
-         Waiting for day cells before believing the panel had opened spent the
-         whole budget on every one of these — 2.4 seconds a field on a real
-         device-management form — and then fell back to typing anyway. -->
-    <div class="field">
-        <label id="lbl-baujahr">Baujahr</label>
-        <div class="p-datepicker p-component" data-pc-name="datepicker" id="baujahr">
-            <input class="p-datepicker-input p-inputtext" aria-labelledby="lbl-baujahr" readonly placeholder="JJJJ">
         </div>
-    </div>
 
-    <div class="field">
-        <label id="lbl-kap">Kapazität (Stellplätze)</label>
-        <div class="p-inputnumber p-component" data-pc-name="inputnumber" id="kapazitaet">
-            <input class="p-inputnumber-input p-inputtext" aria-labelledby="lbl-kap" inputmode="numeric"
-                   autocomplete="off">
+        <!-- A DatePicker scoped to years: its panel offers a decade and never a day.
+             Waiting for day cells before believing the panel had opened spent the
+             whole budget on every one of these — 2.4 seconds a field on a real
+             device-management form — and then fell back to typing anyway. -->
+        <div class="field">
+            <label id="lbl-baujahr">Year built</label>
+            <div class="p-datepicker p-component" data-pc-name="datepicker" id="baujahr">
+                <input class="p-datepicker-input p-inputtext" aria-labelledby="lbl-baujahr" readonly placeholder="YYYY">
+            </div>
         </div>
-    </div>
 
-    <!-- An InputNumber with limits. A widget's constraints live on the inner
-         input, not the wrapper; ignoring them writes a value the control
-         refuses, which reverts silently and looks like nothing was written. -->
-    <div class="field">
-        <label id="lbl-dauer">Mindestdauer (Tage)</label>
-        <div class="p-inputnumber p-component" data-pc-name="inputnumber" id="mindestdauer">
-            <input class="p-inputnumber-input p-inputtext" aria-labelledby="lbl-dauer"
-                   inputmode="numeric" min="12" max="18" autocomplete="off">
+        <div class="field">
+            <label id="lbl-kap">Capacity (parking spaces)</label>
+            <div class="p-inputnumber p-component" data-pc-name="inputnumber" id="kapazitaet">
+                <input class="p-inputnumber-input p-inputtext" aria-labelledby="lbl-kap" inputmode="numeric"
+                       autocomplete="off">
+            </div>
         </div>
-    </div>
 
-    <div class="field inline">
-        <div class="p-toggleswitch p-component" data-pc-name="toggleswitch" id="aktiv" aria-labelledby="lbl-aktiv">
-            <input class="p-toggleswitch-input" type="checkbox" role="switch" aria-checked="false">
-            <div class="p-toggleswitch-slider"></div>
+        <!-- An InputNumber with limits. A widget's constraints live on the inner
+             input, not the wrapper; ignoring them writes a value the control
+             refuses, which reverts silently and looks like nothing was written. -->
+        <div class="field">
+            <label id="lbl-dauer">Minimum duration (days)</label>
+            <div class="p-inputnumber p-component" data-pc-name="inputnumber" id="mindestdauer">
+                <input class="p-inputnumber-input p-inputtext" aria-labelledby="lbl-dauer"
+                       inputmode="numeric" min="12" max="18" autocomplete="off">
+            </div>
         </div>
-        <label id="lbl-aktiv">Standort aktiv</label>
-    </div>
 
-    <div class="field inline">
-        <div class="p-checkbox p-component" data-pc-name="checkbox" id="agb">
-            <input class="p-checkbox-input" type="checkbox" required aria-labelledby="lbl-agb">
-            <div class="p-checkbox-box"></div>
+        <h2 class="sec">Status</h2>
+        <div class="field inline">
+            <div class="p-toggleswitch p-component" data-pc-name="toggleswitch" id="aktiv" aria-labelledby="lbl-aktiv">
+                <input class="p-toggleswitch-input" type="checkbox" role="switch" aria-checked="false">
+                <div class="p-toggleswitch-slider"></div>
+            </div>
+            <label id="lbl-aktiv">Location active</label>
         </div>
-        <label id="lbl-agb">Nutzungsbedingungen akzeptiert</label>
-    </div>
 
-    <!-- A field that re-renders itself shortly after being written, replacing
-         its own DOM node — what a framework does when its model updates. The
-         replacement carries no marker, so a later pass mistakes it for a newly
-         revealed field and writes a fallback over whatever was chosen first. -->
-    <div class="field" id="rerender-host">
-        <label for="rerendered">Vorgabe</label>
-        <input id="rerendered" type="text" name="prerequisite" spellcheck="false">
-    </div>
-
-    <!-- A modal. What the page is called matters far less than what the dialog
-         is called: "New booking prerequisite" is the only thing on screen that
-         says what its one text box wants.
-
-         It is opened by a button that names it, and it floats — which is every
-         signal a dropdown's popup gives off. The difference is that a dialog is
-         a form, and a fill that skips it as somebody's furniture leaves the one
-         field the tester opened it for empty. -->
-    <button type="button" id="dlg-open" aria-haspopup="dialog" aria-controls="dlg"
-            aria-expanded="false">Neue Voraussetzung
-    </button>
-    <!-- Modal, as PrimeVue's Dialog is: a mask over the page, closed by Escape
-         anywhere in the document and by a click on the mask. A filler that sends
-         Escape to close a dropdown inside it closes the dialog instead. -->
-    <div class="p-dialog-mask" id="dlg-mask" style="position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:50"
-         hidden></div>
-    <div role="dialog" aria-modal="true" class="p-dialog" id="dlg"
-         style="position:fixed;left:40px;top:40px;background:#fff;border:1px solid #ccc;padding:12px;z-index:51" hidden>
-        <div class="p-dialog-header"><h2 class="p-dialog-title">Neue Buchungsvoraussetzung</h2></div>
-        <label for="dlg-input">Voraussetzung</label>
-        <input id="dlg-input" type="text" name="prerequisite">
-        <label id="lbl-dlg-status">Anzeigestatus</label>
-        <div class="p-select p-component" data-pc-name="select" id="dlg-status" aria-labelledby="lbl-dlg-status">
-            <span class="p-select-label">Sichtbar</span>
-            <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
-            <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false" readonly>
+        <div class="field inline">
+            <div class="p-checkbox p-component" data-pc-name="checkbox" id="agb">
+                <input class="p-checkbox-input" type="checkbox" required aria-labelledby="lbl-agb">
+                <div class="p-checkbox-box"></div>
+            </div>
+            <label id="lbl-agb">Terms of use accepted</label>
         </div>
-        <button type="button" id="dlg-cancel">Abbrechen</button>
-    </div>
 
-    <!-- A time-only DatePicker: spinners, no text entry, and an input the
-         component writes itself and refuses focus on. Typing into it silently
-         does nothing — which is how every opening-hours field on the real form
-         stayed empty while the filler reported success. -->
-    <div class="field">
-        <label id="lbl-oeffnet">Start time</label>
-        <div class="p-datepicker p-component" data-pc-name="datepicker" id="oeffnet">
-            <input class="p-inputtext p-datepicker-input" aria-labelledby="lbl-oeffnet" readonly>
+        <!-- A field that re-renders itself shortly after being written, replacing
+             its own DOM node — what a framework does when its model updates. The
+             replacement carries no marker, so a later pass mistakes it for a newly
+             revealed field and writes a fallback over whatever was chosen first. -->
+        <div class="field" id="rerender-host">
+            <label for="rerendered">Specification</label>
+            <input id="rerendered" type="text" name="prerequisite" spellcheck="false">
         </div>
-    </div>
 
-    <!-- An inline calendar: a month view bound to the date field above, with no
-         input of its own. The booking form renders one beside its date inputs.
-         It must not be treated as a field. -->
-    <div class="p-datepicker p-datepicker-inline p-component" data-pc-name="datepicker" id="kalenderansicht">
-        <div class="p-datepicker-panel" data-pc-section="panel">
-            <table>
-                <tbody>
-                <tr>
-                    <td><span class="p-datepicker-day">1</span></td>
-                    <td><span class="p-datepicker-day">2</span></td>
-                </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
+        <!-- A modal. What the page is called matters far less than what the dialog
+             is called: "New booking prerequisite" is the only thing on screen that
+             says what its one text box wants.
 
-    <!-- A switch that CREATES fields when it is turned on, as a real opening
-         hours do: flip a day to open and the app renders that day's start and
-         end time. Those inputs do not exist when the page is first collected,
-         so a single pass leaves them empty and required — worse than before the
-         fill. `required` on the switch makes the reveal deterministic here. -->
-    <div class="field inline">
-        <div class="p-toggleswitch p-component" data-pc-name="toggleswitch" id="saopen" aria-labelledby="lbl-saopen">
-            <input class="p-toggleswitch-input" type="checkbox" role="switch" aria-checked="false" required>
-            <div class="p-toggleswitch-slider"></div>
+             It is opened by a button that names it, and it floats — which is every
+             signal a dropdown's popup gives off. The difference is that a dialog is
+             a form, and a fill that skips it as somebody's furniture leaves the one
+             field the tester opened it for empty. -->
+        <button type="button" id="dlg-open" aria-haspopup="dialog" aria-controls="dlg"
+                aria-expanded="false">New prerequisite
+        </button>
+        <!-- Modal, as PrimeVue's Dialog is: a mask over the page, closed by Escape
+             anywhere in the document and by a click on the mask. A filler that sends
+             Escape to close a dropdown inside it closes the dialog instead. -->
+        <div class="p-dialog-mask" id="dlg-mask" style="position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:50"
+             hidden></div>
+        <div role="dialog" aria-modal="true" class="p-dialog" id="dlg"
+             style="position:fixed;left:40px;top:40px;z-index:51" hidden>
+            <div class="p-dialog-header"><h2 class="p-dialog-title">New booking prerequisite</h2></div>
+            <label for="dlg-input">Prerequisite</label>
+            <input id="dlg-input" type="text" name="prerequisite">
+            <label id="lbl-dlg-status">Display status</label>
+            <div class="p-select p-component" data-pc-name="select" id="dlg-status" aria-labelledby="lbl-dlg-status">
+                <span class="p-select-label">Sichtbar</span>
+                <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
+                <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false"
+                       readonly>
+            </div>
+            <button type="button" id="dlg-cancel">Cancel</button>
         </div>
-        <label id="lbl-saopen">Samstag geöffnet</label>
-    </div>
-    <div class="field" id="satimes" hidden>
-        <label for="sa_start">Start time</label>
-        <input id="sa_start" type="text" name="schedules.saturday.startTime" spellcheck="false">
-        <label for="sa_end">End time</label>
-        <input id="sa_end" type="text" name="schedules.saturday.endTime" spellcheck="false">
-        <!-- Revealed with the times, and matched by no rule: the case where a
-             later pass used to reach straight for the fallback. -->
-        <label for="sa_extra">Besonderheit</label>
-        <input id="sa_extra" type="text" name="schedules.saturday.besonderheit" spellcheck="false">
-        <!-- A server-backed country picker, revealed with the block: one page of
-             fifty arrives after a spinner, the search goes to the server, and the
-             persona's country is well past the page. -->
-        <label id="lbl-sastaat">Zweiter Staat</label>
-        <div class="p-select p-component" data-pc-name="select" id="sastaat" aria-labelledby="lbl-sastaat">
-            <span class="p-select-label p-placeholder">Bitte wählen</span>
-            <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
-            <!-- As PrimeVue names it: the list, not the panel — the filter box is outside what aria-controls points at. -->
-            <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false"
-                   aria-controls="sastaat_list" readonly>
-        </div>
-    </div>
 
-    <!-- RadioButton group. PrimeVue gives every button its own root and no group
-         wrapper of its own, and the caption is a sibling label[for] rather than
-         anything inside the control — this is how a real PrimeVue create form
-         renders bookingSettings.bookingConfirmation. Filling these as separate
-         fields clicks each in turn and always lands on the last one. -->
-    <!-- Read-only Select. A real create form ships one of these, bound to
-         another field: PrimeVue marks it aria-readonly on the root and
-         aria-disabled on the inner combobox. Writing to it fights the app. -->
-    <div class="field">
-        <label id="lbl-zeit">Zeiteinheit</label>
-        <div class="p-select p-component" data-pc-name="select" id="zeiteinheit"
-             aria-readonly="true" aria-label="Zeiteinheit">
+        <!-- A time-only DatePicker: spinners, no text entry, and an input the
+             component writes itself and refuses focus on. Typing into it silently
+             does nothing — which is how every opening-hours field on the real form
+             stayed empty while the filler reported success. -->
+        <h2 class="sec">Opening hours</h2>
+        <div class="field">
+            <label id="lbl-oeffnet">Start time</label>
+            <div class="p-datepicker p-component" data-pc-name="datepicker" id="oeffnet">
+                <input class="p-inputtext p-datepicker-input" aria-labelledby="lbl-oeffnet" readonly>
+            </div>
+        </div>
+
+        <!-- An inline calendar: a month view bound to the date field above, with no
+             input of its own. The booking form renders one beside its date inputs.
+             It must not be treated as a field. -->
+        <div class="p-datepicker p-datepicker-inline p-component" data-pc-name="datepicker" id="kalenderansicht">
+            <div class="p-datepicker-panel" data-pc-section="panel">
+                <table>
+                    <tbody>
+                    <tr>
+                        <td><span class="p-datepicker-day">1</span></td>
+                        <td><span class="p-datepicker-day">2</span></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- A switch that CREATES fields when it is turned on, as a real opening
+             hours do: flip a day to open and the app renders that day's start and
+             end time. Those inputs do not exist when the page is first collected,
+             so a single pass leaves them empty and required — worse than before the
+             fill. `required` on the switch makes the reveal deterministic here. -->
+        <div class="field inline">
+            <div class="p-toggleswitch p-component" data-pc-name="toggleswitch" id="saopen"
+                 aria-labelledby="lbl-saopen">
+                <input class="p-toggleswitch-input" type="checkbox" role="switch" aria-checked="false" required>
+                <div class="p-toggleswitch-slider"></div>
+            </div>
+            <label id="lbl-saopen">Open on Saturday</label>
+        </div>
+        <div class="field" id="satimes" hidden>
+            <label for="sa_start">Start time</label>
+            <input id="sa_start" type="text" name="schedules.saturday.startTime" spellcheck="false">
+            <label for="sa_end">End time</label>
+            <input id="sa_end" type="text" name="schedules.saturday.endTime" spellcheck="false">
+            <!-- Revealed with the times, and matched by no rule: the case where a
+                 later pass used to reach straight for the fallback. -->
+            <label for="sa_extra">Special note</label>
+            <input id="sa_extra" type="text" name="schedules.saturday.besonderheit" spellcheck="false">
+            <!-- A server-backed country picker, revealed with the block: one page of
+                 fifty arrives after a spinner, the search goes to the server, and the
+                 persona's country is well past the page. -->
+            <label id="lbl-sastaat">Second country</label>
+            <div class="p-select p-component" data-pc-name="select" id="sastaat" aria-labelledby="lbl-sastaat">
+                <span class="p-select-label p-placeholder">Please select</span>
+                <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
+                <!-- As PrimeVue names it: the list, not the panel — the filter box is outside what aria-controls points at. -->
+                <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false"
+                       aria-controls="sastaat_list" readonly>
+            </div>
+        </div>
+
+        <!-- RadioButton group. PrimeVue gives every button its own root and no group
+             wrapper of its own, and the caption is a sibling label[for] rather than
+             anything inside the control — this is how a real PrimeVue create form
+             renders bookingSettings.bookingConfirmation. Filling these as separate
+             fields clicks each in turn and always lands on the last one. -->
+        <!-- Read-only Select. A real create form ships one of these, bound to
+             another field: PrimeVue marks it aria-readonly on the root and
+             aria-disabled on the inner combobox. Writing to it fights the app. -->
+        <div class="field">
+            <label id="lbl-zeit">Time unit</label>
+            <div class="p-select p-component" data-pc-name="select" id="zeiteinheit"
+                 aria-readonly="true" aria-label="Time unit">
       <span class="p-select-label" role="combobox" aria-haspopup="listbox"
-            aria-expanded="false" aria-disabled="true">Tage</span>
+            aria-expanded="false" aria-disabled="true">Days</span>
+            </div>
         </div>
-    </div>
 
-    <!-- Page chrome, not a form field: filling it swaps the UI language and
-         invalidates every label already scanned. The root's aria-label is
-         present but empty, so the only name is on the inner combobox. -->
-    <div class="p-select p-component" data-pc-name="select" id="sprachwahl" aria-label="">
+        <!-- Page chrome, not a form field: filling it swaps the UI language and
+             invalidates every label already scanned. The root's aria-label is
+             present but empty, so the only name is on the inner combobox. -->
+        <div class="p-select p-component" data-pc-name="select" id="sprachwahl" aria-label="">
     <span name="localeSwitcher" id="localeSwitcher" class="p-select-label" role="combobox"
           aria-label="Switch language" aria-haspopup="listbox" aria-expanded="false">Deutsch</span>
-    </div>
+        </div>
 
-    <!-- Editor (Quill behind a PrimeVue shell). The writable surface is a
-         contenteditable and the caption arrives only as a `label` attribute. -->
-    <div class="p-editor" data-pc-name="editor" id="hinweise"
-         label="Hinweise zur Ausleihe" required="false">
-        <div class="p-editor-toolbar ql-toolbar">
-            <button class="ql-bold" type="button">B</button>
+        <!-- Editor (Quill behind a PrimeVue shell). The writable surface is a
+             contenteditable and the caption arrives only as a `label` attribute. -->
+        <h2 class="sec">Notes</h2>
+        <div class="p-editor" data-pc-name="editor" id="hinweise"
+             label="Usage notes" required="false">
+            <div class="p-editor-toolbar ql-toolbar">
+                <button class="ql-bold" type="button">B</button>
+            </div>
+            <div class="p-editor-content ql-container">
+                <div class="ql-editor" contenteditable="true"></div>
+            </div>
         </div>
-        <div class="p-editor-content ql-container">
-            <div class="ql-editor" contenteditable="true"></div>
-        </div>
-    </div>
 
-    <div class="field" id="bestaetigung">
-        <label id="lbl-best">Buchungsbestätigung</label>
-        <div class="p-radiobutton p-component" data-pc-name="radiobutton" data-pc-section="root">
-            <input class="p-radiobutton-input" type="radio" name="bookingConfirmation" value="AUTOMATIC" id="bc-auto">
-            <div class="p-radiobutton-box"></div>
+        <h2 class="sec">Booking</h2>
+        <div class="field" id="bestaetigung">
+            <label id="lbl-best">Booking confirmation</label>
+            <div class="p-radiobutton p-component" data-pc-name="radiobutton" data-pc-section="root">
+                <input class="p-radiobutton-input" type="radio" name="bookingConfirmation" value="AUTOMATIC"
+                       id="bc-auto">
+                <div class="p-radiobutton-box"></div>
+            </div>
+            <label for="bc-auto">Automatic</label>
+            <div class="p-radiobutton p-component" data-pc-name="radiobutton" data-pc-section="root">
+                <input class="p-radiobutton-input" type="radio" name="bookingConfirmation" value="MANUAL" id="bc-man">
+                <div class="p-radiobutton-box"></div>
+            </div>
+            <label for="bc-man">Manual</label>
+            <div class="p-radiobutton p-component" data-pc-name="radiobutton" data-pc-section="root">
+                <input class="p-radiobutton-input" type="radio" name="bookingConfirmation" value="HYBRID" id="bc-hyb">
+                <div class="p-radiobutton-box"></div>
+            </div>
+            <label for="bc-hyb">Semi-automatic</label>
         </div>
-        <label for="bc-auto">Automatisch</label>
-        <div class="p-radiobutton p-component" data-pc-name="radiobutton" data-pc-section="root">
-            <input class="p-radiobutton-input" type="radio" name="bookingConfirmation" value="MANUAL" id="bc-man">
-            <div class="p-radiobutton-box"></div>
-        </div>
-        <label for="bc-man">Manuell</label>
-        <div class="p-radiobutton p-component" data-pc-name="radiobutton" data-pc-section="root">
-            <input class="p-radiobutton-input" type="radio" name="bookingConfirmation" value="HYBRID" id="bc-hyb">
-            <div class="p-radiobutton-box"></div>
-        </div>
-        <label for="bc-hyb">Teilautomatisch</label>
-    </div>
 
-    <div class="field">
-        <label id="lbl-prio">Priorität</label>
-        <div class="p-selectbutton p-component" data-pc-name="selectbutton" id="prio" role="group"
-             aria-labelledby="lbl-prio">
-            <div class="p-togglebutton" role="option" data-value="niedrig">Niedrig</div>
-            <div class="p-togglebutton" role="option" data-value="mittel">Mittel</div>
-            <div class="p-togglebutton" role="option" data-value="hoch">Hoch</div>
+        <div class="field">
+            <label id="lbl-prio">Priority</label>
+            <div class="p-selectbutton p-component" data-pc-name="selectbutton" id="prio" role="group"
+                 aria-labelledby="lbl-prio">
+                <div class="p-togglebutton" role="option" data-value="niedrig">Low</div>
+                <div class="p-togglebutton" role="option" data-value="mittel">Medium</div>
+                <div class="p-togglebutton" role="option" data-value="hoch">High</div>
+            </div>
         </div>
-    </div>
 
-    <div class="field">
-        <label for="notiz">Interne Notiz</label>
-        <textarea id="notiz" name="note" class="p-inputtext standalone" rows="3"></textarea>
-    </div>
-</form>
+        <div class="field">
+            <label for="notiz">Internal note</label>
+            <textarea id="notiz" name="note" class="p-inputtext standalone" rows="3"></textarea>
+        </div>
+    </form>
+</div>
 
 <script>
     /* A faithful stand-in for PrimeVue v4: same DOM contract (verified against the
@@ -873,7 +1363,7 @@
                 if (id === 'land') {
                     model.stadt = null;
                     const sl = document.querySelector('#stadt .p-select-label');
-                    sl.textContent = 'Bitte wählen';
+                    sl.textContent = 'Please select';
                     sl.classList.add('p-select-label-empty');
                 }
                 closeOverlays();
@@ -895,7 +1385,7 @@
                 label.textContent = model.regionen.join(', ');
                 label.classList.remove('p-multiselect-label-empty');
             } else {
-                label.textContent = 'Regionen wählen';
+                label.textContent = 'Select regions';
                 label.classList.add('p-multiselect-label-empty');
             }
         };
@@ -969,7 +1459,7 @@
                     row.dataset.file = f.name;
                     row.innerHTML =
                         '<span class="upload-name"></span>' +
-                        '<label><input type="checkbox" class="u-show"> Show in borrower portal</label>' +
+                        '<label><input type="checkbox" class="u-show"> Show in public listing</label>' +
                         '<label>Alternative text <input type="text" class="u-alt"></label>' +
                         '<label>Source <input type="text" class="u-src"></label>';
                     row.querySelector('.upload-name').textContent = f.name;
@@ -1009,7 +1499,7 @@
            the panel this opens is empty for a moment even though the control is now
            enabled. A dependent control is the one place where "the list is still
            loading" is the normal case rather than bad luck. */
-        const ROLES = ['Admin MZ', 'Super Teacher', 'Teacher'];
+        const ROLES = ['Administrator', 'Editor', 'Viewer'];
         let loaded = [];
         let loading = false;
         window.__loadRoles = () => {
@@ -1107,8 +1597,8 @@
         const root = document.getElementById('orga');
         const label = root.querySelector('.p-select-label');
         const combo = root.querySelector('[role="combobox"]');
-        const NAMES = ['NRW KMZ', 'Medienzentrum Köln', 'Medienzentrum Bonn', 'Kreis Düren',
-            'Stadt Aachen', 'Schulamt Essen', 'Sonnenfeld Systeme GmbH'];
+        const NAMES = ['Zentrale Nord', 'Niederlassung Köln', 'Niederlassung Bonn', 'Kreisstelle Aachen',
+            'Stadtbüro Essen', 'Regionalstelle West', 'Sonnenfeld Systeme GmbH'];
         let ALL = [];
         let rerun = null;                 // the open panel, if there is one
         /* The initial query runs while the page mounts and takes longer than any
@@ -1252,7 +1742,7 @@
             ov.setAttribute('data-pc-section', 'overlay');
             ov.dataset.owner = 'staat';
             ov.innerHTML = '<div class="p-select-header">' +
-                '<input class="p-select-filter p-inputtext" type="text" placeholder="Suchen"></input></div>' +
+                '<input class="p-select-filter p-inputtext" type="text" placeholder="Search"></input></div>' +
                 '<div class="p-virtualscroller" style="height:' + VIEW + 'px;overflow:auto;position:relative">' +
                 '<ul class="p-select-list" role="listbox" style="position:relative;margin:0;padding:0"></ul></div>';
             const scroller = ov.querySelector('.p-virtualscroller');
@@ -1323,7 +1813,7 @@
                 if (!items.length) {
                     const empty = document.createElement('div');
                     empty.className = 'p-autocomplete-empty-message';
-                    empty.textContent = 'Keine Ergebnisse gefunden';
+                    empty.textContent = 'No results found';
                     ov.appendChild(empty);
                 }
                 ov.dataset.owner = 'lieferant';

@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>New release request — FormForge demo</title>
+    <!--
+      The page the repository's GIF is recorded on. Eight controls, one for each
+      way a value is chosen, and every one of them visible at once: a recording
+      that has to scroll shows the scrolling rather than the filling.
+
+      The DOM contract is PrimeVue v4's, the same as test/primevue-form.html —
+      a Select is a div with a teleported overlay, the editor is a Quill shell
+      around a contenteditable — but nothing here answers over a network. The
+      widget suite's fixture exists to be slow and awkward on purpose; this one
+      exists to be quick, so the whole fill is over in about a second and the
+      model's two fields land a moment later, which is the thing worth watching.
+    -->
+    <style>
+        :root {
+            --bg: #f4f6f9;
+            --card: #fff;
+            --line: #dde3ec;
+            --edge: #ccd4e0;
+            --text: #0f1729;
+            --muted: #667085;
+            --accent: #1f6f4f;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 18px 20px;
+            background: var(--bg);
+            color: var(--text);
+            font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+        }
+
+        .page {
+            max-width: 880px;
+            margin: 0 auto;
+        }
+
+        .page-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 20px;
+            margin: 0 0 14px 2px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 24px;
+            line-height: 1.2;
+            letter-spacing: -.015em;
+        }
+
+        .sub {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .crumb {
+            color: var(--muted);
+            font-size: 12.5px;
+            white-space: nowrap;
+            padding-top: 5px;
+        }
+
+        form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px 24px;
+            align-items: start;
+            padding: 20px 24px 20px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: var(--card);
+            box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 10px 30px -20px rgba(15, 23, 42, .25);
+        }
+
+        .field {
+            display: grid;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .field.wide, .p-editor, .actions {
+            grid-column: 1 / -1;
+        }
+
+        label, .caption {
+            color: #334155;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .req {
+            color: #b42318;
+        }
+
+        input[type=text], input[type=email], .p-select, .p-datepicker, input[type=file] {
+            width: 100%;
+            min-height: 40px;
+            border: 1px solid var(--edge);
+            border-radius: 9px;
+            background: #fff;
+            font: inherit;
+            color: inherit;
+        }
+
+        input[type=text], input[type=email] {
+            padding: 9px 11px;
+        }
+
+        input[type=text]:focus, input[type=email]:focus {
+            outline: 0;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(31, 111, 79, .13);
+        }
+
+        input[type=file] {
+            padding: 8px 11px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .p-select, .p-datepicker {
+            display: inline-flex;
+            align-items: center;
+            padding: 0 11px;
+            cursor: pointer;
+        }
+
+        .p-select:hover, .p-datepicker:hover {
+            border-color: #aeb9c9;
+        }
+
+        .p-select-label, .p-datepicker-input {
+            flex: 1;
+            padding: 8px 0;
+            border: 0;
+            background: transparent;
+            font: inherit;
+            color: inherit;
+            outline: 0;
+            cursor: inherit;
+        }
+
+        .p-placeholder {
+            color: #94a3b8;
+        }
+
+        .p-select-dropdown {
+            width: 18px;
+            text-align: center;
+            color: var(--muted);
+        }
+
+        /* Teleported to <body>, as PrimeVue's overlays are. */
+        .p-select-overlay, .p-datepicker-panel {
+            position: absolute;
+            z-index: 1000;
+            padding: 5px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #fff;
+            box-shadow: 0 14px 34px -12px rgba(15, 23, 42, .4);
+        }
+
+        .p-select-list {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            min-width: 220px;
+        }
+
+        .p-select-option {
+            padding: 8px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .p-select-option:hover {
+            background: #f1f5f9;
+        }
+
+        .p-select-option-selected {
+            background: #e7f3ec;
+        }
+
+        .p-datepicker-calendar {
+            border-collapse: collapse;
+        }
+
+        .p-datepicker-calendar th {
+            padding: 4px 0;
+            color: var(--muted);
+            font-size: 11.5px;
+            font-weight: 600;
+        }
+
+        .p-datepicker-day {
+            display: block;
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            text-align: center;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .p-datepicker-day:hover {
+            background: #f1f5f9;
+        }
+
+        .p-datepicker-other-month, .p-datepicker-day.p-disabled {
+            opacity: .35;
+            cursor: default;
+        }
+
+        .p-datepicker-today .p-datepicker-day {
+            outline: 1px solid var(--accent);
+        }
+
+        .p-checkbox {
+            position: relative;
+            display: inline-flex;
+            width: 20px;
+            height: 20px;
+        }
+
+        .p-checkbox-input {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .p-checkbox-box {
+            width: 20px;
+            height: 20px;
+            border: 1px solid var(--edge);
+            border-radius: 5px;
+            background: #fff;
+        }
+
+        .p-checkbox-checked .p-checkbox-box {
+            border-color: var(--accent);
+            background: var(--accent);
+        }
+
+        .p-checkbox-checked .p-checkbox-box::after {
+            content: "✓";
+            display: block;
+            color: #fff;
+            font-size: 13px;
+            line-height: 18px;
+            text-align: center;
+        }
+
+        .preview {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 2px;
+            padding: 5px;
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            background: #fbfcfe;
+        }
+
+        .preview[hidden] {
+            display: none;
+        }
+
+        .preview img {
+            width: 63px;
+            height: 42px;
+            object-fit: cover;
+            border-radius: 6px;
+            background: #eef1f6;
+        }
+
+        .preview-meta {
+            display: grid;
+            gap: 2px;
+            min-width: 0;
+        }
+
+        .preview-name {
+            font-size: 12.5px;
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .preview-size {
+            color: var(--muted);
+            font-size: 11.5px;
+        }
+
+        .field.inline {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            align-self: center;
+        }
+
+        /* The editor's caption is an attribute, never an element — same as the
+           component this stands in for, so it is drawn from the attribute. */
+        .p-editor::before {
+            content: attr(label);
+            display: block;
+            margin-bottom: 6px;
+            color: #334155;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .p-editor-toolbar {
+            padding: 5px 8px;
+            border: 1px solid var(--edge);
+            border-bottom: 0;
+            border-radius: 9px 9px 0 0;
+            background: #f8fafc;
+        }
+
+        .p-editor-toolbar button {
+            width: 28px;
+            height: 26px;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            background: transparent;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        .p-editor-toolbar button:hover {
+            border-color: var(--edge);
+            background: #fff;
+        }
+
+        .p-editor-content {
+            border: 1px solid var(--edge);
+            border-radius: 0 0 9px 9px;
+            background: #fff;
+        }
+
+        .ql-editor {
+            min-height: 72px;
+            padding: 9px 11px;
+            outline: 0;
+        }
+
+        .ql-editor p {
+            margin: 0 0 6px;
+        }
+
+        .ql-editor ol, .ql-editor ul {
+            margin: 0 0 7px;
+            padding-left: 21px;
+        }
+
+        .actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding-top: 14px;
+            border-top: 1px solid var(--line);
+        }
+
+        .primary {
+            padding: 9px 17px;
+            border: 0;
+            border-radius: 9px;
+            background: var(--accent);
+            color: #fff;
+            font: inherit;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .ghost {
+            padding: 9px 15px;
+            border: 1px solid var(--edge);
+            border-radius: 9px;
+            background: #fff;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        .hint {
+            color: var(--muted);
+            font-size: 12.5px;
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+    <header class="page-head">
+        <div>
+            <h1>New release request</h1>
+            <p class="sub">Eight controls, one for each way FormForge chooses a value.</p>
+        </div>
+        <div class="crumb">Releases / New</div>
+    </header>
+
+    <form id="form">
+        <!-- 1 · rule. A label the rules know, answered with the persona's own name. -->
+        <div class="field">
+            <label for="requester">Contact person <span class="req" aria-hidden="true">*</span></label>
+            <input id="requester" name="contactPerson" type="text" autocomplete="off" required>
+        </div>
+
+        <!-- 2 · rule, and the reason a persona exists: this address belongs to
+             the name above rather than to nobody. -->
+        <div class="field">
+            <label for="email">Work email <span class="req" aria-hidden="true">*</span></label>
+            <input id="email" name="workEmail" type="email" autocomplete="off" required>
+        </div>
+
+        <!-- 3 · rule, matched against a dropdown's real options. The persona's
+             country is tried under every spelling it has, and only an option the
+             control actually offers is ever committed. -->
+        <div class="field">
+            <label id="lbl-country">Office country <span class="req" aria-hidden="true">*</span></label>
+            <div class="p-select p-component" data-pc-name="select" id="country" aria-labelledby="lbl-country"
+                 aria-required="true">
+                <span class="p-select-label p-placeholder">Please select</span>
+                <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
+                <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false"
+                       readonly style="position:absolute;width:1px;height:1px;opacity:0">
+            </div>
+        </div>
+
+        <!-- 4 · type. No rule answers a go-live date, so the control's own kind
+             does: a future date, written in the locale's format by clicking a day. -->
+        <div class="field">
+            <label id="lbl-date">Go-live date</label>
+            <div class="p-datepicker p-component" data-pc-name="datepicker" id="golive">
+                <input class="p-datepicker-input" aria-labelledby="lbl-date" placeholder="DD.MM.YYYY" readonly>
+            </div>
+        </div>
+
+        <!-- 5 · model. Nothing local knows what belongs in this box, so it goes
+             to the on-device model with the page's own heading for context. -->
+        <div class="field">
+            <label for="ticket">Internal ticket</label>
+            <input id="ticket" name="internalTicket" type="text" autocomplete="off">
+        </div>
+
+        <!-- 6 · type. A PNG generated in the page to match `accept`; nothing is
+             fetched and nothing is uploaded. The preview is the page's own, from
+             the File it was handed — which is also the proof that what arrived is
+             a real image rather than a name in a box. -->
+        <div class="field">
+            <label for="screenshot">Screenshot</label>
+            <input id="screenshot" name="screenshot" type="file" accept="image/png,image/jpeg">
+            <div class="preview" id="screenshot-preview" hidden>
+                <img alt="" id="screenshot-thumb">
+                <div class="preview-meta">
+                    <span class="preview-name" id="screenshot-name"></span>
+                    <span class="preview-size" id="screenshot-size"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 7 · choice. A boolean has no right answer, so the persona's seeded
+             RNG picks one — and the same seed picks it again. -->
+        <div class="field inline">
+            <div class="p-checkbox p-component" data-pc-name="checkbox" id="signoff">
+                <input class="p-checkbox-input" type="checkbox" aria-labelledby="lbl-signoff">
+                <div class="p-checkbox-box"></div>
+            </div>
+            <span class="caption" id="lbl-signoff">Needs sign-off before release</span>
+        </div>
+
+        <!-- 8 · model, into a rich-text editor. "Notes" matches a rule, but a
+             weak one — a floor rather than an answer — so the field is offered to
+             the model as well and the rule only fills it if the model has nothing.
+             The answer arrives as markup and is pasted, which is how an editor
+             takes markup it can keep. -->
+        <div class="p-editor" data-pc-name="editor" id="notes" label="Release notes">
+            <div class="p-editor-toolbar ql-toolbar">
+                <button type="button" class="ql-bold"><b>B</b></button>
+                <button type="button" class="ql-italic"><i>I</i></button>
+                <button type="button" class="ql-list" value="bullet">•</button>
+            </div>
+            <div class="p-editor-content ql-container">
+                <div class="ql-editor" contenteditable="true"></div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button type="button" class="primary">Create request</button>
+            <button type="button" class="ghost">Cancel</button>
+            <span class="hint">Press <b>Alt+Shift+F</b> to fill</span>
+        </div>
+    </form>
+</div>
+
+<script>
+    /* A PrimeVue-shaped stand-in with no latency anywhere: every list is in the
+     * page from the start, every overlay opens on the click that asked for it.
+     * The model object is only ever written by real events, so a filler that
+     * assigns `.value` without dispatching is caught here as well. */
+    const model = {};
+
+    const COUNTRIES = ['Germany', 'Austria', 'Switzerland', 'Netherlands', 'United States',
+        'United Kingdom', 'France', 'Spain', 'Deutschland', 'Vereinigte Staaten'];
+
+    function closeOverlays(except) {
+        document.querySelectorAll('.p-select-overlay, .p-datepicker-panel').forEach(o => {
+            if (o !== except) o.remove();
+        });
+        document.querySelectorAll('[aria-expanded="true"]').forEach(c => c.setAttribute('aria-expanded', 'false'));
+    }
+
+    document.addEventListener('mousedown', (e) => {
+        if (!e.target.closest('.p-select, .p-datepicker, .p-select-overlay, .p-datepicker-panel')) closeOverlays();
+    });
+
+    // ---- Select ---------------------------------------------------------------
+    (() => {
+        const root = document.getElementById('country');
+        const label = root.querySelector('.p-select-label');
+        const combo = root.querySelector('[role="combobox"]');
+        root.addEventListener('click', (e) => {
+            // As PrimeVue does: a click whose target is the inner input is not a trigger.
+            if (e.target.tagName === 'INPUT') return;
+            if (combo.getAttribute('aria-expanded') === 'true') return closeOverlays();
+            closeOverlays();
+            const box = root.getBoundingClientRect();
+            const overlay = document.createElement('div');
+            overlay.className = 'p-select-overlay';
+            overlay.id = 'country_overlay';
+            overlay.style.left = `${box.left + scrollX}px`;
+            overlay.style.top = `${box.bottom + scrollY + 4}px`;
+            overlay.style.minWidth = `${box.width}px`;
+            const list = document.createElement('ul');
+            list.className = 'p-select-list';
+            list.id = 'country_list';
+            list.setAttribute('role', 'listbox');
+            for (const name of COUNTRIES) {
+                const li = document.createElement('li');
+                li.className = 'p-select-option' + (model.country === name ? ' p-select-option-selected' : '');
+                li.setAttribute('role', 'option');
+                li.setAttribute('aria-selected', String(model.country === name));
+                li.textContent = name;
+                li.addEventListener('click', () => {
+                    model.country = name;
+                    label.textContent = name;
+                    label.classList.remove('p-placeholder');
+                    closeOverlays();
+                });
+                list.appendChild(li);
+            }
+            overlay.appendChild(list);
+            document.body.appendChild(overlay);
+            combo.setAttribute('aria-expanded', 'true');
+            combo.setAttribute('aria-controls', 'country_list');
+        });
+    })();
+
+    // ---- DatePicker -----------------------------------------------------------
+    (() => {
+        const root = document.getElementById('golive');
+        const input = root.querySelector('input');
+        const two = (n) => String(n).padStart(2, '0');
+        root.addEventListener('click', (e) => {
+            if (document.querySelector('.p-datepicker-panel')) return closeOverlays();
+            closeOverlays();
+            const now = new Date();
+            const year = now.getFullYear(), month = now.getMonth();
+            const first = new Date(year, month, 1);
+            const lead = (first.getDay() + 6) % 7;                     // weeks start on Monday
+            const days = new Date(year, month + 1, 0).getDate();
+            const box = root.getBoundingClientRect();
+            const panel = document.createElement('div');
+            panel.className = 'p-datepicker-panel';
+            panel.setAttribute('data-pc-section', 'panel');
+            panel.style.left = `${box.left + scrollX}px`;
+            panel.style.top = `${box.bottom + scrollY + 4}px`;
+            let html = '<table class="p-datepicker-calendar"><thead><tr>' +
+                ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => `<th>${d}</th>`).join('') +
+                '</tr></thead><tbody><tr>';
+            for (let i = 0; i < lead; i++) html += '<td><span class="p-datepicker-day p-datepicker-other-month"></span></td>';
+            for (let d = 1; d <= days; d++) {
+                if ((lead + d - 1) % 7 === 0 && d > 1) html += '</tr><tr>';
+                const past = d < now.getDate();
+                const cls = 'p-datepicker-day-cell' + (d === now.getDate() ? ' p-datepicker-today' : '');
+                html += past
+                    ? `<td class="${cls}"><span class="p-datepicker-day p-disabled" aria-disabled="true">${d}</span></td>`
+                    : `<td class="${cls}"><span class="p-datepicker-day" data-day="${d}">${d}</span></td>`;
+            }
+            panel.innerHTML = html + '</tr></tbody></table>';
+            panel.querySelectorAll('.p-datepicker-day[data-day]').forEach(cell => {
+                cell.addEventListener('click', () => {
+                    const day = Number(cell.dataset.day);
+                    // The component writes its own input, in its own format.
+                    input.value = `${two(day)}.${two(month + 1)}.${year}`;
+                    model.golive = input.value;
+                    closeOverlays();
+                });
+            });
+            document.body.appendChild(panel);
+        });
+    })();
+
+    // ---- Checkbox -------------------------------------------------------------
+    (() => {
+        const root = document.getElementById('signoff');
+        const input = root.querySelector('input');
+        const sync = () => {
+            root.classList.toggle('p-checkbox-checked', input.checked);
+            model.signoff = input.checked;
+        };
+        root.addEventListener('click', (e) => {
+            if (e.target !== input) {
+                input.checked = !input.checked;
+                input.dispatchEvent(new Event('change', {bubbles: true}));
+            }
+            sync();
+        });
+        input.addEventListener('change', sync);
+        sync();
+    })();
+
+    // ---- Editor ---------------------------------------------------------------
+    /* Quill 2, in the two ways that matter: a paste is converted into the shapes
+     * it models — a bullet list is <ol><li data-list="bullet"> and never <ul> —
+     * and DOM it cannot name is dropped on the next tick. Both halves are here
+     * because between them they decide whether markup written into the editor
+     * survives the write. */
+    (() => {
+        const ed = document.querySelector('.ql-editor');
+        const KNOWN = new Set(['P', 'BR', 'STRONG', 'EM', 'U', 'S', 'A', 'OL', 'LI', 'SPAN', 'H1', 'H2', 'H3']);
+        const sync = () => {
+            model.notes = (ed.innerText || '').trim();
+            model.notesHtml = ed.innerHTML;
+        };
+        let ours = false;
+        const put = (html) => {
+            ours = true;
+            ed.innerHTML = html;
+            sync();
+            Promise.resolve().then(() => (ours = false));
+        };
+        ed.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const data = e.clipboardData;
+            const html = (data && data.getData('text/html')) || '';
+            const text = (data && data.getData('text/plain')) || '';
+            if (!html) return put('<p>' + text.replace(/[<>]/g, '') + '</p>');
+            put(html.replace(/<ul>/gi, '<ol>').replace(/<\/ul>/gi, '</ol>')
+                .replace(/<li>/gi, '<li data-list="bullet">'));
+        });
+        new MutationObserver(() => {
+            if (ours) return;
+            if ([...ed.querySelectorAll('*')].some(n => !KNOWN.has(n.tagName))) put('<p><br></p>');
+            else sync();
+        }).observe(ed, {childList: true, subtree: true, characterData: true});
+        ed.addEventListener('input', sync);
+    })();
+
+    // ---- Native inputs --------------------------------------------------------
+    for (const id of ['requester', 'email', 'ticket']) {
+        const el = document.getElementById(id);
+        el.addEventListener('input', () => (model[id] = el.value));
+    }
+    (() => {
+        const input = document.getElementById('screenshot');
+        const box = document.getElementById('screenshot-preview');
+        const thumb = document.getElementById('screenshot-thumb');
+        const name = document.getElementById('screenshot-name');
+        const size = document.getElementById('screenshot-size');
+        let url = null;
+        input.addEventListener('change', () => {
+            const files = Array.from(input.files);
+            model.screenshot = files.map(f => f.name);
+            if (url) URL.revokeObjectURL(url);           // one at a time, or the page leaks a blob per fill
+            url = null;
+            const file = files[0];
+            if (!file) {
+                box.hidden = true;
+                thumb.removeAttribute('src');
+                return;
+            }
+            url = URL.createObjectURL(file);
+            name.textContent = file.name;
+            size.textContent = `${Math.round(file.size / 1024)} KB`;
+            // The dimensions come from the decoded image, not from what we hoped it was.
+            thumb.onload = () => {
+                size.textContent = `${thumb.naturalWidth} × ${thumb.naturalHeight} · ${Math.round(file.size / 1024)} KB`;
+                model.screenshotPreview = `${thumb.naturalWidth}x${thumb.naturalHeight}`;
+            };
+            thumb.src = url;
+            box.hidden = false;
+        });
+    })();
+
+    // What the page believes it holds, for anything that wants to check the page itself.
+    window.__model = model;
+    window.__snapshot = () => ({
+        requester: model.requester || '',
+        email: model.email || '',
+        country: model.country || null,
+        golive: model.golive || '',
+        ticket: model.ticket || '',
+        screenshot: model.screenshot || [],
+        screenshotPreview: model.screenshotPreview || '',
+        signoff: model.signoff,
+        notes: model.notes || '',
+        notesHtml: model.notesHtml || '',
+        overlays: document.querySelectorAll('.p-select-overlay, .p-datepicker-panel').length
+    });
+</script>
+</body>
+</html>

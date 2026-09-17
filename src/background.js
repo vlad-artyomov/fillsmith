@@ -608,7 +608,14 @@ async function generate(payload, tabId) {
             debug: lastExchange
         };
     }
-    return {ok: true, values: {}, via: 'none', warming: !!lastExchange.warming, warmingMs: lastExchange.warmingMs || 0, debug: lastExchange};
+    return {
+        ok: true,
+        values: {},
+        via: 'none',
+        warming: !!lastExchange.warming,
+        warmingMs: lastExchange.warmingMs || 0,
+        debug: lastExchange
+    };
 }
 
 /* "Is the model ready?" answered with a real round trip through the same

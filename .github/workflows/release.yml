@@ -1,0 +1,60 @@
+# A tag is the only thing that publishes. `npm run package` builds the same ZIP
+# a store upload would get — an allow-list of manifest, src and icons — and the
+# suites run first, because a release is public and permanent.
+#
+#   git tag v1.0.0 && git push origin v1.0.0
+name: release
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and publish, e.g. v1.0.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+
+      # The tag says which build this is, so it has to be the build in the tree.
+      - name: the tag matches the manifest
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          version=$(node -p "require('./manifest.json').version")
+          if [ "$tag" != "v$version" ]; then
+            echo "tag $tag does not match manifest version $version" >&2
+            exit 1
+          fi
+
+      - run: npm run package
+
+      # Notes come from the commits since the previous tag, which GitHub finds
+      # itself: this project's history is one landed change per commit, and that
+      # is the changelog.
+      - name: publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          version=$(node -p "require('./manifest.json').version")
+          gh release create "$tag" "formforge-$version.zip" \
+            --title "FormForge $version" \
+            --generate-notes
