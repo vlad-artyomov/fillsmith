@@ -171,8 +171,13 @@ await page.evaluate(() => {
 });
 
 const tFill = Date.now();
-const result = await worker.evaluate(async ({files, at}) => {
-    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+const result = await worker.evaluate(async ({files, at, url}) => {
+    /* The page this audit opened, by address. "Whatever is active" was right
+     * until the extension started opening its own tab on a fresh install —
+     * and a fresh install is what every audit run is. */
+    const tabs = await chrome.tabs.query({});
+    const tab = tabs.find(t => t.url === url) || tabs.find(t => t.url && t.url.startsWith(url.split('#')[0]))
+        || (await chrome.tabs.query({active: true, currentWindow: true}))[0];
     await showBooting(tab.id);
     const seen = await new Promise(r => setTimeout(async () => r(
         (await chrome.scripting.executeScript({
@@ -190,6 +195,7 @@ const result = await worker.evaluate(async ({files, at}) => {
     return {bootSeen: seen, ms: Date.now() - t0, res};
 }, {
     files: INJECTED,
+    url: target,
     at: {
         useAI: !flag('no-model'),
         locale: String(flag('locale', 'de-DE')),
@@ -273,8 +279,9 @@ if (theirErrors.length) {
 }
 
 // ------------------------------------------------------ the toolbar icon --
-const icon = await worker.evaluate(async () => {
-    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+const icon = await worker.evaluate(async (url) => {
+    const tabs = await chrome.tabs.query({});
+    const tab = tabs.find(t => t.url === url) || (await chrome.tabs.query({active: true, currentWindow: true}))[0];
     // setIcon has no getter; the question is whether restoring it is rejected.
     startSpin(tab.id);
     await new Promise(r => setTimeout(r, 200));
@@ -284,7 +291,7 @@ const icon = await worker.evaluate(async () => {
         setTimeout(() => r(null), 100);
     });
     return {spun, stopped: !spinTimer, err, frames: spinnerFrames().length};
-});
+}, target);
 if (!icon.spun) note('warn', 'the toolbar icon did not animate');
 if (!icon.stopped) note('bug', 'the toolbar icon animation was left running');
 if (icon.spun && icon.stopped) ok('the toolbar icon animates and is restored', `${icon.frames} frames`);

@@ -37,11 +37,20 @@
     // ---------------------------------------------------------- locale data ----
     /* Cities, postcodes and area codes are real and agree with each other, which
      * is why they are curated here rather than taken from faker. Phone numbers
-     * come from ranges reserved for fiction (US 555-01xx, DE 23125 xxx). */
+     * come from the ranges reserved for fiction: in the US 555-0100 to 555-0199
+     * in any area code; in Germany the Bundesnetzagentur's "Drama-Nummern", one
+     * block of a thousand per city for five cities, plus two mobile blocks. A
+     * city without a block gets a mobile number — a mobile is from nowhere in
+     * particular, where a Leipzig code in front of Berlin's block was a number
+     * somebody in Leipzig may well have. */
+    const DRAMA_MOBILE = [{area: '171', block: '39200', tail: 2}, {area: '176', block: '040690', tail: 2}];
+
     const LOCALES = {
         'en-US': {
-            label: 'English',
+            label: 'EN',
             prose: 'en',
+            // What the model is told to write in. The rules already answer in it.
+            language: 'English',
             first: ['James', 'Michael', 'Robert', 'David', 'Daniel', 'Christopher', 'Matthew', 'Andrew', 'Joshua', 'Ryan',
                 'Mary', 'Jennifer', 'Linda', 'Patricia', 'Elizabeth', 'Susan', 'Jessica', 'Sarah', 'Karen', 'Emily'],
             last: ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez',
@@ -66,29 +75,36 @@
             ],
             companySuffix: ['Inc.', 'LLC', 'Corp.', 'Group', 'Partners'],
             country: 'United States', countryCode: 'US',
-            phone: (r, place) => `(${place.area}) 555-01${String(10 + Math.floor(r() * 89)).padStart(2, '0')}`,
-            phoneNational: (r, place) => `${place.area}55501${String(10 + Math.floor(r() * 89)).padStart(2, '0')}`,
-            phoneDigits: (r, place) => `1${place.area}555${String(1000 + Math.floor(r() * 8999))}`,
-            phoneE164: (r, place) => `+1${place.area}55501${String(10 + Math.floor(r() * 89)).padStart(2, '0')}`,
+            /* One number, four spellings: the same digits however a form wants
+             * them written. `parts` is the local number as the country groups it. */
+            telephone: (r, place) => ({area: place.area, parts: ['555', '01' + digits(r, 2)]}),
+            phoneFormats: {
+                pretty: (t) => `(${t.area}) ${t.parts.join('-')}`,
+                national: (t) => `${t.area}${t.parts.join('')}`,
+                digits: (t) => `1${t.area}${t.parts.join('')}`,
+                e164: (t) => `+1${t.area}${t.parts.join('')}`
+            },
             address: (r, place, street) => `${100 + Math.floor(r() * 8900)} ${street}`,
             dateFormat: 'MM/DD/YYYY'
         },
 
         'de-DE': {
-            label: 'Deutsch',
+            label: 'DE',
             prose: 'de',
+            language: 'German',
             first: ['Lukas', 'Jonas', 'Leon', 'Felix', 'Maximilian', 'Paul', 'Thomas', 'Stefan', 'Andreas', 'Michael',
                 'Anna', 'Lena', 'Sophie', 'Marie', 'Emma', 'Laura', 'Katharina', 'Julia', 'Claudia', 'Petra'],
             last: ['Müller', 'Schmidt', 'Schneider', 'Fischer', 'Weber', 'Meyer', 'Wagner', 'Becker', 'Schulz', 'Hoffmann',
                 'Koch', 'Richter', 'Klein', 'Wolf', 'Neumann', 'Schwarz', 'Zimmermann', 'Braun', 'Krüger', 'Hofmann'],
             streets: ['Hauptstraße', 'Bahnhofstraße', 'Lindenweg', 'Gartenstraße', 'Schillerstraße', 'Goethestraße',
                 'Ringstraße', 'Amselweg', 'Mozartstraße', 'Kirchgasse'],
+            // `drama` is the city's reserved block: 030 23125 000 to 999, and so on.
             places: [
-                {city: 'Berlin', region: 'Berlin', postal: '10115', area: '30'},
-                {city: 'Hamburg', region: 'Hamburg', postal: '20095', area: '40'},
-                {city: 'München', region: 'Bayern', postal: '80331', area: '89'},
-                {city: 'Köln', region: 'Nordrhein-Westfalen', postal: '50667', area: '221'},
-                {city: 'Frankfurt am Main', region: 'Hessen', postal: '60311', area: '69'},
+                {city: 'Berlin', region: 'Berlin', postal: '10115', area: '30', drama: '23125'},
+                {city: 'Hamburg', region: 'Hamburg', postal: '20095', area: '40', drama: '66969'},
+                {city: 'München', region: 'Bayern', postal: '80331', area: '89', drama: '99998'},
+                {city: 'Köln', region: 'Nordrhein-Westfalen', postal: '50667', area: '221', drama: '4710'},
+                {city: 'Frankfurt am Main', region: 'Hessen', postal: '60311', area: '69', drama: '90009'},
                 {city: 'Stuttgart', region: 'Baden-Württemberg', postal: '70173', area: '711'},
                 {city: 'Düsseldorf', region: 'Nordrhein-Westfalen', postal: '40213', area: '211'},
                 {city: 'Leipzig', region: 'Sachsen', postal: '04109', area: '341'},
@@ -99,14 +115,19 @@
             ],
             companySuffix: ['GmbH', 'AG', 'GmbH & Co. KG', 'SE', 'KG'],
             country: 'Deutschland', countryCode: 'DE',
-            phone: (r, place) => `+49 ${place.area} 23125 ${String(Math.floor(r() * 900) + 100)}`,
-            phoneNational: (r, place) => `${place.area} 23125 ${String(Math.floor(r() * 900) + 100)}`,
-            // Country code, no plus, no spaces: the shape strict phone validators accept.
-            phoneDigits: (r, place) => {
-                const nsn = (place.area + '23125' + String(Math.floor(r() * 100)).padStart(2, '0')).slice(0, 9);
-                return `49${nsn.padEnd(9, '0')}`;
+            telephone: (r, place) => {
+                if (place.drama) return {area: place.area, parts: [place.drama, digits(r, 3)]};
+                // A mobile is written as one run of digits after the prefix: 0171 3920050.
+                const m = pick(r, DRAMA_MOBILE);
+                return {area: m.area, parts: [m.block + digits(r, m.tail)]};
             },
-            phoneE164: (r, place) => `+49${place.area}23125${String(Math.floor(r() * 900) + 100)}`,
+            phoneFormats: {
+                pretty: (t) => `+49 ${t.area} ${t.parts.join(' ')}`,
+                national: (t) => `0${t.area} ${t.parts.join(' ')}`,
+                // Country code, no plus, no spaces: the shape strict phone validators accept.
+                digits: (t) => `49${t.area}${t.parts.join('')}`,
+                e164: (t) => `+49${t.area}${t.parts.join('')}`
+            },
             address: (r, place, street) => `${street} ${1 + Math.floor(r() * 180)}`,
             dateFormat: 'DD.MM.YYYY'
         }
@@ -208,9 +229,9 @@
         return s;
     }
 
+    // A German IBAN: an eight-digit bank code and a ten-digit account, both random.
     const IBAN_SPECS = {
-        DE: {body: (r) => digits(r, 8) + digits(r, 10)},
-        GB: {body: (r) => 'NWBK' + digits(r, 6) + digits(r, 8)}
+        DE: {body: (r) => digits(r, 8) + digits(r, 10)}
     };
 
     function mod97(str) {
@@ -261,6 +282,19 @@
         return base + luhn(base);
     }
 
+    // A US Employer Identification Number: two digits, a dash, seven digits.
+    function makeEin(r) {
+        return `${digits(r, 2)}-${digits(r, 7)}`;
+    }
+
+    /* The domain a tester typed, or example.com. "@acme.test", "acme.test/" and
+     * "acme" all reached the address unchanged and made it invalid. */
+    function cleanDomain(domain) {
+        const s = String(domain == null ? '' : domain).trim().toLowerCase()
+            .replace(/^https?:\/\//, '').replace(/^@+/, '').replace(/\/.*$/, '');
+        return /^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(s) ? s : 'example.com';
+    }
+
     // -------------------------------------------------------------- persona ----
     function slugify(s) {
         return s.toLowerCase()
@@ -291,7 +325,6 @@
      * finds nothing, and a random country then goes in beside a US address. */
     const COUNTRY_NAMES = {
         US: ['United States', 'Vereinigte Staaten', 'USA', 'United States of America', 'Vereinigte Staaten von Amerika', 'États-Unis'],
-        GB: ['United Kingdom', 'Vereinigtes Königreich', 'Großbritannien', 'Great Britain', 'Royaume-Uni'],
         DE: ['Deutschland', 'Germany', 'Allemagne', 'Alemania', 'Germania']
     };
 
@@ -307,10 +340,12 @@
         const companyName = `${pick(r, COMPANY_STEMS)} ${pick(r, COMPANY_TAIL)} ${pick(r, L.companySuffix)}`;
         const companySlug = slugify(`${companyName.split(' ')[0]}${companyName.split(' ')[1]}`);
 
-        const domain = opts.emailDomain || 'example.com';
+        const domain = cleanDomain(opts.emailDomain);
         const tag = String(seed).toLowerCase().slice(0, 6);
         const emailLocal = `${slugify(first)}.${slugify(last)}`;
         const email = opts.plusTag === false ? `${emailLocal}@${domain}` : `${emailLocal}+${tag}@${domain}`;
+
+        const tel = L.telephone(r, place);
 
         const birthYear = 1965 + Math.floor(r() * 38);
         const birthMonth = 1 + Math.floor(r() * 12);
@@ -325,6 +360,7 @@
             seed: String(seed),
             locale: localeKey,
             localeLabel: L.label,
+            language: L.language,
             dateFormat: L.dateFormat,
             firstName: first,
             lastName: last,
@@ -334,10 +370,10 @@
             email,
             emailAlt: `${slugify(first)[0]}${slugify(last)}@${companySlug}.example`,
             password: `Tst-${tag.toUpperCase()}-${Math.floor(r() * 9000) + 1000}!aZ`,
-            phone: L.phone(r, place),
-            phoneNational: L.phoneNational(r, place),
-            phoneDigits: L.phoneDigits(r, place),
-            phoneE164: L.phoneE164(r, place),
+            phone: L.phoneFormats.pretty(tel),
+            phoneNational: L.phoneFormats.national(tel),
+            phoneDigits: L.phoneFormats.digits(tel),
+            phoneE164: L.phoneFormats.e164(tel),
             company: companyName,
             companyDomain: `${companySlug}.example`,
             jobTitle: pick(r, localeList(JOB_TITLES, localeKey, 'jobTitle')),
@@ -352,7 +388,7 @@
             region: place.region,
             postal: place.postal,
             country: L.country,
-            countryEn: {US: 'United States', GB: 'United Kingdom', DE: 'Germany'}[L.countryCode],
+            countryEn: {US: 'United States', DE: 'Germany'}[L.countryCode],
             countryNames: COUNTRY_NAMES[L.countryCode] || [L.country],
             countryCode: L.countryCode,
             birthDate: `${birthYear}-${pad(birthMonth)}-${pad(birthDay)}`,
@@ -364,7 +400,11 @@
             pastDate: isoDate(past),
             pastDateLocal: formatDate(past, L.dateFormat),
             iban: makeIBAN(r, L.countryCode),
-            vatId: localeKey === 'de-DE' ? makeUstId(r) : `${L.countryCode}${digits(r, 9)}`,
+            /* A VAT number and a tax number are different things with different
+             * shapes, and a validator for one rejects the other: Germany has the
+             * USt-IdNr and the Steuernummer, the US one EIN that serves for both. */
+            vatId: L.countryCode === 'DE' ? makeUstId(r) : makeEin(r),
+            taxNumber: L.countryCode === 'DE' ? `${digits(r, 2)}/${digits(r, 3)}/${digits(r, 5)}` : makeEin(r),
             cardNumber: makeTestCard(r),
             cardCvc: digits(r, 3),
             cardExpiry: `${pad(1 + Math.floor(r() * 12))}/${String(now.getFullYear() + 2 + Math.floor(r() * 3)).slice(2)}`,
@@ -390,9 +430,13 @@
      * something the model cannot know — a checksum, an email matching the name. */
     const WEAK = 'weak';
 
+    /** A pattern, what it answers with, and whether it is a floor or an answer.
+     * @typedef {[RegExp, (persona: any) => (string|string[]), ('weak'|undefined)?]} Rule */
+    /** @type {Rule[]} */
     const RULES = [
         [/\b(confirm|repeat|retype|wiederhol|bestätig).*(pass|kennwort|passwort)/i, p => p.password],
-        [/\b(pass(word)?|kennwort|passwort)\b/i, p => p.password],
+        // "Pass" on its own is a boarding pass or a season pass; a password field says so, or its type does.
+        [/\b(password|passwd|pwd|kennwort|passwort)\b/i, p => p.password],
         [/\b(first\s*-?name|firstname|given\s*-?name|vorname|fname)\b/i, p => p.firstName],
         [/\b(last\s*-?name|lastname|surname|family\s*-?name|nachname|lname)\b/i, p => p.lastName],
         [/\b(middle\s*-?(name|initial)|initials)\b/i, p => p.initials[0]],
@@ -401,7 +445,8 @@
         [/\b(e-?mail|mail\s*address|emailaddress|e-?post)\b/i, p => p.email],
         // The country picker of an international phone input, before the phone rules claim it.
         [/countrylist|countrycode|phonecountry/i, p => [p.country, p.countryEn, ...(p.countryNames || []), p.countryCode]],
-        [/\b(mobile|cell|handy)\b/i, p => p.phone],
+        // "Mobile app version" is a version; "Mobile" alone, or beside "number", is the phone.
+        [/\b(mobile|cell|handy)\b(?!\s*-?\s*(app|application|version|device|os|platform|banking))/i, p => p.phone],
         [/\b(phone|tel|telefon(nummer)?|rufnummer|telephone|fax)\b/i, p => p.phone],
         // A floor, not an answer: the model knows real makes, and the persona's company is the fallback.
         [/\b(manufacturer|hersteller|brand|marke|vendor|lieferant|supplier)\b/i, p => p.company, WEAK],
@@ -414,11 +459,15 @@
          * claims "Year in which the device was produced". */
         [/\b(device|ger(ä|ae)te?)\s*-?\s*(name|bezeichnung|model|modell|titel)\b|\bdevicename\b/i, p => p.productName, WEAK],
         [/\b(artikel|produkt|product|item|equipment|material)(n?(name|bezeichnung|typ))?\b/i, p => p.productName, WEAK],
-        [/\b(address\s*-?(line\s*)?2|addr2|street2|adresszusatz|zusatz|apt|suite|unit)\b/i, p => p.street2 || 'Unit 4'],
+        /* "Apt", "Suite" and "Unit" are the second address line only in an address:
+         * on their own they are a unit price, a business unit, a test suite. The
+         * second alternative wants an address word somewhere in the same label. */
+        [/\b(address\s*-?(line\s*)?2|addr2|street2|adresszusatz)\b|^(?=.*\b(address|addr|adresse|anschrift|street|stra(ss|ß)e)\b).*\b(apt|apartment|suite|unit|zusatz)\b/i, p => p.street2 || 'Unit 4'],
         [/\b(zip|postal|postcode|plz|post\s*code)\b/i, p => p.postal],
         [/\b(city|town|ort|stadt|locality)\b/i, p => p.city],
         [/\b(state|province|region|county|bundesland|kanton)\b/i, p => p.region],
-        [/\b(country|land|staat)\b/i, p => [p.country, p.countryEn, ...(p.countryNames || []), p.countryCode]],
+        // "Land" is a country in German and a plot in English; the plot's labels say what kind.
+        [/\b(country|staat)\b|\bland\b(?!\s*-?\s*(area|size|use|parcel|plot|register|registry|owner|lord))/i, p => [p.country, p.countryEn, ...(p.countryNames || []), p.countryCode]],
         [/\b(street|address|addr|line1|anschrift|strasse|straße)\b/i, p => p.street],
         [/\b(salutation|anrede|gender|geschlecht|prefix)\b/i, p => ['Mr', 'Ms', 'Herr', 'Frau', 'Mx']],
         // Narrow on purpose: a bare /time/ would also claim "Minimum lead time", a number.
@@ -426,7 +475,9 @@
         [/\b(end|finish|ende|bis|closing|schluss)\s*-?\s*(time|zeit)\b|\bendtime\b/i, () => '17:00'],
         [/\b(birth\w*|dob|geburt\w*|geboren)\b/i, p => p.birthDate],
         [/\b(iban|bank\s*account|kontonummer|bankverbindung)\b/i, p => p.iban],
-        [/\b(vat|ust|tax\s*(id|number)|steuernummer|umsatzsteuer)\b/i, p => p.vatId],
+        // Two shapes: a VAT id (DE123456789) and a tax number (12/345/67890 or 12-3456789) fail each other's validators.
+        [/\b(vat|ust|ust-?id(nr)?|umsatzsteuer|mwst|tax\s*id)\b/i, p => p.vatId],
+        [/\b(steuernummer|steuer-?nr|tax\s*(number|no|reference)|taxpayer\s*(id|number)|employer\s*id(entification)?)\b/i, p => p.taxNumber],
         /* The browser's own autofill vocabulary — cc-type, cc-name, cc-exp-month —
          * is on these controls already, and `autocomplete` is matched alongside the
          * label. Every generated number is a 4111… test card, so the brand beside
@@ -441,7 +492,8 @@
         [/\b(expir|valid\s*(thru|until)|gültig|mm\s*\/\s*yy)\b/i, p => p.cardExpiry],
         [/\b(sub)?domain\b/i, p => p.companyDomain, WEAK],
         [/\b(website|url|homepage|webseite|link)\b/i, p => p.website],
-        [/\b(amount|price|total|betrag|preis|summe|cost)\b/i, p => String(p.amount)],
+        // A cost centre is a code, not a sum.
+        [/\b(amount|price|total|betrag|preis|summe|kosten)\b|\bcosts?\b(?!\s*-?\s*(cent(er|re)|code|type|unit|stelle|category))/i, p => String(p.amount)],
         [/\b(quantity|qty|anzahl|menge|count)\b/i, p => String(p.quantity)],
         [/\b(comment|message|description|notes?|feedback|information(en)?|instructions?|bemerkung|nachricht|beschreibung|kommentar|hinweise?|anmerkung(en)?)\b/i, p => p.paragraph, WEAK],
         [/\b(subject|title|betreff|titel|headline)\b/i, () => 'Automated test entry — do not action', WEAK],
@@ -521,14 +573,18 @@
         if (value == null || !limits) return value;
         if (Array.isArray(value)) return value.map(v => constrain(v, limits));
 
-        const hasNum = limits.min != null || limits.max != null;
+        const hasNum = limits.min != null || limits.max != null || limits.step != null;
         if (hasNum && /^-?\d+(\.\d+)?$/.test(String(value).trim())) {
             let n = Number(value);
             if (limits.min != null && n < limits.min) n = limits.min;
             if (limits.max != null && n > limits.max) n = limits.max;
-            if (limits.step && limits.min != null) {
-                n = limits.min + Math.round((n - limits.min) / limits.step) * limits.step;
+            // The step counts from min, or from zero when there is none, as the browser does.
+            if (limits.step) {
+                const base = limits.min != null ? limits.min : 0;
+                n = base + Math.round((n - base) / limits.step) * limits.step;
                 if (limits.max != null && n > limits.max) n -= limits.step;
+                if (limits.min != null && n < limits.min) n += limits.step;
+                n = Number(n.toFixed(6));
             }
             return String(n);
         }
@@ -536,11 +592,17 @@
         let out = String(value);
         if (limits.maxLength && out.length > limits.maxLength) out = shortenTo(out, limits.maxLength);
         if (limits.pattern) {
+            /* HTML patterns are compiled with the `v` flag, so \p{L} and set
+             * operations are legal in them; without the flag they fail to compile
+             * here and the value went through unchecked. */
             let re = null;
-            try {
-                re = new RegExp('^(?:' + limits.pattern + ')$');
-            } catch (_) {
-                re = null;
+            for (const flags of ['v', 'u', '']) {
+                try {
+                    re = new RegExp('^(?:' + limits.pattern + ')$', flags);
+                    break;
+                } catch (_) {
+                    re = null;
+                }
             }
             if (re && !re.test(out)) {
                 // Try the obvious narrowings before letting the value through as is.
@@ -627,6 +689,6 @@
 
     globalThis.FormForgeGen = {
         LOCALES, buildPersona, matchRule, matchRuleDetail, byType, fallbackText, constrain, numberFor,
-        fitMask, looksLikeMask, formatDate, shortenTo, newSeed, mulberry32, seedFromString
+        fitMask, looksLikeMask, formatDate, shortenTo, cleanDomain, newSeed, mulberry32, seedFromString
     };
 })();

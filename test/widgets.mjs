@@ -53,9 +53,9 @@ scan.forEach(f => console.log(`  ${String(f.kind).padEnd(7)} ${String(f.type).pa
 console.log('');
 
 const widgetKinds = scan.filter(f => f.kind === 'widget').map(f => f.lib);
-// Country, Country of registration, City, Location type, the phone country picker, and the
-// remote-backed Organization/Location one.
-check('detects the single selects', widgetKinds.filter(k => k === 'primevue-select').length === 6, widgetKinds.filter(k => k === 'primevue-select').length + '');
+// Country, Country of registration, City, Location type, Priority class, the phone country
+// picker, and the remote-backed Organization/Location one.
+check('detects the single selects', widgetKinds.filter(k => k === 'primevue-select').length === 7, widgetKinds.filter(k => k === 'primevue-select').length + '');
 check('detects the multiselect', widgetKinds.includes('primevue-multiselect'));
 
 /* An application wraps a library control in a div of its own and gives it a
@@ -248,6 +248,14 @@ check('every filled field is reported by a readable name',
 check('and by the name its own label gives it',
     ['Country', 'City', 'Location type'].every(n => captions.includes(n)),
     captions.slice(0, 6).join(' · '));
+/* Two controls, one id: the date picker's wrapper answers to the same name as
+ * the file input further up, which real pages do all the time. The label that
+ * belongs to a control is the one pointing at the control, not the one pointing
+ * at a wrapper that happens to share its id — read the other way round, the
+ * date picker went by the file field's caption and both read "Contract (PDF)". */
+check('a shared id does not hand one control another\'s caption',
+    captions.includes('Contract date') && captions.includes('Contract (PDF)'),
+    captions.filter(c => /Contract/.test(c)).join(' · ') || '(neither)');
 
 const LAENDER = ['Deutschland', 'Österreich', 'Schweiz', 'Niederlande'];
 const TYPEN = ['Filiale', 'Lager', 'Werkstatt', 'Bürostandort', 'Abholstation'];
@@ -367,10 +375,19 @@ check('a re-rendered field is written once, not overwritten',
  * field being reconsidered. `#lieferant` is the case — its backend has nothing
  * for the first probe and something for the second. */
 const AUTOCOMPLETES = new Set(['ansprechpartner', 'lieferant']);
+// `#klasse` drops its first value on purpose; opening it a second time is the repair working.
 const reopened = Object.entries(snap.opens || {})
-    .filter(([id, n]) => n > 1 && !AUTOCOMPLETES.has(id));
+    .filter(([id, n]) => n > 1 && !AUTOCOMPLETES.has(id) && id !== 'klasse');
 check('each dropdown is opened exactly once',
     reopened.length === 0, reopened.map(([k, n]) => `${k}×${n}`).join(', ') || 'none reopened');
+
+/* A select that rejected its first value shows a blank label and no
+ * placeholder class anywhere. The repair pass read that as "holds a choice" and
+ * left it empty; only a positive sign — a selected option, a value in the
+ * inner input — means one was made. */
+check('a select that reverts its first value is written again',
+    ['Standard', 'Express', 'Economy'].includes(snap.klasse) && snap.klasseWrites.length === 2,
+    `now=${JSON.stringify(snap.klasse)} writes=${JSON.stringify(snap.klasseWrites)}`);
 
 /* A rich-text editor is there to hold formatting; filling it with a flat
  * paragraph exercises none of what makes it different from a textarea. */
@@ -850,6 +867,47 @@ check('and every row gets its own value, not the first row\'s',
     new Set(perFile.texts).size === perFile.texts.length,
     perFile.texts.join(' · '));
 
+/* The first row's alt text has a limit the page states only as a complaint, so
+ * the fill shortens it and says so in the report — against the entry of the row
+ * it shortened. Found by caption, "Alternative text" named every row, and the
+ * note landed on the last one, beside a value nothing had touched. */
+await load();
+const seated = await page.evaluate(async () => {
+    const res = await window.__formforge.run({seed: 'SEAT1', locale: 'de-DE', useAI: false, overwrite: true});
+    await new Promise(r => setTimeout(r, 300));
+    const rows = window.__snapshot().bilder;
+    const alts = (res.filled || []).filter(f => f.label === 'Alternative text');
+    const noted = alts.filter(f => /shortened to 12/.test(f.why || ''));
+    return {
+        rows: rows.map(r => r.alt), alts: alts.map(f => f.value),
+        noted: noted.map(f => f.value), pending: window.__formforge.pendingUploads()
+    };
+});
+check('a complaint shortens the row it belongs to',
+    seated.rows.length >= 2 && seated.rows[0].length <= 12 && seated.rows[0].length > 0,
+    `first row "${seated.rows[0]}", ${seated.rows.length} rows`);
+/* Marked by caption, the last row's entry took the first row's shortened value
+ * and the first row's entry kept the long one: the report then described a
+ * form that did not exist. Every reported alt text has to be one a row holds. */
+check('and the report marks that row\'s entry, not the last one with the same caption',
+    seated.noted.length === 1 && seated.noted[0] === seated.rows[0]
+    && [...seated.alts].sort().join('|') === [...seated.rows].sort().join('|'),
+    `noted=${JSON.stringify(seated.noted)} reported=${JSON.stringify(seated.alts)} rows=${JSON.stringify(seated.rows)}`);
+
+/* Each fill starts with an empty list of uploads to wait for. The list used to
+ * live for the page, holding a DOM zone per attached file; on an SPA that is a
+ * few detached subtrees pinned per fill, for ever. */
+const grown = await page.evaluate(async () => {
+    const after = [];
+    for (const seed of ['UPL3', 'UPL4', 'UPL5']) {
+        await window.__formforge.run({seed, locale: 'de-DE', useAI: false, overwrite: true});
+        after.push(window.__formforge.pendingUploads());
+    }
+    return after;
+});
+check('the uploads a fill waits for do not pile up across fills',
+    grown.length === 3 && grown[2] <= grown[0] && grown[0] <= 4, `pending after each fill: ${grown.join(', ')}`);
+
 /* ------------------------------------------------------------ uploads --
  * The one control a tester always had to fill by hand — and on a form that
  * requires one, the whole form blocked behind it. Nothing is fetched and
@@ -1241,6 +1299,80 @@ check('and pointing at the page rather than a field says so',
     one.onThePage && !one.onThePage.ok && /not on a field/.test(one.onThePage.error || ''),
     (one.onThePage || {}).error || '');
 
+/* ------------------------------------------------- the other libraries --
+ * The README names nine component libraries. Eight of them had never been
+ * driven by anything: the PrimeVue fixture covers PrimeVue, and the rest were
+ * selectors in `LIBS` that nobody had ever watched match. A wrong selector does
+ * not miss a control, it claims one and drives it blind — which is the failure
+ * that is hardest to see from the outside.
+ *
+ * `test/libraries-form.html` gives each one its own markup: the class names,
+ * the ARIA and where the popup is rendered are the library's own, because those
+ * three are all `LIBS` matches on. It found two real faults on its first run. */
+await loadPage('test/libraries-form.html');
+const LIB_FIELDS = [
+    ['mui-select', 'Country', 'mui'],
+    ['antd-select', 'Department', 'antd'],
+    ['react-select', 'Priority', 'react-select'],
+    ['radix-select', 'Region', 'radix'],
+    ['headless-listbox', 'Environment', 'headless'],
+    ['choices-js', 'Contract type', 'choices'],
+    ['select2', 'Billing cycle', 'select2'],
+    ['tom-select', 'Shipping method', 'tom-select'],
+    ['vue-multiselect', 'Warehouse', 'vue-multiselect']
+];
+const libs = await page.evaluate(async (want) => {
+    const seen = window.__formforge.collectFields({overwrite: true})
+        .filter(f => f.kind === 'widget')
+        .map(f => ({lib: f.lib, caption: (f.label || '').split('|')[0].trim()}));
+    const res = await window.__formforge.run({seed: 'LIB001', locale: 'en-US', useAI: false, overwrite: true});
+    await new Promise(r => setTimeout(r, 200));
+    return {
+        seen,
+        model: window.__snapshot(),
+        opens: window.__opens,
+        reported: Object.fromEntries((res.filled || []).map(f => [f.label, f.value])),
+        skipped: (res.skipped || []).map(s => `${s.label} (${s.lib})`),
+        // A panel still on screen belongs to a control that never closed.
+        left: [...document.querySelectorAll('.overlay')].filter(o => o.offsetParent !== null).length,
+        want
+    };
+}, LIB_FIELDS);
+
+const missing = LIB_FIELDS.filter(([lib]) => !libs.seen.some(s => s.lib === lib));
+check('every library the README names is recognised',
+    missing.length === 0 && libs.seen.length === LIB_FIELDS.length,
+    missing.map(m => m[0]).join(', ') || libs.seen.map(s => s.lib).join(', '));
+/* A control named through `aria-labelledby` on its inner combobox — which is
+ * how MUI and Select2 do it — was read as "Select…" or, worse, took the caption
+ * of the field above it: the name a control states must beat anything guessed
+ * from what sits near it. */
+const miscalled = LIB_FIELDS
+    .map(([lib, caption]) => [lib, caption, (libs.seen.find(s => s.lib === lib) || {}).caption])
+    .filter(([, want, got]) => want !== got);
+check('and each is called what its own label says',
+    miscalled.length === 0, miscalled.map(([lib, w, g]) => `${lib}: "${g}" not "${w}"`).join('; ') || 'all nine named');
+
+check('a fill writes every one of them', libs.skipped.length === 0 && Object.keys(libs.model).length === 10,
+    libs.skipped.join(', ') || `${Object.keys(libs.model).length} controls hold a value`);
+/* Judged by the page: the value is what the library's own model took, through
+ * the events the page itself received, not what FormForge believes it wrote. */
+const wrongValue = LIB_FIELDS.filter(([lib, caption, key]) =>
+    !libs.model[key] || libs.reported[caption] !== libs.model[key]);
+check('and what it reports is what the library ended up holding',
+    wrongValue.length === 0,
+    wrongValue.map(([lib, caption, key]) => `${lib}: page "${libs.model[key]}" vs report "${libs.reported[caption]}"`).join('; ')
+    || LIB_FIELDS.map(([, , key]) => libs.model[key]).join(', '));
+/* Choices.js and Tom Select render their list inside the control, with
+ * "dropdown" in its class — so the trigger hunt pressed the hidden list and
+ * both reported "would not open" on every field. The trigger is never the
+ * panel, and a press lands on the deepest surface rather than the root, because
+ * a listener bound to a child never hears one bound above it. */
+const libReopened = Object.entries(libs.opens).filter(([, n]) => n !== 1);
+check('each opens exactly once, and closes behind itself',
+    libReopened.length === 0 && libs.left === 0,
+    libReopened.map(([k, n]) => `${k}×${n}`).join(', ') || `${libs.left} panel(s) left open`);
+
 /* ------------------------------------------------------- the page's CSS --
  * The indicator is a guest inside an application's own stylesheet, and a real
  * one reaches a guest element through a universal selector, through `div`, and
@@ -1333,7 +1465,8 @@ const live = await page.evaluate(async () => {
         animations: document.getAnimations().map(a => a.animationName).filter(Boolean).sort(),
         // The sweep of the spinner's arc, sampled twice a third of a second apart.
         arc: [getComputedStyle(box.querySelector('.ff-spin')).getPropertyValue('--ff-arc').trim()],
-        titleVisible: getComputedStyle(box.querySelector('.ff-title')).webkitTextFillColor
+        titleVisible: getComputedStyle(box.querySelector('.ff-title')).webkitTextFillColor,
+        ariaLive: box.getAttribute('aria-live')
     };
     await new Promise(r => setTimeout(r, 340));
     mid.arc.push(getComputedStyle(box.querySelector('.ff-spin')).getPropertyValue('--ff-arc').trim());
@@ -1343,9 +1476,12 @@ const live = await page.evaluate(async () => {
     // returns. Measure where it settles, not where it was passing through.
     await new Promise(r => setTimeout(r, 300));
     clearInterval(watch);
+    const x = box.querySelector('.ff-x').getBoundingClientRect();
     const done = {
         busy: box.classList.contains('ff-busy'),
-        fillWidth: box.querySelector('.ff-bar i').getBoundingClientRect().width
+        fillWidth: box.querySelector('.ff-bar i').getBoundingClientRect().width,
+        ariaLive: box.getAttribute('aria-live'),
+        close: {w: Math.round(x.width), h: Math.round(x.height)}
     };
     // The card leaves on its own, but not while you are reading it.
     box.querySelector('.ff-x').dispatchEvent(new MouseEvent('click', {bubbles: true}));
@@ -1375,10 +1511,16 @@ check('the bar is ahead of nothing and behind the end while filling',
 /* A bar that only grows moves once per field and is frozen in between, which
  * is exactly when the fill is inside one slow control and being doubted. */
 check('the indicator is actually moving while it works',
-    live.mid.busy && ['formforge-sheen', 'formforge-shimmer', 'formforge-spin']
+    live.mid.busy && ['formforge-shimmer', 'formforge-spin']
         .every(n => live.mid.animations.includes(n)),
     live.mid.animations.join(', ') || 'nothing is animating');
 check('and stops the moment the result lands', live.done.busy === false);
+/* A live region that changes with every field is forty-six announcements for
+ * one fill; the card is quiet while it works and speaks once, with the verdict. */
+check('the card is quiet for a screen reader while it works, and speaks when it is done',
+    live.mid.ariaLive === 'off' && live.done.ariaLive === 'polite', `${live.mid.ariaLive} → ${live.done.ariaLive}`);
+check('its close button is a target a pointer can hit',
+    live.done.close.w >= 24 && live.done.close.h >= 24, `${live.done.close.w}×${live.done.close.h}px`);
 
 /* A ring of fixed length rotating at thirteen pixels is hard to tell from a
  * static circle. The arc has to change length as it goes round, which means a
@@ -1611,11 +1753,34 @@ const unfiled = await page.evaluate(async () => {
     const before = {dropped: window.__snapshot().anhaenge.length, foto: document.getElementById('foto').files.length};
     window.__formforge.clearAll();
     await new Promise(r => setTimeout(r, 100));
-    return {before, dropped: window.__snapshot().anhaenge.length, foto: document.getElementById('foto').files.length};
+    const after = window.__snapshot();
+    return {
+        before, dropped: after.anhaenge.length, foto: document.getElementById('foto').files.length,
+        foreign: after.foreignAttachment, deleted: after.locationDeleted
+    };
 });
 check('Clear removes the files an uploader keeps in its own list',
     unfiled.before.dropped > 0 && unfiled.dropped === 0, `${unfiled.before.dropped} → ${unfiled.dropped} attached`);
 check('and empties a plain file input', unfiled.before.foto === 1 && unfiled.foto === 0, `${unfiled.before.foto} → ${unfiled.foto}`);
+/* The remove buttons Clear presses are the ones in rows naming a file we made.
+ * Every delete button in the nearest card used to count, and once our rows were
+ * gone the nearest card holding one was the record's own: an attachment the
+ * tester had uploaded went with ours, and the "Delete location" button under the
+ * list was pressed for good measure. */
+check('and leaves an attachment it did not upload alone', unfiled.foreign === true);
+check('and never presses the record\'s own delete button', unfiled.deleted === false);
+await load();
+const bare = await page.evaluate(async () => {
+    await window.__formforge.run({seed: 'FILE3', locale: 'de-DE', useAI: false, overwrite: true});
+    // The server took our rows down already; the only delete buttons left belong to other things.
+    document.querySelectorAll('#anhaenge-liste li:not([data-foreign])').forEach(li => li.remove());
+    const r = window.__formforge.clearAll();
+    await new Promise(r => setTimeout(r, 100));
+    const s = window.__snapshot();
+    return {foreign: s.foreignAttachment, deleted: s.locationDeleted, cleared: r.count};
+});
+check('with our rows already gone, Clear presses nothing in that card',
+    bare.foreign === true && bare.deleted === false, JSON.stringify(bare));
 
 check('a second fill after Clear fills the control the first fill had revealed',
     !!again.first && !!again.second && !again.skipped.includes('Selected role template'),

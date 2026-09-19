@@ -27,7 +27,6 @@
     })();
 
     const MARK = 'data-formforge-id';
-    const FILLS_KEPT = 10;             // full decision trails in the Debug tab and the report
     const SKIP_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image']);
     const CHOICE_KINDS = new Set(['choice', 'multichoice', 'inline-choice', 'autocomplete', 'radio', 'radio-group', 'select']);
     // Their options are in the page, not behind a popup, so they can be read at collect time.
@@ -366,6 +365,15 @@
         return `c:${(f.label || '').split('|')[0].replace(/[*\s]+/g, ' ').trim().toLowerCase()}`;
     }
 
+    /* A rule's short name for the report: the first word of its pattern, so a
+     * row reads "matched the street rule" and the whole regex sits in the
+     * tooltip. A tester reads the word; whoever edits RULES reads the regex. */
+    function ruleName(pattern) {
+        const words = String(pattern || '').replace(/\\[bswdBSWD]|[()^$?*+|\\\/]/g, ' ');
+        const m = words.match(/[\p{L}][\p{L}-]{2,}/u);
+        return m ? m[0].toLowerCase() : 'a';
+    }
+
     // The caption is only trusted when the original node has left the DOM: two fields can share one.
     function alreadyWritten(wrote, f) {
         const k = fieldKey(f);
@@ -377,7 +385,11 @@
     }
 
     // -------------------------------------------------------------- reading ----
-    // "Has a choice been made", which for a picker showing only a flag differs from "what does it show".
+    /* "Has a choice been made", which for a picker showing only a flag differs
+     * from "what does it show". Only a positive sign counts: "no placeholder
+     * class in sight" used to pass for one, and a select that had reverted its
+     * value — blank label, no placeholder — was believed to hold a choice, so
+     * the repair pass left it empty. */
     function hasSelection(f) {
         const root = f.kind === 'widget' ? f.el : null;
         if (!root) return !!(f.el && f.el.value);
@@ -388,8 +400,7 @@
             if (combo.getAttribute('data-test-select-value') || combo.getAttribute('data-value')) return true;
         }
         const inner = root.querySelector('input, select');
-        if (inner && inner.value) return true;
-        return !root.querySelector('[class*="placeholder"]');
+        return !!(inner && inner.value);
     }
 
     // What the page says the field holds right now.
@@ -510,7 +521,10 @@
      * runs from the attach, as the model's does from its request: a form with
      * plenty left to do pays nothing for this. */
     const UPLOAD_PATIENCE_MS = 5000;
-    const uploads = [];
+    /* Only this fill's uploads. Each entry holds the zone the row is expected in,
+     * and an entry that outlives its fill keeps a node the framework has since
+     * replaced from being collected: on an SPA every fill added a few. */
+    let uploads = [];
     const UPLOAD_ZONE = 'fieldset, section, .field, .p-field, .form-group, [class*="field"], [class*="upload"]';
     const controlsIn = (zone) => {
         try {
@@ -757,7 +771,7 @@
             persona: {
                 fullName: persona.fullName, email: persona.email, company: persona.company,
                 city: persona.city, country: persona.country, jobTitle: persona.jobTitle,
-                locale: persona.locale, seed: persona.seed
+                locale: persona.locale, language: persona.language, seed: persona.seed
             },
             pageTitle: document.title.slice(0, 120),
             context: pageContext(unresolved[0] && unresolved[0].el),
@@ -772,7 +786,7 @@
                 min: f.min != null ? f.min : undefined,
                 max: f.max != null ? f.max : undefined,
                 richText: f.type === 'richtext' || undefined,
-                type: f.kind === 'widget' ? `${f.type} (custom widget)` : f.type,
+                type: f.type,
                 maxLength: f.maxLength,
                 pattern: f.pattern,
                 options: f.options ? f.options.map(o => o.text).slice(0, 20) : undefined
@@ -848,6 +862,7 @@
         modelCalls = 0;
         modelRequestMs = 0;
         filesAttached.clear();
+        uploads = [];
         Hud.reset();
         H.takeNotes();
 
@@ -1030,13 +1045,15 @@
                 return;
             }
             // For a choice the plan is null ("pick one"); remember what was committed so a repair restores *that*.
+            // `seat` is the row in `filled` this write reports to; a later repair updates that row and no other.
+            const was = seatOf.get(f.idx);
             const commit = {
                 f,
                 key: fieldKey(f),
                 caption: captionKey(f),
-                value: entry.value == null ? String(written) : entry.value
+                value: entry.value == null ? String(written) : entry.value,
+                seat: was == null ? filled.length : was
             };
-            const was = seatOf.get(f.idx);
             if (was == null) {
                 seatOf.set(f.idx, filled.length);
                 wroteAt.set(f.idx, wrote.length);
@@ -1051,10 +1068,11 @@
                 label: captionOf(f),
                 value: String(written).slice(0, 60),
                 source: f.kind === 'widget' ? `${entry.source}/${f.lib}` : entry.source,
-                why: entry.source === 'rule' ? `matched ${f.matchedRule || 'a rule'}`
+                why: entry.source === 'rule' ? `matched the ${ruleName(f.matchedRule)} rule`
                     : entry.source === 'type' ? `the control is a ${f.type}`
                         : entry.source === 'ai' ? 'the model answered'
                             : (f.whyFallback || 'nothing else produced a value'),
+                rule: entry.source === 'rule' ? String(f.matchedRule || '') : '',
                 type: f.type, lib: f.lib || ''
             };
             if (was == null) filled.push(row);
@@ -1157,7 +1175,8 @@
          * fill to find — which is what "the metadata only appears on the second
          * run" was. Returns whether something arrived. */
         async function waitForUpload() {
-            const due = uploads.filter(u => Date.now() < u.until && controlsIn(u.zone) <= u.before);
+            uploads = uploads.filter(u => Date.now() < u.until);
+            const due = uploads.filter(u => controlsIn(u.zone) <= u.before);
             if (!due.length) return false;
             progress('repair', 'Waiting for the upload',
                 {label: `${due.length} file field${due.length === 1 ? '' : 's'}`});
@@ -1205,7 +1224,10 @@
                 w.value = String(again);
                 repaired++;
                 didSomething = true;
-                const entry = filled.filter(x => x.label === captionOf(w.f)).pop();
+                /* By seat, not by caption: an uploader's rows all read "Alternative
+                 * text", and the last row's entry was being marked for a value the
+                 * first row holds. */
+                const entry = w.seat != null ? filled[w.seat] : null;
                 if (entry) {
                     entry.value = String(again).slice(0, 60);
                     entry.why += `; shortened to ${max} characters, as the form asked`;
@@ -1286,7 +1308,7 @@
                     continue;
                 }     // a repair, already listed
                 revealed++;
-                wrote.push({f, key, caption: captionKey(f), value});
+                wrote.push({f, key, caption: captionKey(f), value, seat: filled.length});
                 if (f.kind === 'widget') widgetCount++;
                 flash(f.el, !!local);
                 const source = local ? local.source : fromModel ? 'ai' : 'fallback';
@@ -1294,9 +1316,10 @@
                     label: captionOf(f),
                     value: String(written).slice(0, 60),
                     source: f.kind === 'widget' ? `${source}/${f.lib}` : source,
-                    why: local ? `matched ${f.matchedRule || 'a rule'}`
+                    why: local ? (local.source === 'rule' ? `matched the ${ruleName(f.matchedRule)} rule` : `the control is a ${f.type}`)
                         : fromModel ? 'the model answered (field appeared mid-fill)'
                             : 'appeared mid-fill; nothing else produced a value',
+                    rule: local && local.source === 'rule' ? String(f.matchedRule || '') : '',
                     type: f.type, lib: f.lib || ''
                 });
             }
@@ -1353,67 +1376,16 @@
         timings.sort((a, b) => b.ms - a.ms);
         const notes = H.takeNotes();
 
-        /* A rolling record of what every fill cost, so a run of them can be looked
-         * at together rather than one screenshot at a time: the phases, what the
-         * model did, and the slowest controls with the time each took. Kept small
-         * — no values, no persona beyond the seed — and capped, because this sits
-         * in the profile's storage. The Debug tab saves it as one JSON file. */
-        const stat = {
-            at: Date.now(), url: location.href.slice(0, 200), title: document.title.slice(0, 80),
-            seed: persona.seed, locale: persona.locale,
-            fields: fields.length, filled: filled.length, widgets: widgetCount,
-            revealed, repaired, upgraded, skipped: skipped.length, leftOpen: leftOpen.length,
-            ai: {
-                asked: askedCount, used: aiUsed, via: modelVia, requestMs: modelRequestMs,
-                blockedMs: phase.model, warming: modelWarming, warmingMs: modelWarmingMs, timedOut: modelTimedOut,
-                error: modelError ? modelError.slice(0, 120) : '',
-                batches: ((modelDebug || {}).batches || []).map(b => ({
-                    asked: b.asked, answered: b.answered, ms: b.ms, error: b.error ? b.error.slice(0, 80) : undefined
-                }))
-            },
-            phase,
-            slowest: timings.slice(0, 12),
-            notes
-        };
-        try {
-            chrome.storage.local.get({fillLog: []}, (got) => {
-                void chrome.runtime.lastError;
-                const log = (got && got.fillLog || []).concat([stat]).slice(-100);
-                chrome.storage.local.set({fillLog: log}, () => void chrome.runtime.lastError);
-            });
-        } catch (_) {
-        }
-
-        /* Persisted from here, not from the popup, so a keyboard-triggered fill is
-         * recorded too — and ten deep, not one. "It worked a minute ago" is a
-         * comparison, and the trail of the fill before the broken one is what
-         * makes it: the report is worth little if it can only ever describe the
-         * run somebody happened to save it after. */
-        const record = {
-            at: Date.now(), url: location.href.slice(0, 200), title: document.title.slice(0, 80),
-            count: filled.length, widgets: widgetCount, revealed, repaired, upgraded, aiUsed,
-            modelTimedOut, modelWarming, modelWarmingMs, modelVia, modelError, modelAsked, leftOpen, notes,
-            modelRequestMs, unresolvedCount: askedCount,
-            // What the bug report names; the Debug tab builds it from here.
-            persona: {
-                fullName: persona.fullName, seed: persona.seed, locale: persona.locale,
-                email: persona.email, phone: persona.phone, company: persona.company,
-                street: persona.street, postal: persona.postal, city: persona.city, country: persona.country
-            },
-            filled, skipped, phase, modelDebug
-        };
-        try {
-            chrome.storage.local.get({fillHistory: []}, (got) => {
-                void chrome.runtime.lastError;
-                const kept = (got && got.fillHistory || []).concat([record]).slice(-FILLS_KEPT);
-                chrome.storage.local.set({fillHistory: kept}, () => void chrome.runtime.lastError);
-            });
-        } catch (_) {
-        }
-
+        /* The fill answers with everything the record needs; the worker writes it
+         * once, after it has added the frames up. Written from here, every frame
+         * wrote its own — a read-modify-write each, so two frames finishing
+         * together lost one of them, and the Debug tab described a form that was
+         * one of several on the page. */
         toast(`Filled ${filled.length} field${filled.length === 1 ? '' : 's'}`,
             {persona, aiUsed, filled, widgets: widgetCount, skipped, ms: phase.total, total: fields.length});
         return {
+            url: location.href.slice(0, 200), title: document.title.slice(0, 80),
+            fieldCount: fields.length,
             count: filled.length,
             persona: stripRng(persona),
             aiUsed,
@@ -1430,6 +1402,7 @@
             modelError,
             modelDebug,
             modelAsked,
+            modelSwitchedOff: settings.useAI === false,
             modelRequestMs,
             unresolvedCount: askedCount,
             filled,
@@ -1499,6 +1472,7 @@
         if (value == null) value = picksItsOwn(f) ? null : G.fallbackText(f, persona);
 
         const written = await applyValue(f, value, persona);
+        W.takeChoiceTimings();                         // one field's timings are nobody's report; do not let them pile up
         const ok = written != null && String(written) !== '';
         if (ok) flash(f.el, source !== 'fallback');
         // Keep the caret where it was, so the shortcut can be pressed again for another value.
@@ -1523,17 +1497,32 @@
 
     /* An uploader takes the files out of its input and keeps its own list, so
      * emptying the input clears nothing a tester can see. The list's own remove
-     * buttons do; they are looked for in the nearest ancestor that has any,
-     * never as far up as the form, whose other buttons delete other things. */
+     * buttons do — but only the ones in a row that names a file we generated.
+     * "The nearest ancestor holding any delete button" is the card the uploader
+     * sits in as soon as our rows are gone, and the delete button in that card
+     * belongs to the record: Clear would have deleted the location. */
     const REMOVE_FILE = [
         '.p-fileupload-file-remove-button', '[data-pc-section="pcremovebutton"]', '[data-pc-section="removebutton"]',
         'button[name="deleteFile"]', '[aria-label*="remove" i]', '[aria-label*="delete" i]', '[aria-label*="löschen" i]',
         '[aria-label*="entfernen" i]', '[title*="remove" i]', '[title*="delete" i]', '[title*="löschen" i]', '[title*="entfernen" i]'
     ].join(', ');
+    const OUR_FILE = /\bformforge-[a-z0-9]+(?:-\d+)?\.[a-z0-9]{2,4}\b/i;
+
+    /* The row a remove button belongs to is the nearest ancestor that names one
+     * of our files; a container naming one through some other row holds more
+     * than this one button, and is the list, not the row. */
+    function removesOurFile(button, bound) {
+        for (let row = button.parentElement; row && row !== bound.parentElement; row = row.parentElement) {
+            if (!OUR_FILE.test(row.textContent || '')) continue;
+            return row.querySelectorAll(REMOVE_FILE).length === 1;
+        }
+        return false;
+    }
 
     function removeAttached(input) {
         for (let node = input.parentElement; node && node !== document.body && node.tagName !== 'FORM'; node = node.parentElement) {
-            const buttons = Array.from(node.querySelectorAll(REMOVE_FILE)).filter(b => !b.disabled);
+            const buttons = Array.from(node.querySelectorAll(REMOVE_FILE))
+                .filter(b => !b.disabled && removesOurFile(b, node));
             if (buttons.length) {
                 buttons.forEach(b => H.press(b));
                 return buttons.length;
@@ -1592,7 +1581,10 @@
     let busy = false;
 
     // Exposed for the test suites, which call these through the content-script world.
-    globalThis.__formforge = {run, fillOne, clearAll, collectFields, describe, pageContext, nearbyExamples};
+    globalThis.__formforge = {
+        run, fillOne, clearAll, collectFields, describe, pageContext, nearbyExamples,
+        pendingUploads: () => uploads.length
+    };
 
     // Chrome's context menu does not say which element was clicked; remember it ourselves.
     let lastContextTarget = null;
@@ -1617,6 +1609,11 @@
     }
 
     chrome.runtime.onMessage.addListener((msg, sender, respond) => {
+        // "Are you there?" — the worker's way of telling a live frame from one whose script died with an update.
+        if (msg.kind === 'ping') {
+            respond({ok: true, busy});
+            return false;
+        }
         if (msg.kind === 'fill') return exclusive(async () => ({ok: true, ...(await run(msg.settings || {}))}), respond);
         if (msg.kind === 'fill-one') return exclusive(() => fillOne(msg.settings || {}, {focusFirst: !!msg.focusFirst}), respond);
         if (msg.kind === 'clear') return exclusive(async () => ({ok: true, ...clearAll()}), respond);

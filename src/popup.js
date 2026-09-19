@@ -58,6 +58,8 @@ function showTab(which) {
         const on = name === which;
         $(tab).classList.toggle('is-active', on);
         $(tab).setAttribute('aria-selected', String(on));
+        // One tab stop for the list; the arrows move within it.
+        $(tab).tabIndex = on ? 0 : -1;
         $(PANES[name]).hidden = !on;
     }
     if (which === 'debug') renderDebug();
@@ -103,6 +105,7 @@ function renderShortcuts() {
 let providerDefaults = {};
 
 async function load() {
+    showTab('fill');
     renderShortcuts();
     chrome.runtime.sendMessage({kind: 'providers'}, (r) => {
         providerDefaults = (r && r.defaults) || {};
@@ -116,12 +119,8 @@ async function load() {
     }
     const s = await chrome.storage.local.get(KEYS);
     $('locale').value = s.locale || 'en-US';
-    /* Only a seed the user deliberately pinned counts. Earlier builds kept the
-     * seed on the main pane and wrote it to storage on every change, so an
-     * upgraded profile arrives with one set — which silently turns off the "new
-     * data every fill" default and makes every fill identical. */
+    // Only a seed deliberately pinned counts; an older profile is brought forward by the worker, once.
     $('seed').value = s.seedPinned ? (s.seed || '') : '';
-    if (s.seed && !s.seedPinned) chrome.storage.local.set({seed: ''});
     currentSeed = fixedSeed() || randomSeed();
     $('emailDomain').value = s.emailDomain || 'example.com';
     $('modelTimeout').value = String(s.modelTimeout || 0);
@@ -141,7 +140,11 @@ async function load() {
      * does not throw away the answer to "what did it just do". */
     chrome.storage.local.get({fillHistory: []}, ({fillHistory}) => {
         const lastFill = (fillHistory || [])[(fillHistory || []).length - 1];
-        if (!lastFill || !lastFill.filled) return;
+        if (!lastFill || !lastFill.filled) {
+            // Nothing filled yet on this profile: say what the button is for.
+            if (!$('result').innerHTML) $('hint').hidden = false;
+            return;
+        }
         if ($('result').innerHTML) return;          // a fresh fill has already rendered
         const note = lastFill.aiUsed ? `${lastFill.aiUsed} from model`
             : lastFill.modelTimedOut ? 'model too slow — rules used' : 'rules only';
@@ -175,11 +178,19 @@ async function load() {
             pill.title = 'Rules fill every recognised field meanwhile.';
             const btn = document.createElement('button');
             btn.className = 'btn wide';
-            btn.textContent = 'Download on-device model (one-time, ~2 GB)';
+            btn.textContent = 'Download the on-device model (one-time, ~2 GB)';
             btn.addEventListener('click', () => {
                 btn.disabled = true;
                 btn.textContent = 'Downloading… you can keep filling meanwhile';
+                // The worker records the download's progress; the button reads it.
+                const onProgress = (changes) => {
+                    const c = changes.nanoDownloadProgress && changes.nanoDownloadProgress.newValue;
+                    if (typeof c === 'number') btn.textContent = `Downloading… ${c}% — you can keep filling meanwhile`;
+                };
+                chrome.storage.onChanged.addListener(onProgress);
                 chrome.runtime.sendMessage({kind: 'nano-download'}, (r) => {
+                    void chrome.runtime.lastError;
+                    chrome.storage.onChanged.removeListener(onProgress);
                     btn.textContent = r && r.ok ? 'Model ready' : 'Download failed';
                     if (r && r.ok) {
                         pill.className = 'pill ok';
@@ -187,7 +198,8 @@ async function load() {
                     }
                 });
             });
-            $('advanced').before(btn);
+            // Beside the status that says the model is missing, on the pane the tester is looking at.
+            $('modelSlot').appendChild(btn);
             return;
         }
         pill.className = 'pill warn';
@@ -245,12 +257,16 @@ function panel(title, note, bodyHtml, footHtml) {
     live = false;
     const box = $('result');
     box.hidden = false;
+    $('hint').hidden = true;
     box.classList.remove('is-live');
     box.innerHTML =
         `<div class="result-head"><span class="result-title">${esc(title)}</span>` +
         `<span class="result-note">${esc(note || '')}</span></div>` +
         bodyHtml +
         (footHtml ? `<div class="result-foot">${footHtml}</div>` : '');
+    // A list taller than its box fades at the bottom, since overlay scrollbars leave no other sign.
+    const list = box.querySelector('.rows');
+    if (list && list.scrollHeight > list.clientHeight + 2) list.classList.add('is-scrolly');
 }
 
 function message(text) {
@@ -281,8 +297,22 @@ function rows(items) {
     ).join('') + '</div>';
 }
 
+/* Chrome's own words for a page it will not let an extension touch are for
+ * Chrome's developers. "Cannot access a chrome:// URL" told a tester nothing
+ * about what to do; where the page is what is being said. */
+function explain(error) {
+    const e = String(error || '');
+    if (/chrome:\/\/|chrome-extension:\/\/|Cannot access|could not inject|Web Store|cannot be scripted|not permitted/i.test(e)) {
+        return 'Chrome does not let extensions run on this page — its own pages, the Web Store and the PDF viewer are off limits. Open the form in an ordinary tab.';
+    }
+    if (/no active tab|no tab/i.test(e)) return 'No page is open in this window.';
+    if (/already running/i.test(e)) return 'A fill is already running on this page; give it a moment.';
+    if (/did not answer|port closed|receiving end/i.test(e)) return 'The page did not answer. Reload it and press Fill again.';
+    return e || 'No reachable form on this page.';
+}
+
 function report(res) {
-    if (!res || !res.ok) return message(res && res.error ? res.error : 'No reachable form on this page.');
+    if (!res || !res.ok) return message(explain(res && res.error));
     if (res.count === 0 && !(res.filled || []).length) {
         return message(res.persona ? 'No fillable fields found on this page.' : 'Nothing to clear.');
     }
@@ -296,7 +326,7 @@ function report(res) {
             : res.modelWarming ? `model still loading${loadFor(res)} — rules used`
                 : res.modelTimedOut ? 'model too slow — rules used'
                     : 'rules only';
-    let foot = `${p.fullName} · seed <b style="color:var(--accent)">${esc(p.seed)}</b>`;
+    let foot = `${esc(p.fullName)} · seed <b style="color:var(--accent)">${esc(p.seed)}</b>`;
     if (res.widgets) foot += ` · ${res.widgets} widget${res.widgets === 1 ? '' : 's'}`;
     foot += whyLink();
     const skipped = res.skipped || [];
@@ -324,8 +354,9 @@ let debugAt = -1;
 
 function renderDebug() {
     const box = $('debugBody');
-    chrome.storage.local.get({fillHistory: []}, ({fillHistory}) => {
+    chrome.storage.local.get({fillHistory: [], fillLog: []}, ({fillHistory, fillLog}) => {
         const history = fillHistory || [];
+        const log = fillLog || [];
         if (!history.length) {
             debugAt = -1;
             box.innerHTML = '<div class="empty">Nothing filled yet. Fill a page and the whole decision trail lands here.</div>';
@@ -350,11 +381,11 @@ function renderDebug() {
                 } else {
                     lastFill.modelDebug = Object.assign({}, lastFill.modelDebug, {pending: false});
                 }
-                drawDebug(box, lastFill, history, at);
+                drawDebug(box, lastFill, history, at, log);
             });
             return;
         }
-        drawDebug(box, lastFill, history, at);
+        drawDebug(box, lastFill, history, at, log);
     });
 }
 
@@ -399,7 +430,38 @@ function timingBar(ph) {
     return `<div class="tm-bar">${bar}</div><div class="tm-legend">${legend}</div>`;
 }
 
-function drawDebug(box, d, history, at) {
+/* What a run of fills looks like, from the outline kept of the last hundred.
+ * One fill is an anecdote: a slow control, a model that happened to be cold, a
+ * field left empty — none of them mean anything until you know how often they
+ * happen. Counted here, on this machine, from records that hold no values. */
+function trend(log) {
+    if (!log || log.length < 3) return '';
+    const n = log.length;
+    const median = (xs) => {
+        const s = xs.slice().sort((a, b) => a - b);
+        return s.length ? s[Math.floor(s.length / 2)] : 0;
+    };
+    const complete = log.filter(s => !s.skipped).length;
+    const totals = log.map(s => (s.phase || {}).total || 0);
+    /* Only the fills that actually asked. A window of fills made with the model
+     * switched off otherwise averaged out to "answered 0 of 11", which reads as
+     * a model that is failing rather than one nobody called. */
+    const consulted = log.filter(s => !((s.ai || {}).off));
+    const asked = consulted.reduce((t, s) => t + ((s.ai || {}).asked || 0), 0);
+    const used = consulted.reduce((t, s) => t + ((s.ai || {}).used || 0), 0);
+    const left = log.reduce((t, s) => t + (s.skipped || 0), 0);
+    const row = (what, value, note) =>
+        `<div class="tm-row"><span class="tm-name">${esc(what)}</span><span class="tm-ms">${esc(value)}</span></div>` +
+        (note ? `<div class="dim" style="margin:-2px 0 4px">${esc(note)}</div>` : '');
+    return section(`Across the last ${n} fill${n === 1 ? '' : 's'}`,
+        row('Finished with nothing left', `${complete} of ${n}`,
+            left ? `${left} field${left === 1 ? '' : 's'} planned but never written` : '') +
+        row('Typical fill', fmtMs(median(totals))) +
+        (asked ? row('Answered by the model', `${used} of ${asked}`)
+            : row('Model', consulted.length ? 'asked nothing' : 'switched off')));
+}
+
+function drawDebug(box, d, history, at, log) {
     const out = [];
 
     const kept = history || [d];
@@ -428,17 +490,21 @@ function drawDebug(box, d, history, at) {
   </div>`));
 
     out.push(section('Where the time went', timingBar(d.phase || {})));
+    // One fill is an anecdote; the run of them is the thing worth reading.
+    if (here === kept.length - 1) out.push(trend(log));
 
     // The model: asked or not, and what came of it.
     const m = d.modelDebug;
     const asked = d.unresolvedCount || 0;
-    const head = !d.modelAsked ? 'Not consulted — the rules answered every field'
-        : d.modelWarming ? `Still loading${loadFor(d)} — the next fill has it`
-            : d.aiUsed ? `${d.aiUsed} of ${asked} answered · ${esc(d.modelVia || 'unknown')}`
-                + (d.modelTimedOut ? ' · the rest ran past its window' : '')
-                : d.modelTimedOut ? `${asked} asked, none back before the window closed`
-                    : d.modelError ? `${asked} asked — ${esc(d.modelError)}`
-                        : `${asked} asked, none answered`;
+    // "The rules answered every field" is a different fact from "switched off", and a fallback in the list below says which.
+    const head = d.modelSwitchedOff ? 'Switched off in the settings — fields no rule answered got filler values'
+        : !d.modelAsked ? 'Not consulted — the rules answered every field'
+            : d.modelWarming ? `Still loading${loadFor(d)} — the next fill has it`
+                : d.aiUsed ? `${d.aiUsed} of ${asked} answered · ${esc(d.modelVia || 'unknown')}`
+                    + (d.modelTimedOut ? ' · the rest ran past its window' : '')
+                    : d.modelTimedOut ? `${asked} asked, none back before the window closed`
+                        : d.modelError ? `${asked} asked — ${esc(d.modelError)}`
+                            : `${asked} asked, none answered`;
     let modelBody = `<div class="dbg-kv"><div>${esc(head)}</div>`;
     /* One line for what it cost, and it is not what people assume: the form was
        finished before any of this, so the time here bought better values in
@@ -468,12 +534,22 @@ function drawDebug(box, d, history, at) {
     }
     out.push(section('Model', modelBody));
 
-    // Every field, with the reason it got what it got.
-    const rows = (d.filled || []).map(f =>
-        `<div class="dbg-row"><div class="dbg-row-h"><span class="k">${esc(f.label)}</span>` +
+    /* Every field, with the reason it got what it got. The ones worth a look
+     * come first and open: what fell to the filler, what the model wrote, what
+     * had to be repaired. A rule doing its job is the expected case, so on a
+     * long form those rows wait behind one button rather than making the list
+     * five screens tall. The regex behind a rule is in the tooltip. */
+    const decisions = d.filled || [];
+    const worth = (f) => !/^(rule|type|choice)\b/.test(String(f.source || '')) || /shortened|second attempt|appeared|replaced/.test(f.why || '');
+    const fold = decisions.length > 8 && decisions.some(worth) && decisions.some(f => !worth(f));
+    const row = (f) =>
+        `<div class="dbg-row"${fold && !worth(f) ? ' data-quiet hidden' : ''}><div class="dbg-row-h"><span class="k">${esc(f.label)}</span>` +
         `<span class="v">${esc(f.value)}</span>${sourceTag(f.source)}</div>` +
-        `<div class="dim why">${esc(f.why || '')}</div></div>`).join('');
-    out.push(section(`Decisions (${(d.filled || []).length})`, rows || '<div class="empty">none</div>'));
+        `<div class="dim why"${f.rule ? ` title="${esc(f.rule)}"` : ''}>${esc(f.why || '')}</div></div>`;
+    const quiet = fold ? decisions.filter(f => !worth(f)).length : 0;
+    out.push(section(`Decisions (${decisions.length})`,
+        (decisions.map(row).join('') || '<div class="empty">none</div>') +
+        (quiet ? `<button type="button" class="btn small dbg-more">Show ${quiet} answered by rules</button>` : '')));
 
     /* Reported here rather than through console.warn, which lands in the
      * extension's own error list and reads as a crash in FormForge to whoever
@@ -504,6 +580,11 @@ function drawDebug(box, d, history, at) {
         debugAt = Number(b.dataset.fill);
         renderDebug();
     }));
+    const more = box.querySelector('.dbg-more');
+    if (more) more.addEventListener('click', () => {
+        box.querySelectorAll('[data-quiet]').forEach(r => (r.hidden = false));
+        more.remove();
+    });
 }
 
 /* ------------------------------------------------------ live activity ---- */
@@ -679,161 +760,12 @@ async function explainClosedPort(box, sent, attempt) {
 
 $('checkModel').addEventListener('click', () => runSetupCheck($('modelCheck')));
 
-/* One report, for both readers. A tester attaches it to a ticket; whoever picks
-   the ticket up needs the same thing plus the timings of the fills around it,
-   and a pattern — a stage that is sometimes slow, a model that sometimes never
-   answers — only shows across several fills. So: plain text, the last fill in
-   full at the top, the run of recent fills underneath, and the prompts last
-   because they are long. Two buttons meant choosing wrongly before knowing
-   which half mattered. */
-const ms = (n) => (n == null ? '?' : n < 950 ? `${n} ms` : `${(n / 1000).toFixed(1)} s`);
-
-/* One fill, whole: what it faced, what it decided, and what it asked the model.
-   Written once and called for each kept fill — a report that could only ever
-   describe the run somebody happened to save it after answers "what changed?"
-   with a single data point, and the nine fills before it are the answer. */
-function fillDetail(d, line) {
-    const p = d.persona || {};
-    const ph = d.phase || {};
-    line(`  ${d.url || ''}`);
-    line(`  ${d.count} field(s) in ${ms(ph.total)} · ${d.widgets || 0} widget(s) · ` +
-        `${d.revealed || 0} appeared mid-fill · ${d.repaired || 0} repaired`);
-    line(`  phases: ` + Object.entries(ph).map(([k, v]) => `${k} ${ms(v)}`).join(' · '));
-    /* Two numbers people confuse, kept apart on purpose: when the form was
-       finished, and how long the model went on improving it afterwards. They used
-       to be the same number, because the fill waited. */
-    line(`  model: asked ${d.unresolvedCount || 0}, used ${d.aiUsed || 0}, via ${d.modelVia || 'none'}, ` +
-        `request ${ms(d.modelRequestMs)}` +
-        (d.modelWarming ? `, still loading${loadFor(d)}` : '') + (d.modelTimedOut ? ', ran past its window' : '') +
-        (d.modelError ? `, error: ${d.modelError}` : ''));
-    line(`  form complete in ${ms(ph.firstPass)}; ${d.upgraded || 0} field(s) upgraded over the ${ms(ph.model)} after it`);
-    line('');
-    line(`  Persona (seed ${p.seed}, locale ${p.locale})`);
-    line(`    ${p.fullName || ''} · ${p.email || ''} · ${p.phone || ''}`);
-    line(`    ${p.company || ''} · ${p.street || ''}, ${p.postal || ''} ${p.city || ''}, ${p.country || ''}`);
-    line('');
-    line('  Fields filled:');
-    for (const f of (d.filled || [])) line(`    ${f.label}: ${f.value}  [${f.source}] ${f.why || ''}`);
-    if ((d.skipped || []).length) {
-        line('');
-        line('  Planned but wrote nothing:');
-        for (const sk of d.skipped) line(`    ${sk.label}  [${sk.type}]`);
-    }
-    if ((d.leftOpen || []).length) {
-        line('');
-        line('  Left on screen: ' + d.leftOpen.join(', '));
-    }
-    if ((d.notes || []).length) {
-        line('');
-        line('  Notes:');
-        for (const n of d.notes) line(`    ${n}`);
-    }
-    const batches = (d.modelDebug && d.modelDebug.batches) || [];
-    if (batches.length) {
-        line('');
-        line(`  Model prompts (${batches.length}):`);
-        for (const b of batches) {
-            line('');
-            line(`    --- asked ${b.asked}, answered ${b.answered != null ? b.answered : 'none'}, ${b.ms} ms ---`);
-            line(String(b.prompt || '').split('\n').map(x => '    ' + x).join('\n'));
-            if (b.reply) {
-                line('    --- reply ---');
-                // Indented line by line: a reply that came back fenced or pretty-printed is several.
-                line(String(b.reply).split('\n').map(x => '    ' + x).join('\n'));
-            }
-            if (b.error) line(`    --- error: ${b.error}`);
-        }
-    }
-}
-
-function reportText(history, log, env) {
-    const out = [];
-    const line = (t) => out.push(t == null ? '' : String(t));
-    line(`FormForge ${env.version} — report`);
-    line(`${env.ua} · popup locale ${env.locale} · on-device model: ${env.model}`);
-    line(`saved ${new Date().toISOString()}`);
-    line('');
-
-    line(`Recent fills (${log.length}):`);
-    line('  when                  total   collect  model   first   repair  fields  ai     page');
-    for (const s of log) {
-        const ph = s.phase || {};
-        const cell = (v, w) => String(v == null ? '?' : v).padEnd(w);
-        line('  ' + cell(new Date(s.at).toISOString().slice(5, 19).replace('T', ' '), 22) +
-            cell(ms(ph.total), 8) + cell(ms(ph.collect), 9) + cell(ms(ph.model), 8) +
-            cell(ms(ph.firstPass), 8) + cell(ms(ph.secondPass), 8) +
-            cell(`${s.filled}/${s.fields}`, 8) + cell(`${(s.ai || {}).used || 0}/${(s.ai || {}).asked || 0}`, 7) +
-            (s.title || s.url || ''));
-    }
-
-    const slow = log.flatMap(s => (s.slowest || []).map(t => ({...t, at: s.at})))
-        .sort((a, b) => b.ms - a.ms).slice(0, 25);
-    if (slow.length) {
-        line('');
-        line('Slowest controls across those fills:');
-        for (const t of slow) line(`  ${String(t.ms).padStart(6)} ms  ${String(t.type || '').padEnd(14)} ${t.lib || ''}  ${t.label || ''}`);
-    }
-
-    const fills = (history || []).slice().reverse();
-    line('');
-    if (!fills.length) {
-        line('No fill recorded in full yet.');
-        return out.join('\n');
-    }
-    line(`${fills.length} fill(s) kept in full, newest first.`);
-    fills.forEach((d, i) => {
-        line('');
-        line(`======== ${i + 1}/${fills.length} · ${new Date(d.at).toISOString().slice(0, 19).replace('T', ' ')}` +
-            ` · ${d.title || d.url || ''} ========`);
-        fillDetail(d, line);
-    });
-    return out.join('\n');
-}
-
-/* Through chrome.downloads, not an <a download> click: a popup closes the moment
-   anything takes focus — the download shelf, the "where to save" dialog — and a
-   download the page started dies with it, which is why the button looked dead
-   while working perfectly in a tab. The browser owns this one. */
-$('saveReport').addEventListener('click', async () => {
-    const got = await new Promise(r => chrome.storage.local.get({fillLog: [], fillHistory: []}, (v) => {
-        void chrome.runtime.lastError;
-        r(v || {});
-    }));
-    let model = 'unknown';
-    try {
-        const s = await new Promise(r => chrome.runtime.sendMessage({kind: 'nano-status'}, (v) => {
-            void chrome.runtime.lastError;
-            r(v);
-        }));
-        if (s && s.status) model = s.status;
-    } catch (_) {
-    }
-    const env = {
-        version: chrome.runtime.getManifest().version,
-        ua: (navigator.userAgent.match(/Chrome\/[\d.]+/) || ['Chrome ?'])[0] + ' on ' + navigator.platform,
-        locale: chrome.i18n && chrome.i18n.getUILanguage ? chrome.i18n.getUILanguage() : navigator.language,
-        model
-    };
-    const text = reportText(got.fillHistory || [], got.fillLog || [], env);
-    const url = URL.createObjectURL(new Blob([text], {type: 'text/plain'}));
-    const filename = `formforge-report-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.txt`;
-    const done = (ok) => {
-        $('saveReport').textContent = ok ? 'Saved' : 'Could not save';
-        setTimeout(() => ($('saveReport').textContent = 'Save report'), 1800);
-        setTimeout(() => URL.revokeObjectURL(url), 4000);
-    };
-    if (chrome.downloads && chrome.downloads.download) {
-        chrome.downloads.download({url, filename, saveAs: false},
-            (id) => done(!chrome.runtime.lastError && id != null));
-        return;
-    }
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    done(true);
+/* The report lives on a page of its own. A popup closes the moment anything
+   takes focus — a save dialog, a new tab — so saving from here needed the
+   downloads permission and still looked dead; a tab can be read, copied and
+   saved with a plain link, and needs no permission at all. */
+$('openReport').addEventListener('click', () => {
+    chrome.tabs.create({url: chrome.runtime.getURL('src/report.html')});
 });
 
 /* Clear empties what the tab shows, not only the log behind it: leaving the
@@ -865,14 +797,47 @@ function syncBackendUi() {
     if (!ready) $('setupCheck').innerHTML = '';
 }
 
-document.addEventListener('change', save);
-document.addEventListener('input', save);
+/* A change is saved at once; a keystroke a moment after the last one — typing an
+ * API key wrote all thirteen settings fifty times over. Leaving a field flushes
+ * what is pending, so a stored value is never a keystroke behind the screen. */
+let saveTimer = null;
+const flush = () => {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    save();
+};
+document.addEventListener('change', flush);
+document.addEventListener('focusout', () => {
+    if (saveTimer) flush();
+});
+document.addEventListener('input', () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flush, 120);
+});
 for (const id of ['backend', 'provider', 'apiKey']) $(id).addEventListener('input', syncBackendUi);
 for (const id of ['backend', 'provider']) $(id).addEventListener('change', syncBackendUi);
+// The domain as it will be used, shown the moment the box is left: "@acme.test" becomes acme.test.
+$('emailDomain').addEventListener('blur', () => {
+    const G = globalThis.FormForgeGen;
+    if (G && G.cleanDomain) $('emailDomain').value = G.cleanDomain($('emailDomain').value);
+    save();
+});
 
 $('tabFill').addEventListener('click', () => showTab('fill'));
 $('tabSettings').addEventListener('click', () => showTab('settings'));
 $('tabDebug').addEventListener('click', () => showTab('debug'));
+/* Arrow keys move between tabs, as a tablist promises a keyboard user. */
+const TAB_ORDER = ['fill', 'settings', 'debug'];
+document.querySelector('.tabs').addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'Home' && e.key !== 'End') return;
+    const shown = TAB_ORDER.filter(t => !$(TABS[t]).hidden);
+    const at = shown.indexOf(TAB_ORDER.find(t => $(TABS[t]) === document.activeElement) || 'fill');
+    const next = e.key === 'Home' ? 0 : e.key === 'End' ? shown.length - 1
+        : (at + (e.key === 'ArrowRight' ? 1 : shown.length - 1)) % shown.length;
+    e.preventDefault();
+    showTab(shown[next]);
+    $(TABS[shown[next]]).focus();
+});
 $('debugTab').addEventListener('change', syncDebugUi);
 $('result').addEventListener('click', (e) => {
     if (!e.target.closest('.toDebug')) return;

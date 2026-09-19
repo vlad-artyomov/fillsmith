@@ -36,7 +36,9 @@ const walk = (v) => {
     } else if (v && typeof v === 'object') Object.values(v).forEach(walk);
 };
 walk(manifest);
-referenced.add('src/content.js');                       // injected by name, not named in the manifest
+// Opened or injected by name rather than named in the manifest.
+for (const f of ['src/content.js', 'src/welcome.html', 'src/welcome.js',
+    'src/report.html', 'src/report.js', 'src/report.css', 'src/report-text.js']) referenced.add(f);
 for (const f of referenced) {
     if (!existsSync(join(root, f))) fail(`manifest.json refers to ${f}, which does not exist.`);
 }

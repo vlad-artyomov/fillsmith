@@ -123,10 +123,47 @@
             box-shadow: 0 0 0 3px rgba(31, 111, 79, .13);
         }
 
-        input[type=file] {
-            padding: 8px 11px;
+        /* The upload, the way an application builds one: the native input is
+           behind a label the page draws, because the browser writes the caption
+           of its own button and writes it in the browser's language. FormForge
+           fills it all the same — a visually hidden input inside a visible
+           wrapper is a control, and it is collected as one. */
+        .filebox {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            min-height: 40px;
+            padding: 7px 11px;
+            border: 1px solid var(--edge);
+            border-radius: 9px;
+            background: #fff;
             color: var(--muted);
             font-size: 13px;
+            box-sizing: border-box;
+        }
+
+        .filebox input[type=file] {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+        }
+
+        .filebox .pick {
+            padding: 5px 12px;
+            border: 1px solid var(--edge);
+            border-radius: 7px;
+            background: #f4f6f9;
+            color: var(--text);
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .filebox .chosen {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .p-select, .p-datepicker {
@@ -464,7 +501,11 @@
              a real image rather than a name in a box. -->
         <div class="field">
             <label for="screenshot">Screenshot</label>
-            <input id="screenshot" name="screenshot" type="file" accept="image/png,image/jpeg">
+            <div class="filebox">
+                <input id="screenshot" name="screenshot" type="file" accept="image/png,image/jpeg">
+                <label class="pick" for="screenshot">Choose file</label>
+                <span class="chosen" id="screenshot-chosen">No file chosen</span>
+            </div>
             <div class="preview" id="screenshot-preview" hidden>
                 <img alt="" id="screenshot-thumb">
                 <div class="preview-meta">
@@ -683,10 +724,12 @@
         const thumb = document.getElementById('screenshot-thumb');
         const name = document.getElementById('screenshot-name');
         const size = document.getElementById('screenshot-size');
+        const chosen = document.getElementById('screenshot-chosen');
         let url = null;
         input.addEventListener('change', () => {
             const files = Array.from(input.files);
             model.screenshot = files.map(f => f.name);
+            chosen.textContent = files.length ? files.map(f => f.name).join(', ') : 'No file chosen';
             if (url) URL.revokeObjectURL(url);           // one at a time, or the page leaks a blob per fill
             url = null;
             const file = files[0];

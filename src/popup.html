@@ -1,7 +1,8 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
+    <title>FormForge</title>
     <link rel="stylesheet" href="popup.css">
 </head>
 <body>
@@ -30,12 +31,26 @@
     <button id="fill" class="btn primary big">Fill this page</button>
 
     <div class="actions">
-        <button id="scan" class="btn">Dry run</button>
-        <button id="clear" class="btn subtle">Clear</button>
-        <select id="locale" aria-label="Language of the generated data"></select>
+        <button id="scan" class="btn"
+                title="List what would be filled, and which adapter claimed each control. Writes nothing.">Dry run
+        </button>
+        <button id="clear" class="btn subtle" title="Empty what FormForge filled">Clear</button>
+        <!-- Two letters need no caption beside them: "EN" reads as a language
+             where "English" read as a fourth button. The name is on the control
+             for anything that cannot see the shape of it. -->
+        <select id="locale" class="lang" aria-label="Language of the generated data"
+                title="Language of the generated data"></select>
     </div>
 
-    <div id="result" class="result" hidden></div>
+    <!-- Where the download button lands when Chrome has the model but not its weights: beside the
+         status that says so, not in another tab. -->
+    <div id="modelSlot"></div>
+
+    <!-- The first thing a new install sees, until there is a result to show instead. -->
+    <p id="hint" class="hint first" hidden>Open a page with a form, then press <b>Fill this page</b>. A card on the page
+        says what happened, and the result stays here.</p>
+
+    <div id="result" class="result" aria-live="polite" hidden></div>
 </section>
 
 <!-- -------------------------------------------------------- settings -->
@@ -58,15 +73,20 @@
         </button>
     </div>
 
+    <!-- The form is filled at once; this only bounds how long the model's later
+         answers are still written in. It used to be called patience, from the days
+         the fill waited, and read as a trade of speed against quality. -->
     <div class="field">
-        <label for="modelTimeout">Model patience</label>
+        <label for="modelTimeout">Model answers</label>
         <select id="modelTimeout">
-            <option value="0">Automatic — patient once, brisk after</option>
-            <option value="5">5 seconds</option>
-            <option value="15">15 seconds</option>
-            <option value="30">30 seconds</option>
+            <option value="0">Automatic</option>
+            <option value="5">Up to 5 seconds</option>
+            <option value="15">Up to 15 seconds</option>
+            <option value="30">Up to 30 seconds</option>
         </select>
     </div>
+    <p class="hint">The form is filled from the rules at once. This is how long the model's answers, arriving
+        afterwards, are still written in.</p>
 
     <div class="field">
         <label for="emailDomain">Email domain</label>
@@ -96,13 +116,13 @@
         <summary>Fallback API key <span class="opt-tag">optional</span></summary>
         <p class="hint">
             Used only when the on-device model cannot answer. The key is stored in this
-            browser profile and sent only to the provider you pick.
+            browser profile and sent only to the provider you pick. <b>On-device only</b> never touches the network.
         </p>
         <div class="field">
             <label for="backend">Backend</label>
             <select id="backend">
-                <option value="ondevice-first">On-device first, key as fallback</option>
-                <option value="ondevice-only">On-device only (no network, ever)</option>
+                <option value="ondevice-first">On-device, then the key</option>
+                <option value="ondevice-only">On-device only</option>
                 <option value="remote-only">Key only</option>
             </select>
         </div>
@@ -138,14 +158,21 @@
 <!-- Everything behind the last fill: what each field got and why, what the
      model was asked, what it said, and where the time went. -->
 <section class="pane" id="paneDebug" role="tabpanel" aria-labelledby="tabDebug" hidden>
-    <button id="checkModel" class="btn wide">Test the model setup</button>
+    <!-- The tools first: on a long trail the bottom of the pane is five screens
+         away, and the report is the thing this tab exists to hand over. The
+         report opens in a tab of its own, where it can be read, copied or saved
+         — a popup dies the moment a save dialog takes focus. -->
+    <div class="dbg-tools">
+        <button id="openReport" class="btn small primary"
+                title="Every kept fill in full, in a tab: read it, copy it, save it as text">Open report
+        </button>
+        <button id="checkModel" class="btn small"
+                title="A real round trip through the configured model, with its own error text">Test the model
+        </button>
+        <button id="clearLog" class="btn small subtle" title="Forget the kept fills">Clear</button>
+    </div>
     <div id="modelCheck"></div>
     <div id="debugBody"></div>
-    <!-- A run of fills is what shows a pattern; one screenshot is not. -->
-    <div class="dbg-tools">
-        <button id="saveReport" class="btn small">Save report</button>
-        <button id="clearLog" class="btn small">Clear</button>
-    </div>
 </section>
 
 <footer class="foot">

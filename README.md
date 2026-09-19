@@ -14,7 +14,7 @@ For QA engineers who fill the same create-form forty times a day.
 [![AI: on-device](https://img.shields.io/badge/AI-on--device-1f6f4f)](#-the-model-is-optional-and-never-in-the-way)
 [![License: MIT](https://img.shields.io/badge/license-MIT-1f6f4f)](LICENSE)
 
-<img src="docs/filled-form.png" alt="A form filled in one press: selects, a dependent dropdown, a phone country picker, a file upload — with a card in the corner reporting what it filled">
+<img src="docs/filled-form.png" alt="A form filled in one press: a name and a matching email, a country picked from the dropdown's own options, a date chosen in the calendar, a generated PNG attached and previewed, and a rich-text editor holding real markup — with a card in the corner reporting what came from where">
 
 </div>
 
@@ -55,8 +55,9 @@ FormForge drives each control the way a person does — then reads it back to se
   message under the field and obeyed.
 - **Says what went wrong.** A card in the corner reports how many fields were filled, where each value came from,
   and which ones were left. The detail lives in the popup's Debug tab, which is still there after the card has taken
-  itself off screen: every value and where it came from, the model's own prompts, and **Save report** — one text file
-  with the last fill in full and the timings of the fills around it, to attach to a ticket.
+  itself off screen: every value and where it came from, the model's own prompts, and **Open report** — the last
+  ten fills in full and the timings of the hundred around them, on a page you can read, copy, or save as one text
+  file to attach to a ticket.
 
 <div align="center">
 <img src="docs/demo.gif" alt="One press filling a form: a name and an email that belong to the same person, a country picked from the dropdown's own options, a date chosen in the calendar, a generated PNG previewed, and two fields the model answers a moment later">
@@ -69,7 +70,8 @@ Either take the packaged build from [**Releases**](https://github.com/vlad-artyo
 
 Open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked**, pick the folder.
 
-Chrome 128+. Nothing to build, nothing to sign up for. The ZIP is built by CI from the tag, holds the manifest,
+Chrome 128+, and Chrome 138+ for the on-device model — without it the rules still fill every recognised field.
+Nothing to build, nothing to sign up for. The ZIP is built by CI from the tag, holds the manifest,
 `src/` and `icons/` and nothing else, and is the same archive a store upload would get.
 
 ## 🖱 Use
@@ -102,6 +104,9 @@ For each field, the first step that answers wins:
 
 Everything derives from a seed, so a fill is reproducible: pin one in **Settings → Repeat data** to get the same
 person twice — what you want when you're reproducing a bug rather than finding one.
+
+Two locales, **EN** and **DE**, and each is a country rather than a translation: the date format, the postcode shape,
+the tax and bank identifiers and the reserved phone ranges all follow it.
 
 ## 🏎 Speed
 
@@ -146,18 +151,19 @@ as though it arrived slowly.
 
 ## 🔒 Privacy and permissions
 
-| Permission               | Why                                                                                                                    |
-|--------------------------|------------------------------------------------------------------------------------------------------------------------|
-| `activeTab`, `scripting` | The filler is injected **only** when you press Fill. It is not a declared content script and never runs as you browse. |
-| `storage`                | Settings, the last fill's trail, and an API key if you enter one. Local to this browser profile.                       |
-| `contextMenus`           | The right-click entries.                                                                                               |
-| `downloads`              | Only the **Save report** button in the Debug tab: one text file about your own fills.                                  |
-| `<all_urls>`             | A tester's form can be on any host, and the extension can't know which in advance.                                     |
+| Permission               | Why                                                                                                                                                              |
+|--------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `activeTab`, `scripting` | The filler is injected **only** on your action: opening the popup, Fill, a shortcut, the menu. It is not a declared content script and never runs as you browse. |
+| `storage`                | Settings, the last fill's trail, and an API key if you enter one. Local to this browser profile.                                                                 |
+| `contextMenus`           | The right-click entries.                                                                                                                                         |
+| `<all_urls>`             | A tester's form is on their own host, and forms are often split across origins — an embedded payment or booking frame is outside the tab's own.                  |
 
 Rules and the on-device model run entirely in your browser. Field labels reach a hosted provider only if you enter
 an API key, and then only the labels and limits of fields no rule could answer — never values already on the page.
-Uploaded files are generated in the page; nothing is fetched. Phone numbers come from ranges reserved for fiction (US
-`555-01xx`, DE `23125 xxx`) and card numbers are the `4111 11…` test family.
+Uploaded files are generated in the page; nothing is fetched. Phone numbers come only from ranges reserved for
+fiction — US `555-0100` to `555-0199`, and in Germany the Bundesnetzagentur's *Drama-Nummern*: `030 23125 xxx`,
+`040 66969 xxx`, `089 99998 xxx`, `0221 4710 xxx`, `069 90009 xxx`, or one of the two reserved mobile blocks — and
+card numbers are the `4111 11…` test family.
 
 ## 🧩 Extending it
 
@@ -213,15 +219,19 @@ src/
   uploads.js     generated files for <input type="file">
   hud.js         the on-page progress card
   content.js     discovery, planning, the fill loop, repair
-  background.js  service worker: the model, the injected file list, shortcuts, menus
+  background.js  service worker: the model, the injected file list, the record of each fill, shortcuts, menus
   popup.*        the toolbar popup
+  report.*       every kept fill, on a page you can read, copy or save
+  welcome.html   the one screen a fresh install opens
 ```
 
 ```bash
 npm install                 # Playwright and faker, dev only
 npm test                    # all four suites, in parallel
 npm run test:widgets        # just the widget layer (fast)
-npm run fixture             # serve test/ at :8099: demo-form.html to try by hand, primevue-form.html for the hard cases
+npm run fixture             # serve test/ at :8099: demo-form.html by hand, primevue-form.html for the hard cases, libraries-form.html for one select per library
+npm run screenshots         # the store pictures and the README's, at the size the store wants
+npm run typecheck           # the JSDoc and types/, read over the logic files — emits nothing
 npm run audit               # fill the fixture with the real extension and judge the page
 npm run audit -- --url URL  # the same against any page you can reach
 npm run release -- patch    # move the version on, in both files that carry it
@@ -241,8 +251,10 @@ git push origin main
 git tag v1.0.1 && git push origin v1.0.1
 ```
 
-`release` only touches the two files that carry the version, and refuses to go backwards or over a tag that
-already exists — the commit subject is this project's changelog, so it stays yours to write.
+`release` only touches the files that carry the version — `manifest.json`, `package.json` and the lockfile's own
+copy — and refuses to go backwards or over a tag that already exists. The commit subject is this project's
+changelog, so it stays yours to write; the [Releases](https://github.com/vlad-artyomov/formforge/releases) page
+collects them per version.
 
 The suites judge the **page**, not FormForge's own report: `test/complete.mjs` presses Fill once on a clean form and
 asks the page whether every required control now holds a value, and `tools/audit.mjs` watches the indicator, the

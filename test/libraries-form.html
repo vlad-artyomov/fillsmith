@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Nine dropdowns — FormForge library fixture</title>
+    <!--
+      One select per component library FormForge claims to drive, each in that
+      library's own markup: the class names, the ARIA and the place the popup is
+      rendered are taken from the real thing, because those three are the whole
+      of what `LIBS` in src/adapters.js matches on. Only the behaviour is a
+      stand-in, and only as far as a fill touches it — a trigger that opens, rows
+      that commit, and a model updated by real events alone, so a filler that
+      assigns a value without dispatching one is caught.
+
+      The README names these libraries. Nothing tested them: the PrimeVue fixture
+      covers PrimeVue, and the rest were nine selectors nobody had ever watched
+      match. A wrong one does not miss a control — it claims it and drives it
+      blind, which is worse.
+    -->
+    <style>
+        body {
+            font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 24px;
+            background: #f5f6f8;
+            color: #14171c;
+        }
+
+        h1 {
+            font-size: 20px;
+            margin: 0 0 4px;
+        }
+
+        .sub {
+            color: #667085;
+            margin: 0 0 20px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(300px, 1fr));
+            gap: 16px 24px;
+            max-width: 900px;
+        }
+
+        .field > label, .field > .lbl {
+            display: block;
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        /* Every trigger looks the same; only the class names differ, and those
+           are the library's own. */
+        .MuiSelect-select, .ant-select-selector, [class$="-control"], [data-radix-select-trigger],
+        #headlessui-listbox-button-1, .choices__inner, .select2-selection, .ts-control, .multiselect__tags {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 36px;
+            padding: 6px 10px;
+            border: 1px solid #ccd4e0;
+            border-radius: 6px;
+            background: #fff;
+            cursor: pointer;
+            font: inherit;
+            width: 100%;
+            box-sizing: border-box;
+            text-align: left;
+        }
+
+        .overlay {
+            position: absolute;
+            z-index: 50;
+            min-width: 220px;
+            padding: 4px 0;
+            border: 1px solid #ccd4e0;
+            border-radius: 6px;
+            background: #fff;
+            box-shadow: 0 8px 24px rgba(16, 24, 40, .16);
+            max-height: 240px;
+            overflow: auto;
+        }
+
+        .overlay [role="option"] {
+            padding: 6px 12px;
+            cursor: pointer;
+            list-style: none;
+        }
+
+        .overlay [role="option"]:hover {
+            background: #eef2f7;
+        }
+
+        ul.overlay, .overlay ul {
+            margin: 0;
+            padding-left: 0;
+        }
+
+        .placeholder {
+            color: #98a2b3;
+        }
+    </style>
+</head>
+<body>
+<h1>Nine dropdowns, nine libraries</h1>
+<p class="sub">Each in its own markup. The value a control commits lands in <code>window.__model</code>, and only
+    through events the page itself received.</p>
+
+<form id="form">
+    <div class="grid" id="grid"></div>
+</form>
+
+<script>
+    /* The lists. A country list because that is the one a rule has a candidate
+       for and a fill must therefore match rather than pick; the rest are plain. */
+    const COUNTRIES = ['Australia', 'Austria', 'Belgium', 'Canada', 'Denmark', 'France', 'Germany', 'Ireland',
+        'Italy', 'Netherlands', 'Norway', 'Poland', 'Spain', 'Sweden', 'Switzerland', 'United Kingdom',
+        'United States'];
+    const DEPARTMENTS = ['Engineering', 'Finance', 'Logistics', 'Marketing', 'Operations', 'Support'];
+
+    const model = {};
+    const opens = {};
+    window.__model = model;
+    window.__opens = opens;
+    window.__snapshot = () => Object.assign({}, model);
+
+    const el = (tag, cls, html) => {
+        const n = document.createElement(tag);
+        if (cls) n.className = cls;
+        if (html != null) n.innerHTML = html;
+        return n;
+    };
+
+    /* Every library is the same three moves in different clothes: a trigger that
+       opens a panel, rows that commit, and a label that then shows the value.
+       What differs — and all that FormForge matches on — is the markup, so each
+       spec brings its own. */
+    function mount(spec) {
+        const field = el('div', 'field');
+        field.id = 'field-' + spec.id;
+        const label = el(spec.labelTag || 'label', 'lbl', spec.label);
+        if (spec.labelFor) label.setAttribute('for', spec.labelFor);
+        if (spec.labelId) label.id = spec.labelId;
+        field.appendChild(label);
+        const root = spec.build(spec);
+        field.appendChild(root);
+        document.getElementById('grid').appendChild(field);
+
+        let panel = null;
+        const close = () => {
+            if (!panel) return;
+            if (spec.keepPanel) panel.style.display = 'none';
+            else panel.remove();
+            panel = null;
+            spec.expanded(root, false);
+        };
+        const open = () => {
+            if (panel) {
+                close();
+                return;
+            }
+            opens[spec.id] = (opens[spec.id] || 0) + 1;
+            panel = spec.panel(spec, (value) => {
+                model[spec.id] = value;
+                spec.show(root, value);
+                root.dispatchEvent(new Event('change', {bubbles: true}));
+                close();
+            });
+            if (!spec.keepPanel) document.body.appendChild(panel);
+            panel.style.display = '';
+            const r = root.getBoundingClientRect();
+            if (!spec.inRoot) {
+                panel.style.left = (r.left + scrollX) + 'px';
+                panel.style.top = (r.bottom + scrollY + 2) + 'px';
+                panel.style.minWidth = r.width + 'px';
+            }
+            spec.expanded(root, true);
+        };
+        // Libraries open on mousedown or on click; both reach a filler that sends the whole sequence.
+        (spec.trigger ? root.querySelector(spec.trigger) : root)
+            .addEventListener(spec.on || 'mousedown', (e) => {
+                if (e.target.tagName === 'INPUT' && spec.ignoreInput) return;
+                open();
+            });
+        document.addEventListener('mousedown', (e) => {
+            if (panel && !root.contains(e.target) && !panel.contains(e.target)) close();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') close();
+        });
+    }
+
+    const rows = (items, cls, tag, onPick, attrs) => items.map(text => {
+        const row = el(tag || 'li', cls);
+        row.setAttribute('role', 'option');
+        row.setAttribute('aria-selected', 'false');
+        for (const [k, v] of Object.entries(attrs || {})) row.setAttribute(k, v === true ? text : v);
+        row.textContent = text;
+        row.addEventListener('click', () => onPick(text));
+        return row;
+    });
+
+    const ariaExpanded = (sel) => (root, on) => {
+        const n = sel ? root.querySelector(sel) : root;
+        if (n) n.setAttribute('aria-expanded', String(on));
+    };
+
+    // ---- MUI (v5) -----------------------------------------------------------
+    mount({
+        id: 'mui', label: 'Country', labelId: 'lbl-mui', labelTag: 'span',
+        items: COUNTRIES,
+        build: (s) => {
+            const root = el('div', 'MuiInputBase-root MuiOutlinedInput-root MuiSelect-root');
+            root.innerHTML =
+                '<div class="MuiSelect-select MuiOutlinedInput-input" role="combobox" aria-expanded="false" ' +
+                'aria-haspopup="listbox" aria-labelledby="lbl-mui" tabindex="0"><span class="placeholder">Select…</span></div>' +
+                '<input class="MuiSelect-nativeInput" value="" aria-hidden="true" tabindex="-1">';
+            return root;
+        },
+        panel: (s, pick) => {
+            // MUI puts the paper inside a popover root; the paper is what the adapter names.
+            const paper = el('div', 'MuiPopover-paper MuiPaper-root overlay');
+            const list = el('ul', 'MuiList-root MuiMenu-list');
+            list.setAttribute('role', 'listbox');
+            rows(s.items, 'MuiButtonBase-root MuiMenuItem-root', 'li', pick).forEach(r => list.appendChild(r));
+            paper.appendChild(list);
+            return paper;
+        },
+        show: (root, v) => {
+            root.querySelector('.MuiSelect-select').textContent = v;
+            root.querySelector('.MuiSelect-nativeInput').value = v;
+        },
+        expanded: ariaExpanded('.MuiSelect-select')
+    });
+
+    // ---- Ant Design (v5) ----------------------------------------------------
+    mount({
+        id: 'antd', label: 'Department', labelId: 'lbl-antd', labelTag: 'span',
+        items: DEPARTMENTS,
+        build: () => {
+            const root = el('div', 'ant-select ant-select-single ant-select-show-arrow');
+            root.innerHTML =
+                '<div class="ant-select-selector"><span class="ant-select-selection-search">' +
+                '<input class="ant-select-selection-search-input" role="combobox" aria-expanded="false" ' +
+                'aria-haspopup="listbox" aria-labelledby="lbl-antd" readonly></span>' +
+                '<span class="ant-select-selection-placeholder">Please select</span></div>';
+            return root;
+        },
+        panel: (s, pick) => {
+            const drop = el('div', 'ant-select-dropdown overlay');
+            const list = el('div', 'rc-virtual-list-holder-inner');
+            list.setAttribute('role', 'listbox');
+            rows(s.items, 'ant-select-item ant-select-item-option', 'div', pick,
+                {'data-value': true}).forEach(r => {
+                const inner = el('div', 'ant-select-item-option-content', r.textContent);
+                r.textContent = '';
+                r.appendChild(inner);
+                list.appendChild(r);
+            });
+            drop.appendChild(list);
+            return drop;
+        },
+        show: (root, v) => {
+            const sel = root.querySelector('.ant-select-selector');
+            sel.querySelector('.ant-select-selection-placeholder')?.remove();
+            let item = sel.querySelector('.ant-select-selection-item');
+            if (!item) {
+                item = el('span', 'ant-select-selection-item');
+                sel.appendChild(item);
+            }
+            item.title = v;
+            item.textContent = v;
+        },
+        expanded: ariaExpanded('input'),
+        ignoreInput: false
+    });
+
+    // ---- react-select (v5, emotion class names) -----------------------------
+    mount({
+        id: 'react-select', label: 'Priority', labelId: 'lbl-rs', labelTag: 'span',
+        items: ['Low', 'Normal', 'High', 'Urgent'],
+        build: () => {
+            /* Emotion names end in the part: `css-b62m3t-container` wraps
+               `css-13cymwt-control`. The adapter anchors on those suffixes because
+               an application's own `page-container` matches anything looser. */
+            const root = el('div', 'css-b62m3t-container');
+            root.innerHTML =
+                '<div class="css-13cymwt-control"><div class="css-hlgwow">' +
+                '<div class="css-1jqq78o-placeholder placeholder">Select…</div></div>' +
+                '<div class="css-1wy0on6"><span class="css-1u9des2-indicatorSeparator"></span></div></div>' +
+                '<input id="react-select-3-input" role="combobox" aria-expanded="false" aria-haspopup="listbox" ' +
+                'aria-labelledby="lbl-rs" readonly style="opacity:0;width:1px">';
+            return root;
+        },
+        panel: (s, pick) => {
+            const menu = el('div', 'css-1nmdiq5-menu overlay');
+            const list = el('div', 'css-1n6sfyn-MenuList');
+            list.setAttribute('role', 'listbox');
+            rows(s.items, 'css-d7l1ni-option', 'div', pick).forEach(r => list.appendChild(r));
+            menu.appendChild(list);
+            return menu;
+        },
+        show: (root, v) => {
+            const box = root.querySelector('.css-hlgwow');
+            box.innerHTML = '';
+            box.appendChild(el('div', 'css-1dimb5e-singleValue', v));
+        },
+        expanded: ariaExpanded('input')
+    });
+
+    // ---- Radix ---------------------------------------------------------------
+    mount({
+        id: 'radix', label: 'Region', labelId: 'lbl-radix', labelTag: 'span',
+        items: ['North', 'South', 'East', 'West'],
+        build: () => {
+            const root = el('button');
+            root.type = 'button';
+            root.setAttribute('data-radix-select-trigger', '');
+            root.setAttribute('role', 'combobox');
+            root.setAttribute('aria-expanded', 'false');
+            root.setAttribute('aria-haspopup', 'listbox');
+            root.setAttribute('aria-labelledby', 'lbl-radix');
+            root.setAttribute('data-state', 'closed');
+            root.innerHTML = '<span data-radix-select-value class="placeholder">Select…</span>';
+            return root;
+        },
+        panel: (s, pick) => {
+            const wrap = el('div', 'overlay');
+            wrap.setAttribute('data-radix-popper-content-wrapper', '');
+            const content = el('div');
+            content.setAttribute('data-radix-select-content', '');
+            content.setAttribute('role', 'listbox');
+            rows(s.items, '', 'div', pick, {'data-radix-collection-item': ''}).forEach(r => content.appendChild(r));
+            wrap.appendChild(content);
+            return wrap;
+        },
+        show: (root, v) => {
+            const span = root.querySelector('[data-radix-select-value]');
+            span.className = '';
+            span.textContent = v;
+        },
+        expanded: (root, on) => {
+            root.setAttribute('aria-expanded', String(on));
+            root.setAttribute('data-state', on ? 'open' : 'closed');
+        },
+        on: 'click'
+    });
+
+    // ---- Headless UI ---------------------------------------------------------
+    mount({
+        id: 'headless', label: 'Environment', labelId: 'lbl-hl', labelTag: 'span',
+        items: ['Development', 'Staging', 'Production'],
+        build: () => {
+            const root = el('button');
+            root.type = 'button';
+            root.id = 'headlessui-listbox-button-1';
+            root.setAttribute('aria-haspopup', 'listbox');
+            root.setAttribute('aria-expanded', 'false');
+            root.setAttribute('aria-labelledby', 'lbl-hl');
+            root.innerHTML = '<span class="placeholder">Select…</span>';
+            return root;
+        },
+        panel: (s, pick) => {
+            const list = el('ul', 'overlay');
+            list.id = 'headlessui-listbox-options-2';
+            list.setAttribute('role', 'listbox');
+            list.setAttribute('aria-orientation', 'vertical');
+            rows(s.items, '', 'li', pick, {id: 'headlessui-listbox-option-x'}).forEach(r => list.appendChild(r));
+            return list;
+        },
+        show: (root, v) => (root.innerHTML = `<span>${v}</span>`),
+        expanded: (root, on) => {
+            root.setAttribute('aria-expanded', String(on));
+            if (on) root.setAttribute('aria-controls', 'headlessui-listbox-options-2');
+            else root.removeAttribute('aria-controls');
+        },
+        on: 'click'
+    });
+
+    // ---- Choices.js ----------------------------------------------------------
+    /* Its panel is a child of the control rather than teleported, and it is
+       shown by a class rather than by being added to the page. */
+    mount({
+        id: 'choices', label: 'Contract type', labelFor: 'choices-native',
+        items: ['Fixed term', 'Permanent', 'Seasonal'],
+        inRoot: true, keepPanel: true, trigger: '.choices__inner',
+        build: (s) => {
+            const root = el('div', 'choices');
+            root.dataset.type = 'select-one';
+            root.innerHTML =
+                '<div class="choices__inner"><div class="choices__list choices__list--single">' +
+                '<div class="choices__item placeholder">Select…</div></div></div>' +
+                '<div class="choices__list choices__list--dropdown" style="display:none">' +
+                '<div class="choices__list" role="listbox"></div></div>' +
+                '<select id="choices-native" hidden></select>';
+            s.mounted = root;
+            return root;
+        },
+        panel: (s, pick) => {
+            const drop = s.mounted.querySelector('.choices__list--dropdown');
+            const list = drop.querySelector('[role="listbox"]');
+            list.innerHTML = '';
+            rows(s.items, 'choices__item choices__item--choice choices__item--selectable', 'div', pick,
+                {'data-value': true}).forEach(r => list.appendChild(r));
+            drop.classList.add('is-active');
+            return drop;
+        },
+        show: (root, v) => {
+            const item = root.querySelector('.choices__list--single .choices__item');
+            item.className = 'choices__item';
+            item.textContent = v;
+            root.querySelector('select').innerHTML = `<option selected>${v}</option>`;
+        },
+        expanded: (root, on) => root.classList.toggle('is-open', on)
+    });
+
+    // ---- Select2 -------------------------------------------------------------
+    /* Its dropdown is teleported inside a *second* `.select2-container`, which is
+       the shape that makes "the outermost match wins" worth checking. */
+    mount({
+        id: 'select2', label: 'Billing cycle', labelId: 'lbl-s2', labelTag: 'span',
+        items: ['Monthly', 'Quarterly', 'Annual'],
+        build: () => {
+            const root = el('span', 'select2 select2-container select2-container--default');
+            root.innerHTML =
+                '<span class="selection"><span class="select2-selection select2-selection--single" ' +
+                'role="combobox" aria-expanded="false" aria-haspopup="true" aria-labelledby="lbl-s2" tabindex="0">' +
+                '<span class="select2-selection__rendered placeholder">Select…</span>' +
+                '<span class="select2-selection__arrow"></span></span></span>';
+            return root;
+        },
+        panel: (s, pick) => {
+            const wrap = el('span', 'select2-container select2-container--open overlay');
+            const drop = el('span', 'select2-dropdown select2-dropdown--below');
+            const results = el('span', 'select2-results');
+            const list = el('ul', 'select2-results__options');
+            list.setAttribute('role', 'listbox');
+            rows(s.items, 'select2-results__option', 'li', pick).forEach(r => list.appendChild(r));
+            results.appendChild(list);
+            drop.appendChild(results);
+            wrap.appendChild(drop);
+            return wrap;
+        },
+        show: (root, v) => {
+            const r = root.querySelector('.select2-selection__rendered');
+            r.className = 'select2-selection__rendered';
+            r.title = v;
+            r.textContent = v;
+        },
+        expanded: ariaExpanded('.select2-selection')
+    });
+
+    // ---- Tom Select ----------------------------------------------------------
+    mount({
+        id: 'tom-select', label: 'Shipping method', labelId: 'lbl-ts', labelTag: 'span',
+        items: ['Courier', 'Freight', 'Pickup'],
+        inRoot: true, keepPanel: true, trigger: '.ts-control',
+        build: (s) => {
+            const root = el('div', 'ts-wrapper single');
+            root.innerHTML =
+                '<div class="ts-control"><div class="placeholder">Select…</div>' +
+                '<input role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-labelledby="lbl-ts" readonly></div>' +
+                '<div class="ts-dropdown single" style="display:none">' +
+                '<div role="listbox" class="ts-dropdown-content"></div></div>';
+            s.mounted = root;
+            return root;
+        },
+        panel: (s, pick) => {
+            const drop = s.mounted.querySelector('.ts-dropdown');
+            const list = drop.querySelector('.ts-dropdown-content');
+            list.innerHTML = '';
+            rows(s.items, 'option', 'div', pick, {'data-value': true}).forEach(r => list.appendChild(r));
+            return drop;
+        },
+        show: (root, v) => {
+            const box = root.querySelector('.ts-control');
+            box.querySelector('.placeholder, .item')?.remove();
+            const item = el('div', 'item', v);
+            item.dataset.value = v;
+            box.insertBefore(item, box.firstChild);
+        },
+        expanded: ariaExpanded('input')
+    });
+
+    // ---- vue-multiselect -----------------------------------------------------
+    mount({
+        id: 'vue-multiselect', label: 'Warehouse', labelId: 'lbl-vm', labelTag: 'span',
+        items: ['Central', 'North depot', 'South depot', 'Overflow'],
+        inRoot: true, keepPanel: true,
+        build: (s) => {
+            const root = el('div', 'multiselect');
+            root.setAttribute('role', 'combobox');
+            root.setAttribute('aria-expanded', 'false');
+            root.setAttribute('aria-labelledby', 'lbl-vm');
+            root.innerHTML =
+                '<div class="multiselect__select"></div>' +
+                '<div class="multiselect__tags"><span class="multiselect__placeholder placeholder">Select…</span>' +
+                '<input class="multiselect__input" style="width:1px;opacity:0" readonly></div>' +
+                '<div class="multiselect__content-wrapper" style="display:none">' +
+                '<ul class="multiselect__content" role="listbox"></ul></div>';
+            s.mounted = root;
+            return root;
+        },
+        panel: (s, pick) => {
+            const wrap = s.mounted.querySelector('.multiselect__content-wrapper');
+            const list = wrap.querySelector('.multiselect__content');
+            list.innerHTML = '';
+            for (const row of rows(s.items, 'multiselect__option', 'span', pick)) {
+                const li = el('li', 'multiselect__element');
+                li.appendChild(row);
+                list.appendChild(li);
+            }
+            return wrap;
+        },
+        show: (root, v) => {
+            const tags = root.querySelector('.multiselect__tags');
+            tags.querySelector('.multiselect__placeholder, .multiselect__single')?.remove();
+            tags.insertBefore(el('span', 'multiselect__single', v), tags.firstChild);
+        },
+        expanded: ariaExpanded()
+    });
+
+    /* A plain text field, so the page is a form rather than a row of dropdowns
+       and the fill has something to write before it reaches them. */
+    const plain = el('div', 'field');
+    plain.innerHTML = '<label for="contact">Contact person</label>' +
+        '<input id="contact" name="contactPerson" type="text" style="width:100%;padding:7px 10px;' +
+        'border:1px solid #ccd4e0;border-radius:6px;font:inherit;box-sizing:border-box">';
+    document.getElementById('grid').appendChild(plain);
+    document.getElementById('contact').addEventListener('input', (e) => (model.contact = e.target.value));
+</script>
+</body>
+</html>

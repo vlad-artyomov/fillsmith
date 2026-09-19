@@ -84,7 +84,7 @@ async function keptAlive(promise) {
 const SYSTEM_PROMPT = [
     'You invent realistic test data for QA engineers filling forms on their own staging sites.',
     'Given form fields, return one believable value each. Data only, never commentary.',
-    'Match the persona given (same person, company, country) and the page language.',
+    'Match the persona given. Write values in the language the request names, not the labels\' own.',
     'Infer from the label: "Project code" -> "PRJ-2481", not a name.',
     'Obey stated limits: maxLength, min, max, pattern. If options are listed, copy one verbatim.',
     'HTML (<p>, <strong>, <em>, <ul><li>) only where a field says html.',
@@ -96,25 +96,25 @@ const SYSTEM_PROMPT = [
  * back, or a refusal. Keep in step with LOCALES in generator.js. */
 const LANGUAGES = ['en', 'de'];
 
-const RESPONSE_SCHEMA = {
-    type: 'object',
-    properties: {
-        values: {
-            type: 'array',
-            items: {
-                type: 'object',
-                properties: {id: {type: 'integer'}, value: {type: 'string'}},
-                required: ['id', 'value']
-            }
-        }
-    },
-    required: ['values']
-};
-
-/* The schema constrains the decoder without being spelled out to the model:
- * on a small on-device model the prompt length is most of the latency, and the
- * shape is already stated in the last line of every prompt. */
-const CONSTRAIN = {responseConstraint: RESPONSE_SCHEMA, omitResponseConstraintInput: true};
+/* One property per field id, every one of them required. The schema is built
+ * per batch because the ids differ, and it is what makes a reply complete: a
+ * permissive one let the decoder close the object after a single entry, and the
+ * other eleven fields of a batch fell through to the filler unanswered.
+ *
+ * It constrains the decoder without being spelled out to the model — on a small
+ * on-device model the prompt length is most of the latency, and the last line of
+ * every prompt already states the shape. A model too old to take the schema
+ * throws, and askBatch asks again without it. */
+function constrain(fields) {
+    const properties = {};
+    for (const f of fields) properties[String(f.id)] = {type: 'string'};
+    return {
+        responseConstraint: {
+            type: 'object', properties, required: Object.keys(properties), additionalProperties: false
+        },
+        omitResponseConstraintInput: true
+    };
+}
 
 const BATCH = 12;
 
@@ -124,17 +124,28 @@ function buildUserPrompt(persona, pageTitle, fields, context, examples) {
     // One context line, most specific first: a dialog's title beats the breadcrumb beats the page title.
     const where = c.dialog || c.heading || c.breadcrumb || c.title || pageTitle;
     if (where) lines.push(`Form: ${where}`);
-    if (examples && examples.length) {
-        lines.push(`Similar existing values: ${examples.slice(0, 3).map(e => `"${e}"`).join(', ')}`);
-    }
+    /* Rows the page already holds say more about a value's shape than any
+     * instruction can — but only when they have a shape. The first cells of a
+     * grid are often "1" and "2", which cost a line and teach nothing. */
+    const like = (examples || []).filter(e => /[\p{L}]{3}/u.test(String(e))).slice(0, 3);
+    if (like.length) lines.push(`Like: ${like.map(e => `"${e}"`).join(', ')}`);
     lines.push(`Persona: ${persona.fullName}, ${persona.company}, ${persona.city} ${persona.country}`);
+    /* Named outright, because the labels are the wrong thing to infer it from: a
+     * German application is often labelled in English, and a tester who picked
+     * DE gets German from every rule and wants German from the model too. Said
+     * once, in the closing line: on a small on-device model every repetition is
+     * paid for in latency, on every batch. */
+    const language = persona.language || '';
     lines.push('');
     for (const f of fields) {
-        const bits = [`${f.id}`, f.type];
+        /* Only the unusual type is named. "text" was on almost every line and
+         * told the model nothing it could not see from the label. Neither did
+         * "required": every field in the batch is being answered anyway. */
+        const bits = [`${f.id}`];
+        if (f.type && f.type !== 'text') bits.push(f.type);
         const label = String(f.label || '').split('|')[0].replace(/\s+/g, ' ').trim().slice(0, 60);
         bits.push(`"${label}"`);
         if (f.section) bits.push(`in "${String(f.section).slice(0, 40)}"`);
-        if (f.required) bits.push('required');
         if (f.maxLength) bits.push(`max${f.maxLength}`);
         if (f.min != null || f.max != null) bits.push(`${f.min ?? ''}..${f.max ?? ''}`);
         if (f.pattern) bits.push(`pattern ${String(f.pattern).slice(0, 30)}`);
@@ -148,17 +159,29 @@ function buildUserPrompt(persona, pageTitle, fields, context, examples) {
         }
         lines.push(bits.join(' '));
     }
-    /* One entry per field in the skeleton, never a single {"id":N}. The schema
-     * is deliberately not spelled out to the model (omitResponseConstraintInput
-     * keeps the prompt short), so this line is the only shape it ever sees — and
-     * it copies that shape literally. A one-entry example got exactly one value
-     * back for a batch of twelve, and the other eleven fields fell through to
-     * the filler with "the model had no answer for it". */
+    /* One entry per field, keyed by id. The schema is deliberately not spelled
+     * out to the model (omitResponseConstraintInput keeps the prompt short), so
+     * this line is the only shape it ever sees — and it copies that shape
+     * literally, which is why every field appears in it: a one-entry example got
+     * exactly one value back for a batch of twelve. A map spends eight characters
+     * on a field where a list of {"id":N,"value":""} objects spent twenty, and on
+     * a batch of twelve that skeleton was a third of the whole prompt.
+     *
+     * The ids are listed once, here. They are on every field line above and in
+     * this skeleton; a third listing in prose was the same list a third time. */
     const ids = fields.map(f => f.id);
-    lines.push('', `Answer all ${ids.length} field${ids.length === 1 ? '' : 's'}, one entry each, in this order: ${ids.join(', ')}`);
-    lines.push(`JSON: {"values":[${ids.map(id => `{"id":${id},"value":"..."}`).join(',')}]}`);
+    lines.push('', `Answer all ${ids.length} field${ids.length === 1 ? '' : 's'}${language ? ' in ' + language : ''}, one each:`);
+    lines.push(`{${ids.map(id => `"${id}":""`).join(',')}}`);
     return lines.join('\n');
 }
+
+/* The one field the self-checks ask about, and who they ask as. A round trip
+ * through the same prompt shape and the same parser a fill uses is the only
+ * answer to "is the model working" worth having. */
+const PROBE_FIELD = [{id: 0, type: 'text', label: 'City', required: true, maxLength: 40}];
+const PROBE_PERSONA = {
+    fullName: 'Test Person', company: 'Test GmbH', city: 'Köln', country: 'Deutschland', language: 'German'
+};
 
 function chunk(arr, n) {
     const out = [];
@@ -193,10 +216,21 @@ function parseValues(text, asked, tally) {
         }
     }
     if (!data) return out;
-    const list = Array.isArray(data) ? data : data.values;
+    /* Two shapes arrive. The map keyed by id is what the prompt asks for and what
+     * the grammar enforces; the list survives because a hosted model, which gets
+     * no grammar, sometimes sends one, and because replies recorded before the
+     * map still sit in the debug log. */
+    let list = Array.isArray(data) ? data : data.values;
+    if (!Array.isArray(list) && data && typeof data === 'object') {
+        list = Object.entries(data).map(([id, value]) => ({id, value}));
+    }
     if (!Array.isArray(list)) return out;
 
-    const items = list.filter(x => x && typeof x.value === 'string');
+    /* A value that says "no value" is not an answer: written, "N/A" in a city
+     * box is a form that looks filled and validates nothing. The field falls
+     * through to the rules or the filler instead. */
+    const JUNK = /^(n\/?a|none|null|nil|undefined|unknown|test|tbd|todo|string|example|lorem ipsum|-+|\.{2,}|\?+)$/i;
+    const items = list.filter(x => x && typeof x.value === 'string' && !JUNK.test(x.value.trim()));
     const ids = (asked || []).map(f => String(f.id));
     const known = new Set(ids);
     const clean = (v) => v.trim().slice(0, 2000);
@@ -313,19 +347,13 @@ async function nanoSessionGet({allowDownload = false} = {}) {
     }
 }
 
-// The first create() after a browser start brings the model into memory; begin it before anyone presses Fill.
-function warmOnStart() {
-    nanoSessionGet({allowDownload: false}).catch(ignore);
-}
-
-chrome.runtime.onInstalled.addListener(warmOnStart);
-chrome.runtime.onStartup.addListener(warmOnStart);
-/* Not on every start of this worker. Chrome wakes it for every message, and
- * bringing a multi-gigabyte model into memory alongside whatever woke it made the
- * browser itself feel slow — including the moment the indicator says "Starting
- * FormForge". The warm-up belongs where somebody is about to fill: the popup
- * opening and the fill's own probe both ask for it, and a session that is already
- * up costs nothing to ask for again. */
+/* No warm-up on start — not of this worker, and not of the browser. Chrome wakes
+ * the worker for every message, and bringing a multi-gigabyte model into memory
+ * alongside whatever woke it made the browser itself feel slow; on `onStartup`
+ * it did the same at every launch, on machines that were not going to see a
+ * form that day. The warm-up belongs where somebody is about to fill: the popup
+ * opening and the fill's own probe both ask for it, and a session that is
+ * already up costs nothing to ask for again. */
 
 // A session remembers every prompt; each batch runs on a clone that starts from the system prompt alone.
 async function statelessSession(session) {
@@ -337,13 +365,27 @@ async function statelessSession(session) {
     }
 }
 
-// The last exchange with the model, for the popup's Debug tab.
+/* The most recent exchange with the model, for the popup's Debug tab. Every
+ * request writes its own record and hands it back with its answer; this only
+ * points at the latest. Shared, two frames asking at once wrote their batches
+ * into whichever record was created last. */
 let lastExchange = null;
 
 const PROMPT_HEADROOM_MS = 2500;
 
+/* Back to the frame that asked, never to the tab. Every frame runs the filler
+ * and keys the model's answers by its own field numbers, so a batch broadcast
+ * to the tab lands in every frame that is filling: an iframe's form took the
+ * top form's answers under the same numbers, and its own batch, arriving
+ * later, found those fields already written. */
+function tellFrame(tabId, frameId, msg) {
+    if (tabId == null) return;
+    const where = frameId != null ? {frameId} : {};
+    chrome.tabs.sendMessage(tabId, msg, where, () => void chrome.runtime.lastError);
+}
+
 async function generateOnDevice(persona, pageTitle, fields, context, examples, opts) {
-    const {sessionWaitMs = 0, tabId = null, fieldCount = 0, budgetMs = 0} = opts || {};
+    const {sessionWaitMs = 0, tabId = null, frameId = null, fieldCount = 0, budgetMs = 0, exchange} = opts || {};
     const tSession = Date.now();
     let session = nanoSession;
     if (session) keepAwake(MODEL_HOLD_MS);   // a session in use is one worth keeping
@@ -355,22 +397,21 @@ async function generateOnDevice(persona, pageTitle, fields, context, examples, o
             new Promise(r => setTimeout(() => r(null), Math.max(1200, sessionWaitMs || PROMPT_HEADROOM_MS)))
         ]);
         wanted.catch(ignore);
-        if (session && tabId != null) {
-            chrome.tabs.sendMessage(tabId, {
-                    kind: 'model-stage', stage: 'asking',
-                    text: `Asking the model about ${fieldCount} field${fieldCount === 1 ? '' : 's'}`
-                },
-                () => void chrome.runtime.lastError);
+        if (session) {
+            tellFrame(tabId, frameId, {
+                kind: 'model-stage', stage: 'asking',
+                text: `Asking the model about ${fieldCount} field${fieldCount === 1 ? '' : 's'}`
+            });
         }
     }
-    lastExchange.sessionMs = Date.now() - tSession;
+    exchange.sessionMs = Date.now() - tSession;
     if (!session) {
         // "Still loading" and "no model" call for opposite advice.
         const warming = nanoBuilding || !!nanoPending;
-        lastExchange.warming = warming;
-        lastExchange.warmingMs = warming ? Date.now() - nanoBuildStarted : 0;
-        lastExchange.note = warming
-            ? `the model is still loading (${Math.round(lastExchange.warmingMs / 1000)}s so far) — it keeps loading after this fill, and the next one has it`
+        exchange.warming = warming;
+        exchange.warmingMs = warming ? Date.now() - nanoBuildStarted : 0;
+        exchange.note = warming
+            ? `the model is still loading (${Math.round(exchange.warmingMs / 1000)}s so far) — it keeps loading after this fill, and the next one has it`
             : 'no on-device session available';
         return null;
     }
@@ -389,14 +430,14 @@ async function generateOnDevice(persona, pageTitle, fields, context, examples, o
      * working at all. */
     const send = tabId == null ? null : (values) => {
         if (!values || !Object.keys(values).length) return;
-        chrome.tabs.sendMessage(tabId, {kind: 'model-batch', via: 'on-device', values},
-            () => void chrome.runtime.lastError);
+        tellFrame(tabId, frameId, {kind: 'model-batch', via: 'on-device', values});
     };
-    const results = await Promise.all(groups.map(g => askBatch(session, persona, pageTitle, g, context, examples, budgetMs, send)));
+    const results = await Promise.all(groups.map(g =>
+        askBatch(session, persona, pageTitle, g, context, examples, budgetMs, send, exchange)));
     return Object.assign({}, ...results);
 }
 
-async function askBatch(session, persona, pageTitle, group, context, examples, budgetMs, onValues) {
+async function askBatch(session, persona, pageTitle, group, context, examples, budgetMs, onValues, exchange) {
     const prompt = buildUserPrompt(persona, pageTitle, group, context, examples);
     const t0 = Date.now();
     const {s: turn, temporary} = await statelessSession(session);
@@ -410,13 +451,13 @@ async function askBatch(session, persona, pageTitle, group, context, examples, b
     let text = '';
     try {
         try {
-            text = await turn.prompt(prompt, withSignal(CONSTRAIN));
+            text = await turn.prompt(prompt, withSignal(constrain(group)));
         } catch (err) {
             if (err && err.name === 'AbortError') throw err;
             text = await turn.prompt(prompt, withSignal({}));
         }
     } catch (err) {
-        lastExchange.batches.push({prompt, error: String(err && err.message || err), ms: Date.now() - t0});
+        exchange.batches.push({prompt, error: String(err && err.message || err), ms: Date.now() - t0});
         return {};
     } finally {
         if (temporary) {
@@ -429,7 +470,7 @@ async function askBatch(session, persona, pageTitle, group, context, examples, b
     const tally = {};
     const parsed = parseValues(text, group, tally);
     if (onValues) onValues(parsed);
-    lastExchange.batches.push({
+    exchange.batches.push({
         prompt, reply: String(text || '').slice(0, 4000),
         answered: Object.keys(parsed).length, asked: group.length, ms: Date.now() - t0,
         ...tally
@@ -553,75 +594,85 @@ async function remoteCall(cfg, group, prompt) {
     return out;
 }
 
-async function generateRemote(cfg, persona, pageTitle, fields, context, examples) {
+/* Batches go out together and each is handed to the fill as it lands, exactly
+ * as the on-device path does. They used to run one after another and reach the
+ * fill only with the last one, so with a key configured a form of thirty fields
+ * sat on filler values for the sum of the round trips rather than the longest. */
+async function generateRemote(cfg, persona, pageTitle, fields, context, examples, exchange, onValues) {
     if (!PROVIDERS[cfg.provider]) return {values: {}, error: `unknown provider "${cfg.provider}"`};
     const values = {};
     let error = null;
-    for (const group of chunk(fields, BATCH * 2)) {
+    await Promise.all(chunk(fields, BATCH * 2).map(async (group) => {
         const prompt = buildUserPrompt(persona, pageTitle, group, context, examples);
         const r = await remoteCall(cfg, group, prompt);
         if (r.error) {
             error = error || r.error;
-            lastExchange.batches.push({prompt, error: r.error, ms: r.ms});
-            continue;
+            exchange.batches.push({prompt, error: r.error, ms: r.ms});
+            return;
         }
-        lastExchange.batches.push({
+        exchange.batches.push({
             prompt, reply: String(r.text).slice(0, 4000),
             answered: Object.keys(r.parsed).length, asked: group.length, ms: r.ms
         });
         Object.assign(values, r.parsed);
-    }
+        if (onValues && Object.keys(r.parsed).length) onValues(r.parsed);
+    }));
     return {values, error: Object.keys(values).length ? null : error};
 }
 
 // ------------------------------------------------------------------ routing ----
-async function generate(payload, tabId) {
+async function generate(payload, tabId, frameId) {
     const {persona, pageTitle, fields, context, examples, sessionWaitMs} = payload;
     const cfg = await chrome.storage.local.get(['provider', 'apiKey', 'model', 'backend']);
     const backend = cfg.backend || 'ondevice-first';
-    lastExchange = {at: Date.now(), backend, asked: fields.length, context, examples, batches: []};
+    const exchange = {at: Date.now(), backend, asked: fields.length, context, examples, batches: []};
+    lastExchange = exchange;
 
     if (backend !== 'remote-only') {
         const local = await generateOnDevice(persona, pageTitle, fields, context, examples, {
             sessionWaitMs,
             tabId,
+            frameId,
             fieldCount: fields.length,
-            budgetMs: payload.budgetMs || 0
+            budgetMs: payload.budgetMs || 0,
+            exchange
         });
-        if (local && Object.keys(local).length) return {ok: true, values: local, via: 'on-device', debug: lastExchange};
+        if (local && Object.keys(local).length) return {ok: true, values: local, via: 'on-device', debug: exchange};
         if (backend === 'ondevice-only') return {
             ok: true,
             values: {},
             via: 'none',
-            warming: !!lastExchange.warming,
-            warmingMs: lastExchange.warmingMs || 0,
-            debug: lastExchange
+            warming: !!exchange.warming,
+            warmingMs: exchange.warmingMs || 0,
+            debug: exchange
         };
     }
     if (cfg.apiKey && cfg.provider) {
-        const remote = await generateRemote(cfg, persona, pageTitle, fields, context, examples);
+        const send = (values) => tellFrame(tabId, frameId, {kind: 'model-batch', via: cfg.provider, values});
+        const remote = await generateRemote(cfg, persona, pageTitle, fields, context, examples, exchange, send);
         return {
             ok: true,
             values: remote.values,
             via: cfg.provider,
             error: remote.error || undefined,
-            debug: lastExchange
+            debug: exchange
         };
     }
     return {
         ok: true,
         values: {},
         via: 'none',
-        warming: !!lastExchange.warming,
-        warmingMs: lastExchange.warmingMs || 0,
-        debug: lastExchange
+        warming: !!exchange.warming,
+        warmingMs: exchange.warmingMs || 0,
+        debug: exchange
     };
 }
 
 /* "Is the model ready?" answered with a real round trip through the same
  * prompt shape and parser a fill uses. The verdict is whether a usable value
  * came back, never whether it matched a magic word. */
-async function nanoCheck(onStage = ignore) {
+async function nanoCheck(onStage = (/** @type {string} */ _stage) => {
+}) {
     const out = {at: Date.now()};
     try {
         out.availability = await nanoStatus();
@@ -642,14 +693,12 @@ async function nanoCheck(onStage = ignore) {
         out.inputUsage = session.contextUsage ?? session.inputUsage;
         out.inputQuota = session.contextWindow ?? session.inputQuota;
 
-        const probeField = [{id: 0, type: 'text', label: 'City', required: true, maxLength: 40}];
-        const probePrompt = buildUserPrompt(
-            {fullName: 'Test Person', company: 'Test GmbH', city: 'Köln', country: 'Deutschland'},
-            'FormForge self-check', probeField, {dialog: 'FormForge self-check'}, []);
+        const probePrompt = buildUserPrompt(PROBE_PERSONA, 'FormForge self-check', PROBE_FIELD,
+            {dialog: 'FormForge self-check'}, []);
         const {s: turn, temporary} = await statelessSession(session);
         onStage('waiting for the on-device reply');
         const t0 = Date.now();
-        const reply = await turn.prompt(probePrompt, CONSTRAIN);
+        const reply = await turn.prompt(probePrompt, constrain(PROBE_FIELD));
         out.replyMs = Date.now() - t0;
         out.reply = String(reply || '').slice(0, 200);
         if (temporary) {
@@ -659,7 +708,7 @@ async function nanoCheck(onStage = ignore) {
             }
         }
 
-        out.value = parseValues(out.reply, probeField)['0'];
+        out.value = parseValues(out.reply, PROBE_FIELD)['0'];
         out.ok = typeof out.value === 'string' && out.value.trim() !== '';
         if (!out.ok) out.note = 'replied, but nothing usable for the field asked about';
         else if (out.replyMs > 3000) out.note = 'answering, but slowly — expect multi-second fills';
@@ -679,13 +728,20 @@ async function injectFiller(tabId) {
  * embedded form. Every frame gets the filler, but a broadcast to the tab
  * delivers back exactly one answer — whichever frame replied first. A hidden
  * 0x0 tag-manager frame wins that race often enough to report "cleared 0
- * fields" over a form that just lost forty. Ask each frame by id instead. */
+ * fields" over a form that just lost forty. Ask each frame by id instead.
+ *
+ * Which frames are listening is settled by asking them, not by a flag in the
+ * page's world: after the extension updates or is reloaded, the old content
+ * script's context is invalidated but the variable it set is still there, and a
+ * frame that can no longer answer anything read as ready for work. */
 async function liveFrames(tabId) {
-    const got = await chrome.scripting.executeScript({
-        target: {tabId, allFrames: true},
-        func: () => !!globalThis.__formforgeListening
-    });
-    return got.filter(r => r && r.result).map(r => r.frameId);
+    const seen = await chrome.scripting.executeScript({target: {tabId, allFrames: true}, func: () => 1});
+    const ids = seen.map(r => r.frameId);
+    const alive = await Promise.all(ids.map(frameId =>
+        chrome.tabs.sendMessage(tabId, {kind: 'ping'}, {frameId})
+            .then(r => (r && r.ok ? frameId : null))
+            .catch(() => null)));
+    return alive.filter(id => id != null);
 }
 
 /* The frame that did the most work is the one the tester is looking at, so its
@@ -700,6 +756,7 @@ function mergeFrames(answers) {
     for (const r of busy) {
         if (r === main) continue;
         out.count += r.count || 0;
+        out.fieldCount = (out.fieldCount || 0) + (r.fieldCount || 0);
         out.aiUsed = (out.aiUsed || 0) + (r.aiUsed || 0);
         for (const k of ['filled', 'skipped', 'fields', 'hidden']) {
             if (Array.isArray(r[k])) out[k] = (out[k] || []).concat(r[k]);
@@ -720,7 +777,74 @@ async function askPage(tabId, msg) {
     if (!ids.length) return {ok: false, error: 'could not inject'};
     const answers = await Promise.all(ids.map(frameId =>
         chrome.tabs.sendMessage(tabId, msg, {frameId}).catch(() => null)));   // a frame can go away mid-flight
-    return mergeFrames(answers);
+    const merged = mergeFrames(answers);
+    if (msg && msg.kind === 'fill' && merged && merged.persona) await remember(merged);
+    return merged;
+}
+
+/* What a fill was, kept for the Debug tab and the report: the last ten in full
+ * and the last hundred in outline. Written here, once, from the answer the
+ * frames were added into — each frame used to write its own, and a
+ * read-modify-write each meant two frames finishing together lost one. */
+const FILLS_KEPT = 10;
+const LOG_KEPT = 100;
+
+async function remember(r) {
+    const at = Date.now();
+    const p = r.persona || {};
+    const ph = r.phase || {};
+    const record = {
+        at, url: r.url || '', title: r.title || '',
+        count: r.count || 0, widgets: r.widgets || 0, revealed: r.revealed || 0, repaired: r.repaired || 0,
+        upgraded: r.upgraded || 0, aiUsed: r.aiUsed || 0,
+        modelTimedOut: !!r.modelTimedOut, modelWarming: !!r.modelWarming, modelWarmingMs: r.modelWarmingMs || 0,
+        modelVia: r.modelVia || '', modelError: r.modelError || '', modelAsked: !!r.modelAsked,
+        modelSwitchedOff: !!r.modelSwitchedOff, modelRequestMs: r.modelRequestMs || 0,
+        unresolvedCount: r.unresolvedCount || 0,
+        leftOpen: r.leftOpen || [], notes: r.notes || [],
+        // What the bug report names; the Debug tab and the report page build it from here.
+        persona: {
+            fullName: p.fullName, seed: p.seed, locale: p.locale, email: p.email, phone: p.phone,
+            company: p.company, street: p.street, postal: p.postal, city: p.city, country: p.country
+        },
+        filled: r.filled || [], skipped: r.skipped || [], phase: ph, modelDebug: r.modelDebug || null
+    };
+    /* The outline: no values and no persona beyond the seed, so a hundred of
+     * them stay small — this lives in the profile's storage. */
+    const stat = {
+        at, url: record.url, title: record.title, seed: p.seed, locale: p.locale,
+        /* Every field the fill ever knew about, not the ones it started with:
+         * the ones a switch or an upload revealed are written too, so a count
+         * of them against the first pass alone read "47 of 36". */
+        fields: (r.fieldCount || 0) + (r.revealed || 0), filled: record.count, widgets: record.widgets,
+        revealed: record.revealed, repaired: record.repaired, upgraded: record.upgraded,
+        skipped: record.skipped.length, leftOpen: record.leftOpen.length,
+        ai: {
+            // Off is not the same as asked-and-silent, and a run of fills must not average the two together.
+            off: record.modelSwitchedOff,
+            asked: record.unresolvedCount, used: record.aiUsed, via: record.modelVia,
+            requestMs: record.modelRequestMs, blockedMs: ph.model, warming: record.modelWarming,
+            warmingMs: record.modelWarmingMs, timedOut: record.modelTimedOut,
+            error: record.modelError ? String(record.modelError).slice(0, 120) : '',
+            batches: ((record.modelDebug || {}).batches || []).map(b => ({
+                asked: b.asked,
+                answered: b.answered,
+                ms: b.ms,
+                error: b.error ? String(b.error).slice(0, 80) : undefined
+            }))
+        },
+        phase: ph, slowest: r.slowest || [], notes: record.notes
+    };
+    try {
+        const got = await chrome.storage.local.get({fillHistory: [], fillLog: []});
+        const kept = /** @type {object[]} */ (got.fillHistory || []);
+        const log = /** @type {object[]} */ (got.fillLog || []);
+        await chrome.storage.local.set({
+            fillHistory: kept.concat([record]).slice(-FILLS_KEPT),
+            fillLog: log.concat([stat]).slice(-LOG_KEPT)
+        });
+    } catch (_) { /* storage full or gone: a fill is not worth failing over a record of it */
+    }
 }
 
 /* Something on screen before the six files land: the shortcut otherwise does
@@ -776,7 +900,7 @@ async function showBooting(tabId) {
  * shipped as PNGs; keeps the silhouette, so the icon stays recognisable at
  * sixteen pixels where a bare spinner blinks out. */
 const SPIN_FRAMES = 14;
-const SPIN_MS = 60;
+const SPIN_MS = 100;       // ten icon writes a second read the same to the eye as sixteen
 let spinTimer = null;
 let spinFrame = 0;
 let spinIcons = null;
@@ -903,6 +1027,7 @@ async function send(kind, settings, tabId, extra) {
     }
 }
 
+/** @type {chrome.contextMenus.CreateProperties[]} */
 const MENUS = [
     {
         id: 'ff-fill-page',
@@ -922,6 +1047,44 @@ function installMenus() {
 
 chrome.runtime.onInstalled.addListener(installMenus);
 chrome.runtime.onStartup.addListener(installMenus);
+
+/* Settings carry a version, and a profile from an older build is brought
+ * forward here rather than wherever the key happens to be read next. The one
+ * migration there has ever been lived inline in the popup, which meant a
+ * keyboard-only user never got it. */
+const SETTINGS_VERSION = 2;
+const MIGRATIONS = {
+    /* 1 → 2. An earlier build kept the seed on the main pane and wrote it on
+     * every change, so an upgraded profile arrives with one set — which quietly
+     * turns off "new data every fill" and makes every fill the same person.
+     * Only a seed deliberately pinned survives. */
+    2: (s) => (s.seed && !s.seedPinned ? {seed: ''} : {})
+};
+
+async function migrateSettings() {
+    try {
+        const got = await chrome.storage.local.get(null);
+        const from = Number(got.settingsVersion) || 1;
+        if (from >= SETTINGS_VERSION) return;
+        const changes = {};
+        for (let v = from + 1; v <= SETTINGS_VERSION; v++) {
+            const step = MIGRATIONS[v];
+            if (step) Object.assign(changes, step(Object.assign({}, got, changes)));
+        }
+        changes.settingsVersion = SETTINGS_VERSION;
+        await chrome.storage.local.set(changes);
+    } catch (_) { /* a profile that cannot be read is one a fill still works without */
+    }
+}
+
+chrome.runtime.onInstalled.addListener(migrateSettings);
+
+/* Once, on a fresh install: what the button does and which keys are bound.
+ * Nothing on the page moved before, and a first press on a page without a form
+ * looked like nothing. Not on update — a reload is not a first meeting. */
+chrome.runtime.onInstalled.addListener((details) => {
+    if (details && details.reason === 'install') chrome.tabs.create({url: chrome.runtime.getURL('src/welcome.html')});
+});
 
 const SETTINGS_KEYS = ['locale', 'seed', 'useAI', 'overwrite', 'emailDomain', 'plusTag', 'modelTimeout'];
 
@@ -948,8 +1111,6 @@ chrome.commands.onCommand.addListener(async (command) => {
  * configured, whether the on-device model answers, and whether the hosted
  * provider accepts the key and the model name — a real round trip, with the
  * API's own error text when it does not. */
-const PROBE_FIELD = [{id: 0, type: 'text', label: 'City', required: true, maxLength: 40}];
-const PROBE_PERSONA = {fullName: 'Test Person', company: 'Test GmbH', city: 'Köln', country: 'Deutschland'};
 
 async function setupCheck() {
     // Each stage is recorded before it starts, so a worker that dies mid-check leaves its last step behind.
@@ -997,9 +1158,10 @@ async function setupCheck() {
 chrome.runtime.onMessage.addListener((msg, sender, respond) => {
     if (!msg) return false;
     const tabId = sender && sender.tab ? sender.tab.id : null;
+    const frameId = sender && sender.frameId != null ? sender.frameId : null;
 
     if (msg.kind === 'generate') {
-        generate(msg.payload, tabId).then(respond).catch(e => respond({ok: false, error: String(e)}));
+        generate(msg.payload, tabId, frameId).then(respond).catch(e => respond({ok: false, error: String(e)}));
         return true;
     }
     if (msg.kind === 'nano-download') {
@@ -1037,10 +1199,6 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
         respond({ok: true, exchange: lastExchange});
         return false;
     }
-    if (msg.kind === 'nano-check') {
-        nanoCheck().then(respond);
-        return true;
-    }
     if (msg.kind === 'setup-check') {
         setupCheck().then(respond).catch(e => respond({error: String(e)}));
         return true;
@@ -1061,7 +1219,10 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
     return false;
 });
 
-// Handles for tooling that evaluates inside this worker.
-self.FILLER_FILES = FILLER_FILES;
-self.injectFiller = injectFiller;
-self.askPage = askPage;
+/* Handles for the suites and the tooling, which evaluate inside this worker.
+ * Declared in types/prompt-api.d.ts, because a test reaching for a name that no
+ * longer exists should be a question the checker asks, not one a run does. */
+const worker = /** @type {WorkerGlobalScope} */ (/** @type {unknown} */ (self));
+worker.FILLER_FILES = FILLER_FILES;
+worker.injectFiller = injectFiller;
+worker.askPage = askPage;

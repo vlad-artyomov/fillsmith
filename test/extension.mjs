@@ -20,10 +20,15 @@ const withTimeout = (p, ms, label) => Promise.race([
     Promise.resolve(p),
     new Promise(r => setTimeout(() => r({__timeout: label}), ms))
 ]);
+/* A wall against a hang, not a runtime budget. Set just above the local time it
+ * caught the suite at 173 of 179 checks on a CI runner, which is a red build
+ * that says nothing about the code. Every individual step has its own timeout;
+ * this one only has to be longer than all of them together. */
+const WATCHDOG_MS = 300000;
 const watchdog = setTimeout(() => {
-    console.log('\nWATCHDOG: suite exceeded 160s, aborting');
+    console.log(`\nWATCHDOG: suite exceeded ${WATCHDOG_MS / 1000}s, aborting`);
     process.exit(1);
-}, 160000);
+}, WATCHDOG_MS);
 watchdog.unref?.();
 
 // --- static manifest validation -------------------------------------------
@@ -52,7 +57,9 @@ const referenced = [
     mf.background.service_worker,
     mf.action.default_popup,
     ...INJECTED,
-    ...Object.values(mf.icons)
+    ...Object.values(mf.icons),
+    // Opened by the worker and the popup rather than named in the manifest.
+    'src/welcome.html', 'src/welcome.js', 'src/report.html', 'src/report.js', 'src/report.css', 'src/report-text.js'
 ];
 check('filler is injected on demand, not declared', !mf.content_scripts);
 check('the injected file list is non-empty and ordered', INJECTED.length >= 4
@@ -65,9 +72,17 @@ check('the popup keeps no second copy of the file list',
 // Alt+Shift+R rolls a seed for one fill; storing it would pin it for every keyboard fill after.
 const bgSrc = readFileSync(join(root, 'src/background.js'), 'utf8');
 check('the refill shortcut does not write its seed to storage', !/storage\.local\.set\(\{\s*seed/.test(bgSrc));
+/* The model comes up when somebody is about to fill, never because Chrome
+ * started: a multi-gigabyte model loading at every launch slowed the browser
+ * for people who were not going to see a form that day. */
+check('nothing warms the model on install or browser start',
+    !/on(Installed|Startup)\.addListener\(\s*warm/.test(bgSrc) && !/function warmOnStart/.test(bgSrc));
 check('the setup check covers both halves of the configured backend',
     /kind === 'setup-check'/.test(bgSrc) && /checkSetup/.test(popupSrc));
 check('the popup never hands the API key to the page', /apiKey, \.\.\.forPage/.test(popupSrc));
+// The report is a page with a plain download link; nothing needs the downloads permission any more.
+check('no permission is asked for that the report page made unnecessary', !(mf.permissions || []).includes('downloads'));
+check('the manifest names a homepage', /^https:\/\/github\.com\//.test(mf.homepage_url || ''));
 check('the focused-field shortcut is declared and handled',
     !!(mf.commands['fill-field'] && mf.commands['fill-field'].suggested_key) && /command === 'fill-field'/.test(bgSrc)
     && mf.version === JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version,
@@ -179,6 +194,17 @@ if (worker) {
         '<label for="fp">Phone</label><input id="fp" name="phone" required></form>' +
         '<script>const f=document.createElement("iframe");' +
         'f.width=0;f.height=0;f.style.display="none";document.body.appendChild(f);<\/script>');
+    /* Two forms on one page, one of them in a frame, both with fields only the
+     * model can answer. The filler runs in each frame and numbers its own fields
+     * from zero, so the model's answers have to come back to the frame that
+     * asked — a batch sent to the tab lands in both. */
+    const codes = (names) => names.map((n, i) =>
+        `<label for="c${i}">${n} code</label><input id="c${i}" name="${n.toLowerCase()}Code" required>`).join('');
+    pages['/twoforms.html'] = Buffer.from(
+        '<!doctype html><meta charset="utf-8"><title>Two forms</title><form>' + codes(['Alpha', 'Beta', 'Gamma']) +
+        '</form><iframe src="/innerform.html" width="400" height="200"></iframe>');
+    pages['/innerform.html'] = Buffer.from(
+        '<!doctype html><meta charset="utf-8"><title>Inner form</title><form>' + codes(['Delta', 'Epsilon', 'Zeta']) + '</form>');
     const server = createServer((req, res) => {
         const path = (req.url || '').split('?')[0];
         const body = pages[path] || pages['/form.html'];
@@ -197,6 +223,18 @@ if (worker) {
     await page.waitForTimeout(300);
 
     // Drive it exactly the way the popup does: try, inject on failure, retry.
+    /* A fresh install opens one page that says what the button does. This
+     * profile was created for this run, so the install just happened; an
+     * update must not do it, which the worker decides by the reason it is given. */
+    const welcome = ctx.pages().filter(p => /\/src\/welcome\.html$/.test(p.url()));
+    check('a fresh install opens the welcome page, once', welcome.length === 1, `${welcome.length} welcome tab(s)`);
+    if (welcome.length) {
+        const keys = await welcome[0].evaluate(() => [...document.querySelectorAll('kbd')].map(k => k.textContent));
+        check('and it shows the shortcuts as Chrome bound them',
+            keys.length === 4 && keys.every(k => /Shift|not set|⇧/.test(k)), keys.join(' · '));
+        for (const w of welcome) await w.close();
+    }
+
     step('injecting on demand');
     const injected = await withTimeout(worker.evaluate(async ({files, match}) => {
         const tabs = await chrome.tabs.query({});
@@ -214,12 +252,14 @@ if (worker) {
         .catch(e => 'failed: ' + e.message), 20000, 'inject');
     check('on-demand injection reaches the page', /injected|already/.test(String(injected)), String(injected));
 
-    // Drive it the way the popup does: a message to the tab.
+    /* Drive it the way the popup and the shortcuts do: through askPage, which
+     * asks every frame, adds the answers up and records the fill. A message
+     * straight at the tab skips all three. */
     step('sending fill message');
     const res = await withTimeout(worker.evaluate(async () => {
         const tabs = await chrome.tabs.query({});
         const tab = tabs.find(t => t.url && t.url.includes('form.html'));
-        return await chrome.tabs.sendMessage(tab.id, {
+        return await self.askPage(tab.id, {
             kind: 'fill',
             settings: {seed: 'EXT001', locale: 'de-DE', useAI: true, overwrite: true, emailDomain: 'example.com'}
         });
@@ -231,8 +271,9 @@ if (worker) {
     const email = await page.inputValue('#em');
     const phone = await page.inputValue('#ph');
     check('email filled via extension', /@example\.com$/.test(email), email);
-    // Two locales only — English and German, matching what the app ships.
-    check('German locale applied end-to-end', /^49\d{9}$/.test(phone), phone);
+    // The locales the generator ships, offered in the order it lists them.
+    // Country code and a full drama number: 12 digits for a city block, 13 for a mobile one.
+    check('German locale applied end-to-end', /^49\d{10,11}$/.test(phone), phone);
 
     /* The toast is a confirmation, not a panel to dismiss: it appears, and then
      * it goes away on its own. Both halves matter — the old one sat over the
@@ -307,18 +348,56 @@ if (worker) {
     check('the fill pane is just the actions',
         surface.hasFill && surface.hasScan && surface.hasClear
         && !surface.showsAPersona && !surface.showsASeedOnTheFillPane);
-    check('two locales, English and German', surface.locales.join('/') === 'English/Deutsch',
-        surface.locales.join('/'));
+    /* What a screen reader and a keyboard get: a language on the document, a
+     * title, one tab stop for the tablist with the arrows moving inside it, and
+     * option labels short enough to fit a 360px select — "Automatic — patient
+     * once, brisk a" was what the default used to read. */
+    const access = await pop.evaluate(async () => {
+        const settings = document.getElementById('tabSettings');
+        document.getElementById('tabFill').focus();
+        settings.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', bubbles: true}));
+        await new Promise(r => setTimeout(r, 50));
+        const afterArrow = document.activeElement.id;
+        const selectedPane = document.getElementById('paneSettings').hidden === false;
+        return {
+            lang: document.documentElement.lang, title: document.title,
+            live: document.getElementById('result').getAttribute('aria-live'),
+            stops: [...document.querySelectorAll('.tab')].map(t => t.tabIndex),
+            afterArrow, selectedPane,
+            longest: Math.max(...[...document.querySelectorAll('#modelTimeout option, #backend option')].map(o => o.textContent.trim().length))
+        };
+    });
+    check('the popup has a language, a title and a live region for the result',
+        access.lang === 'en' && access.title === 'FormForge' && access.live === 'polite',
+        JSON.stringify({lang: access.lang, title: access.title, live: access.live}));
+    check('the tablist is one tab stop and the arrow keys move within it',
+        access.stops.filter(t => t === 0).length === 1 && access.afterArrow === 'tabSettings' && access.selectedPane,
+        `stops=${access.stops.join(',')} after ArrowRight: ${access.afterArrow}`);
+    check('every option label fits the select it is in', access.longest <= 24, `${access.longest} characters at most`);
+    await pop.evaluate(() => document.getElementById('tabFill').click());
+    /* Every locale the generator has, and nothing the popup invented: a second
+     * copy of this list is how the popup went on offering a locale the generator
+     * had dropped. Two, named as languages — which English it is was a
+     * distinction nobody filling these forms wanted to make. */
+    check('the popup offers exactly the locales the generator ships',
+        surface.locales.join('/') === 'EN/DE', surface.locales.join('/'));
     check('nothing is pinned by default, so each fill is fresh data',
         surface.pinnedByDefault === '', surface.pinnedByDefault);
 
     /* Pinning repeats a fill exactly — the reproduce-a-bug case. */
     const pinned = await pop.evaluate(async () => {
         const seed = document.getElementById('seed');
-        const set = (v) => {
+        /* Typing is saved a moment after the last keystroke, not on each one:
+         * thirteen settings written per character is fifty writes for a key. So
+         * wait for the value rather than for a clock. */
+        const set = async (v) => {
             seed.value = v;
             seed.dispatchEvent(new Event('input', {bubbles: true}));
-            return new Promise(r => setTimeout(r, 100));
+            for (let i = 0; i < 20; i++) {
+                const got = await chrome.storage.local.get(['seed']);
+                if (got.seed === v) return;
+                await new Promise(r => setTimeout(r, 50));
+            }
         };
         await set('PIN123');
         const stored = await chrome.storage.local.get(['seed', 'seedPinned']);
@@ -351,6 +430,9 @@ if (worker) {
     const dbg = await pop.evaluate(async () => {
         document.getElementById('tabDebug').click();
         await new Promise(r => setTimeout(r, 400));
+        // A long form folds the rows a rule answered away; the trail is all of it.
+        const more = document.querySelector('#debugBody .dbg-more');
+        if (more) more.click();
         return document.getElementById('debugBody').innerText;
     });
     /* To scale, and in words. A list of raw counts under the variable names they
@@ -361,8 +443,60 @@ if (worker) {
         /WHERE THE TIME WENT/i.test(dbg) && /\bFilling\b/.test(dbg) && /\d+\s*m?s/.test(dbg),
         (dbg.match(/WHERE THE TIME WENT[\s\S]{0,80}/i) || ['(no timing section)'])[0].replace(/\s+/g, ' '));
     check('debug explains the model', /MODEL[\s\S]*(answered|asked|Not consulted)/.test(dbg));
-    check('debug names the rule behind a value', /matched \/.+\/[a-z]*/.test(dbg));
+    // A word a tester can read; the regex behind it is a tooltip, checked below.
+    check('debug names the rule behind a value', /matched the [a-z-]+ rule/.test(dbg));
     check('debug says why a fallback was used', /no rule matched/.test(dbg));
+    const ruleTip = await pop.evaluate(() => {
+        const w = [...document.querySelectorAll('#debugBody .why[title]')];
+        return w.length ? w[0].getAttribute('title') : '';
+    });
+    check('and keeps the regex behind a rule in the tooltip', /^\/.+\/[a-z]*$/.test(ruleTip), ruleTip.slice(0, 60));
+
+    /* Switched off is not the same answer as "the rules covered everything", and
+     * the difference is the whole of what to do next: a fill full of filler
+     * values used to be reported as one the rules had answered completely. */
+    const offTrail = await withTimeout((async () => {
+        await worker.evaluate(async () => {
+            const tabs = await chrome.tabs.query({});
+            const tab = tabs.find(t => t.url && t.url.includes('form.html'));
+            await self.askPage(tab.id, {
+                kind: 'fill',
+                settings: {seed: 'NOAI01', locale: 'de-DE', useAI: false, overwrite: true, emailDomain: 'example.com'}
+            });
+        });
+        return await pop.evaluate(async () => {
+            document.getElementById('tabFill').click();
+            document.getElementById('tabDebug').click();
+            await new Promise(r => setTimeout(r, 400));
+            return document.getElementById('debugBody').innerText;
+        });
+    })().catch(e => String(e.message)), 30000, 'model off');
+    check('debug says the model was switched off, not that it was not needed',
+        /Switched off in the settings/.test(offTrail) && !/rules answered every field/.test(offTrail),
+        (String(offTrail).match(/MODEL\s+([^\n]+)/) || ['', '(no model line)'])[1]);
+
+    /* A profile from an older build is brought forward once, by the worker. The
+     * only migration there has ever been lived inline in the popup, so a user
+     * who fills from the keyboard never got it — and an upgraded profile kept a
+     * pinned seed nobody had pinned, quietly making every fill the same person. */
+    const migrated = await withTimeout(worker.evaluate(async () => {
+        const saved = await chrome.storage.local.get(['seed', 'seedPinned', 'settingsVersion']);
+        await chrome.storage.local.remove(['settingsVersion', 'seedPinned']);
+        await chrome.storage.local.set({seed: 'STALE1'});
+        await migrateSettings();
+        const after = await chrome.storage.local.get(['seed', 'settingsVersion']);
+        // And again: a migration that has run is not run twice.
+        await chrome.storage.local.set({seed: 'PINNED2', seedPinned: true});
+        await migrateSettings();
+        const twice = await chrome.storage.local.get(['seed', 'settingsVersion']);
+        await chrome.storage.local.set(saved);
+        return {after, twice};
+    }).catch(e => ({error: e.message})), 10000, 'migrate');
+    check('an older profile\'s accidental seed is cleared once, by the worker',
+        migrated.after && migrated.after.seed === '' && migrated.after.settingsVersion === 2,
+        migrated.error || JSON.stringify(migrated.after));
+    check('and a profile already brought forward is left alone',
+        migrated.twice && migrated.twice.seed === 'PINNED2', JSON.stringify(migrated.twice));
 
     /* A fill that gave up waiting recorded only that it gave up — but the worker
      * keeps generating, so what the model was about to say usually exists by the
@@ -687,6 +821,7 @@ if (worker) {
             exact: await run('{"values":[{"id":0,"value":"Köln"}]}', false),
             slow: await run('{"values":[{"id":1,"value":"Hamburg"}]}', true),
             blank: await run('{"values":[{"id":1,"value":"   "}]}', false),
+            junk: await run('{"values":[{"id":0,"value":"N/A"}]}', false),
             prose: await run('I am afraid I cannot help with that.', false)
         };
     }).catch(e => ({error: e.message})), 25000, 'verdicts');
@@ -704,6 +839,9 @@ if (worker) {
         (verdicts.slow && verdicts.slow.note) || '');
     check('a blank value does not count as answering',
         verdicts.blank && verdicts.blank.ok === false, JSON.stringify(verdicts.blank && verdicts.blank.value));
+    // "N/A" in a city box is a form that looks filled and validates nothing; the field falls to the rules instead.
+    check('a value that says "no value" does not count as answering',
+        verdicts.junk && verdicts.junk.ok === false, JSON.stringify(verdicts.junk && verdicts.junk.value));
     check('prose instead of JSON does not count as answering',
         verdicts.prose && verdicts.prose.ok === false, (verdicts.prose && verdicts.prose.note) || '');
 
@@ -852,7 +990,11 @@ if (worker) {
          * data rather than as a miss, which is worse than an empty field. */
         tooMany: parseValues('{"values":[{"value":"A"},{"value":"X"},{"value":"B"}]}', [{id: 4}, {id: 7}]),
         tooFew: parseValues('{"values":[{"value":"A"}]}', [{id: 4}, {id: 7}]),
-        mixed: parseValues('{"values":[{"id":4,"value":"A"},{"value":"X"}]}', [{id: 4}, {id: 7}])
+        mixed: parseValues('{"values":[{"id":4,"value":"A"},{"value":"X"}]}', [{id: 4}, {id: 7}]),
+        /* The shape the prompt asks for and the grammar enforces. */
+        map: parseValues('{"4":"A","7":"B"}', [{id: 4}, {id: 7}]),
+        mapJunk: parseValues('{"4":"A","7":"N/A"}', [{id: 4}, {id: 7}]),
+        mapStrange: parseValues('{"4":"A","99":"B"}', [{id: 4}, {id: 7}])
     })).catch(e => ({error: e.message})), 10000, 'reconcile');
 
     check('an answer with a shifted id is still used',
@@ -873,6 +1015,13 @@ if (worker) {
     check('and an odd entry among named ones is dropped, not slid into the next slot',
         reconciled && reconciled.mixed && reconciled.mixed['4'] === 'A' && reconciled.mixed['7'] === undefined,
         JSON.stringify(reconciled && reconciled.mixed));
+    check('a reply keyed by id is read straight off',
+        reconciled && reconciled.map && reconciled.map['4'] === 'A' && reconciled.map['7'] === 'B',
+        JSON.stringify(reconciled && reconciled.map));
+    check('a keyed reply is held to the same rules as a listed one',
+        reconciled && reconciled.mapJunk && reconciled.mapJunk['7'] === undefined
+        && reconciled.mapStrange && reconciled.mapStrange['4'] === 'A' && reconciled.mapStrange['7'] === undefined,
+        `${JSON.stringify(reconciled && reconciled.mapJunk)} / ${JSON.stringify(reconciled && reconciled.mapStrange)}`);
 
     /* A field with no rule should get a model answer, not a fallback — including
      * one that only appears part-way through the fill, which earlier went
@@ -1006,6 +1155,7 @@ if (worker) {
         const realGlobal = self.LanguageModel, realSession = nanoSession;
         nanoSession = null;
         let seen = '';
+        let constrained = null;
         self.LanguageModel = {
             availability: async () => 'available',
             create: async () => ({
@@ -1013,11 +1163,14 @@ if (worker) {
                     return {...this};
                 },
                 // As many answers as the example shows, in the order the fields were listed.
-                prompt: async (p) => {
+                prompt: async (p, opts) => {
                     seen = p;
-                    const shown = (p.split('\n').pop().match(/\{"id":/g) || []).length;
+                    constrained = opts && opts.responseConstraint;
+                    const shown = (p.split('\n').pop().match(/":""/g) || []).length;
                     const ids = [...p.matchAll(/^(\d+) /gm)].map(m => +m[1]);
-                    return JSON.stringify({values: ids.slice(0, shown).map(id => ({id, value: 'Wert ' + id}))});
+                    const out = {};
+                    for (const id of ids.slice(0, shown)) out[id] = 'Wert ' + id;
+                    return JSON.stringify(out);
                 },
                 destroy() {
                 }
@@ -1028,15 +1181,50 @@ if (worker) {
         const res = await generate({persona: {fullName: 'W'}, pageTitle: 'w', context: {}, examples: [], fields});
         self.LanguageModel = realGlobal;
         nanoSession = realSession;
-        return {answered: Object.keys(res.values || {}).length, tail: seen.split('\n').pop()};
+        return {
+            answered: Object.keys(res.values || {}).length, tail: seen.split('\n').pop(),
+            required: (constrained && constrained.required) || [],
+            closed: !!constrained && constrained.additionalProperties === false
+        };
     }).catch(e => ({error: e.message})), 25000, 'skeleton');
 
     check('a batch of twelve comes back with twelve values',
         skeleton && !skeleton.error && skeleton.answered === 12,
         skeleton && skeleton.error ? skeleton.error : `${skeleton && skeleton.answered} answered`);
     check('and the example the model is shown holds every id, not just one',
-        skeleton && !skeleton.error && (skeleton.tail.match(/\{"id":/g) || []).length === 12,
+        skeleton && !skeleton.error && (skeleton.tail.match(/":""/g) || []).length === 12,
         skeleton && skeleton.tail ? skeleton.tail.slice(0, 120) : '');
+    /* The example is what the model copies; the grammar is what stops it copying
+     * only the first line of it. Both name all twelve or neither is worth having. */
+    check('and the grammar requires every id and admits nothing else',
+        skeleton && !skeleton.error && skeleton.closed === true
+        && (skeleton.required || []).join(',') === '0,1,2,3,4,5,6,7,8,9,10,11',
+        skeleton ? `${(skeleton.required || []).length} required, closed=${skeleton.closed}` : '');
+
+    /* On a small on-device model the length of the request is most of the
+     * latency, so the prompt has a budget and this is it. A full batch of twelve
+     * fields, each with a label, a section and a limit, fits in 750 characters
+     * — and a line added to every prompt has to earn its place against that.
+     * The skeleton is a map keyed by id rather than a list of objects naming it,
+     * which is where a third of the prompt went; "text" and "required" came off
+     * the field lines because neither told the model anything. */
+    const budget = await withTimeout(worker.evaluate(() => {
+        const fields = Array.from({length: 12}, (_, i) => ({
+            id: i, type: i % 4 ? 'text' : 'textarea', label: `Attribute ${i + 1}`,
+            section: 'Registration', required: i % 3 === 0, maxLength: i % 2 ? 60 : null
+        }));
+        const persona = {
+            fullName: 'Emma Schottmann', company: 'Silverpine Digital KG',
+            city: 'Stuttgart', country: 'Deutschland', language: 'German'
+        };
+        return {
+            prompt: buildUserPrompt(persona, 'New location', fields, {}, []).length,
+            system: SYSTEM_PROMPT.length
+        };
+    }).catch(e => ({error: e.message})), 10000, 'prompt size');
+    check('a batch of twelve stays inside its character budget',
+        budget.prompt > 0 && budget.prompt <= 750 && budget.system <= 650,
+        budget.error || `${budget.prompt} chars, on a system prompt of ${budget.system}`);
 
     /* The first create() after the extension loads is where the browser brings a
      * multi-gigabyte model into memory, and it routinely takes longer than any
@@ -1784,6 +1972,62 @@ if (worker) {
         nothing && !nothing.error && nothing.spinning === false && nothing.tab == null,
         nothing && !nothing.error ? `spinning=${nothing.spinning}, tab=${nothing.tab}` : '');
 
+    /* The model is told which language to answer in, and told it outright. It
+     * used to be left to infer one from the labels, which is the wrong thing to
+     * read it off: a German application is very often labelled in English, so a
+     * tester who picked DE got German from every rule — the city, the prose, the
+     * postcode — and English sentences from the model in the same form. */
+    step('the language is stated, not inferred');
+    const languages = await withTimeout(worker.evaluate(async ({files, url}) => {
+        const real = self.LanguageModel;
+        const realSession = nanoSession;
+        const seen = [];
+        self.LanguageModel = {
+            availability: async () => 'available',
+            create: async () => ({
+                clone: async function () {
+                    return {...this};
+                },
+                prompt: async (p) => {
+                    seen.push(p);
+                    const ids = [...p.matchAll(/^(\d+) /gm)].map(m => +m[1]);
+                    return JSON.stringify({values: ids.map(id => ({id, value: 'Wert ' + id}))});
+                },
+                destroy() {
+                }
+            })
+        };
+        const asked = {};
+        for (const locale of ['de-DE', 'en-US']) {
+            nanoSession = null;
+            nanoPending = null;
+            nanoBuilding = false;
+            seen.length = 0;
+            const tab = await chrome.tabs.create({url, active: false});
+            await new Promise(r => setTimeout(r, 500));
+            await chrome.scripting.executeScript({target: {tabId: tab.id, allFrames: true}, files});
+            await chrome.tabs.sendMessage(tab.id, {
+                kind: 'fill', settings: {seed: 'LANG1', locale, useAI: true, overwrite: true}
+            });
+            await chrome.tabs.remove(tab.id);
+            asked[locale] = seen.slice();
+        }
+        self.LanguageModel = real;
+        nanoSession = realSession;
+        return asked;
+    }, {files: INJECTED, url: `${origin}/manyfields.html`}).catch(e => ({error: e.message})), 60000, 'languages');
+    /* Once per batch, and once only: the instruction is worth its characters,
+     * a second copy of it is not. */
+    const namesIt = (prompts, language) => (prompts || []).length > 0 && prompts.every(p =>
+        new RegExp(`Answer all \\d+ fields? in ${language}, one each:`).test(p)
+        && (p.match(new RegExp(`\\b${language}\\b`, 'g')) || []).length === 1);
+    check('a German fill asks the model for German, on a page labelled in English',
+        namesIt(languages['de-DE'], 'German'),
+        languages.error || ((languages['de-DE'] || [''])[0].match(/Answer all[^\n]*/) || ['(never said)'])[0]);
+    check('and an English one asks for English, and never for German',
+        namesIt(languages['en-US'], 'English') && !(languages['en-US'] || []).some(p => /German/.test(p)),
+        ((languages['en-US'] || [''])[0].match(/Answer all[^\n]*/) || ['(never said)'])[0]);
+
     /* One page is several frames, and the filler runs in all of them. A broadcast
      * to the tab brings back whichever frame answered first, so the hidden 0x0
      * frame a tag manager drops on a page can answer "cleared 0 fields" over a
@@ -1818,6 +2062,78 @@ if (worker) {
         twoFrames.cleared > 0 && twoFrames.cleared === twoFrames.filled,
         `cleared=${twoFrames.cleared} filled=${twoFrames.filled}`);
     check('the form really is empty again', (await framed.inputValue('#fe')) === '');
+
+    /* Each frame gets its own answers. The stub answers the top form quickly and
+     * the framed one slowly, which is the order that showed the bug: the frame's
+     * fill was woken by the top form's batch, wrote those values into its own
+     * fields under the same numbers, and ignored its own batch as already done. */
+    step('two frames asking the model at once');
+    const twoForms = await ctx.newPage();
+    await twoForms.goto(`${origin}/twoforms.html`);
+    await twoForms.waitForTimeout(400);
+    const crossed = await withTimeout(worker.evaluate(async () => {
+        const real = self.LanguageModel;
+        const realSession = nanoSession;
+        self.LanguageModel = {
+            availability: async () => 'available',
+            create: async () => ({
+                clone: async function () {
+                    return {...this};
+                },
+                prompt: async (p) => {
+                    await new Promise(r => setTimeout(r, /Delta/.test(p) ? 1500 : 300));
+                    // The type is on the line only when it is not "text".
+                    const rows = [...p.matchAll(/^(\d+) (?:\S+ )?"([^"]+)"/gm)];
+                    return JSON.stringify(Object.fromEntries(rows.map(m => [m[1], 'Model:' + m[2]])));
+                },
+                destroy() {
+                }
+            })
+        };
+        nanoSession = null;
+        nanoPending = null;
+        nanoBuilding = false;
+        const tabs = await chrome.tabs.query({});
+        const tab = tabs.find(t => t.url && t.url.includes('twoforms.html'));
+        const res = await self.askPage(tab.id, {
+            kind: 'fill', settings: {seed: 'FRAMES2', locale: 'en-US', useAI: true, overwrite: true}
+        });
+        const held = await chrome.scripting.executeScript({
+            target: {tabId: tab.id, allFrames: true},
+            func: () => [...document.querySelectorAll('input')].map(i => `${i.labels[0].textContent}=${i.value}`)
+        });
+        self.LanguageModel = real;
+        nanoSession = realSession;
+        const kept = await chrome.storage.local.get({fillHistory: [], fillLog: []});
+        return {
+            count: res && res.count, aiUsed: res && res.aiUsed, frames: held.map(f => f.result),
+            batches: res && res.modelDebug && res.modelDebug.batches ? res.modelDebug.batches.length : null,
+            records: kept.fillHistory.filter(h => /twoforms/.test(h.url || '')).length,
+            logged: kept.fillLog.filter(s => /twoforms/.test(s.url || '')).length,
+            recordCount: (kept.fillHistory.filter(h => /twoforms/.test(h.url || '')).pop() || {}).count
+        };
+    }).catch(e => ({error: e.message})), 40000, 'twoforms');
+    const own = (rows) => (rows || []).every(r => {
+        const [label, value] = r.split('=');
+        return value === 'Model:' + label;
+    });
+    check('both frames are filled from the model', crossed.count === 6 && crossed.aiUsed === 6,
+        crossed.error || `count=${crossed.count} aiUsed=${crossed.aiUsed}`);
+    check('and each frame holds its own answers, not the other frame\'s',
+        (crossed.frames || []).length === 2 && crossed.frames.every(own),
+        (crossed.frames || []).map(f => f.join(', ')).join(' | '));
+    /* One record per request. The worker kept a single "last exchange" and both
+     * requests pushed their batches into whichever was created last, so each
+     * frame's Debug tab showed two prompts for its three fields. */
+    check('and each frame\'s debug record holds only its own request',
+        crossed.batches === 1, `batches=${crossed.batches}`);
+    /* One record per fill, for the tab. Each frame used to write its own with a
+     * read-modify-write, so two frames finishing together lost one — and what
+     * survived described one of the forms on the page rather than the page. */
+    check('a fill across two frames is remembered once, for the whole page',
+        crossed.records === 1 && crossed.logged === 1 && crossed.recordCount === 6,
+        `${crossed.records} record(s), ${crossed.logged} logged, ${crossed.recordCount} fields in it`);
+    await twoForms.close();
     await framed.close();
 
     /* A list the page spells out in full is a list we can choose from. Asking the
@@ -1966,6 +2282,62 @@ if (worker) {
         slow.upgraded === 30, `upgraded=${slow.upgraded}`);
     check('a streamed batch says which backend answered it', slow.via === 'on-device', `via=${slow.via}`);
 
+    /* A hosted provider is asked the way the on-device model is: the batches go
+     * out together and each one is written the moment it lands. They used to run
+     * one after another and reach the fill only when the last had answered — so
+     * with a key configured, a form of thirty fields sat on filler values for
+     * the sum of the round trips, not the longest. The stub answers the first
+     * batch quickly and the second slowly; a second in, the first must be on
+     * the page and the second must not. */
+    step('hosted batches land one by one');
+    const hosted = await withTimeout(worker.evaluate(async ({files, url}) => {
+        const KEYS = ['provider', 'apiKey', 'model', 'backend'];
+        const realFetch = self.fetch;
+        const saved = await chrome.storage.local.get(KEYS);
+        await chrome.storage.local.set({provider: 'anthropic', apiKey: 'k', backend: 'remote-only', model: ''});
+        let calls = 0;
+        self.fetch = async (url, o) => {
+            // The toolbar icon is fetched through here too when the fill ends; only the provider counts.
+            if (!/api\.anthropic\.com/.test(String(url))) return realFetch(url, o);
+            calls++;
+            const prompt = JSON.parse(o.body).messages[0].content;
+            const ids = [...prompt.matchAll(/^(\d+) /gm)].map(m => +m[1]);
+            await new Promise(r => setTimeout(r, ids.includes(0) ? 200 : 2500));
+            return new Response(JSON.stringify({
+                content: [{type: 'text', text: JSON.stringify({values: ids.map(id => ({id, value: 'Remote ' + id}))})}]
+            }), {status: 200});
+        };
+        try {
+            const tab = await chrome.tabs.create({url, active: false});
+            await new Promise(r => setTimeout(r, 600));
+            await chrome.scripting.executeScript({target: {tabId: tab.id, allFrames: true}, files});
+            const count = () => chrome.scripting.executeScript({
+                target: {tabId: tab.id},
+                func: () => [...document.querySelectorAll('input')].filter(i => /^Remote /.test(i.value)).length
+            }).then(r => r[0].result);
+            const fill = chrome.tabs.sendMessage(tab.id, {
+                kind: 'fill', settings: {seed: 'REMOTE1', locale: 'en-US', useAI: true, overwrite: true}
+            });
+            await new Promise(r => setTimeout(r, 1200));
+            const early = await count();
+            const res = await fill;
+            const late = await count();
+            await chrome.tabs.remove(tab.id);
+            return {calls, early, late, aiUsed: res.aiUsed, via: res.modelVia, requestMs: res.modelRequestMs};
+        } finally {
+            self.fetch = realFetch;
+            await chrome.storage.local.remove(KEYS);
+            await chrome.storage.local.set(saved);
+        }
+    }, {files: INJECTED, url: `${origin}/manyfields.html`}).catch(e => ({error: e.message})), 40000, 'hosted');
+    check('hosted batches go out together', hosted.calls === 2 && hosted.requestMs < 2700,
+        hosted.error || `${hosted.calls} calls, request ${hosted.requestMs}ms`);
+    check('and the first batch is on the page before the second has answered',
+        hosted.early === 24, `${hosted.early} of 30 from the model a second in`);
+    check('and every hosted answer lands, attributed to the provider',
+        hosted.late === 30 && hosted.aiUsed === 30 && hosted.via === 'anthropic',
+        `${hosted.late}/30 on the page, aiUsed=${hosted.aiUsed}, via=${hosted.via}`);
+
     /* Ten fills are kept, not one. "It worked a minute ago" is a comparison, and
      * the run before the broken one is the half that makes it — a report that can
      * only describe whichever fill somebody saved it after answers nothing. */
@@ -1998,9 +2370,9 @@ if (worker) {
                 await new Promise(r => setTimeout(r, 100));
                 got = await read();
             }
-            const text = reportText(got.fillHistory, got.fillLog, {version: 't', ua: 't', locale: 't', model: 't'});
             document.getElementById('tabDebug').click();
             await new Promise(r => setTimeout(r, 300));
+            const trail = document.getElementById('debugBody').innerText;
             const pins = document.querySelectorAll('#debugBody [data-fill]');
             // The pin row itself does not change, so read the heading of the fill on show.
             const head = () => (document.querySelector('#debugBody .dbg-h') || {}).textContent || '';
@@ -2011,24 +2383,59 @@ if (worker) {
                 kept: got.fillHistory.length,
                 oldestGone: !got.fillHistory.some(h => h.title === 'older 0'),
                 newestKept: got.fillHistory[got.fillHistory.length - 1].persona.seed,
-                blocks: (text.match(/^======== /gm) || []).length,
                 pins: pins.length,
                 shown,
+                trail,
                 afterClick: head()
             };
         });
         await pop2.close();
-        return seen;
+        /* The report is a page of its own now, so it is read there: the text it
+         * offers for download, and the cards it renders, both describe every kept
+         * fill. A popup could only ever save; a tab can be read first. */
+        const rep = await ctx.newPage();
+        await rep.goto(`chrome-extension://${id}/src/report.html`);
+        await rep.waitForTimeout(600);
+        const report = await rep.evaluate(async () => {
+            const got = await new Promise(r => chrome.storage.local.get({fillHistory: [], fillLog: []}, r));
+            const text = globalThis.FormForgeReport.text(got.fillHistory, got.fillLog, {
+                version: 't',
+                ua: 't',
+                locale: 't',
+                model: 't'
+            });
+            return {
+                blocks: (text.match(/^======== /gm) || []).length,
+                cards: document.querySelectorAll('details.fill').length,
+                downloads: !!document.getElementById('download'),
+                title: document.title
+            };
+        });
+        await rep.close();
+        return Object.assign(seen, {report});
     })().catch(e => ({error: e.message})), 40000, 'history');
 
     check('ten fills are kept, and the eleventh pushes the oldest out',
         history.kept === 10 && history.oldestGone && history.newestKept === 'HIST01',
         history.error || `kept=${history.kept} newest=${history.newestKept}`);
     check('the report describes every one of them, not just the last',
-        history.blocks === 10, `${history.blocks} fill block(s)`);
+        history.report && history.report.blocks === 10 && history.report.cards === 10,
+        `${history.report && history.report.blocks} fill block(s), ${history.report && history.report.cards} card(s)`);
+    check('and the report page offers the text as a download, without the downloads permission',
+        history.report && history.report.downloads && !mf.permissions.includes('downloads'),
+        `download button: ${history.report && history.report.downloads}, permissions: ${mf.permissions.join(', ')}`);
     check('and the Debug tab can be pointed at any of them',
         history.pins === 10 && history.shown === 'Last fill' && history.afterClick === 'Fill 1 of 10',
         `${history.pins} pin(s): "${history.shown}" → "${history.afterClick}"`);
+    /* One fill is an anecdote. How often a fill finishes with nothing left, what
+     * one usually costs and how much of it the model answered are questions
+     * about the run — counted here, on this machine, from records holding no
+     * values at all. */
+    check('and says what the run of fills has looked like',
+        /ACROSS THE LAST \d+ FILLS/i.test(history.trail || '')
+        && /Finished with nothing left\s+\d+ of \d+/i.test(history.trail || '')
+        && /Typical fill/i.test(history.trail || ''),
+        (String(history.trail || '').match(/ACROSS THE LAST[\s\S]{0,120}/i) || ['(no trend section)'])[0].replace(/\s+/g, ' '));
 
     check('no service worker errors', swErrors.length === 0, swErrors.join(' | '));
 
