@@ -1,0 +1,41 @@
+name: A field filled wrongly, or not at all
+description: Something FormForge wrote, skipped or left open on a form.
+labels: [ bug ]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The report is the fastest way to a fix: it holds every value, where it came from, the model's prompts and
+        the timings of the fills around it. Turn the Debug tab on under **Settings → Show the Debug tab**, fill once
+        more, press **Open report**, download it as text and attach the file below.
+  - type: input
+    id: control
+    attributes:
+      label: The control
+      description: What kind of control, and from which library if you know it.
+      placeholder: PrimeVue Select with a server-side filter · MUI DatePicker · plain <select>
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should have happened, and what did
+      placeholder: The country picker should hold Deutschland; it shows the placeholder and the phone got +1…
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Report file
+      description: Drag the formforge-report-….txt file here. It contains the values FormForge wrote and the page URL, nothing else from the page.
+  - type: textarea
+    id: dom
+    attributes:
+      label: The control's markup
+      description: Right-click the control → Inspect → Copy → Copy outerHTML, for the closed control and, if it has one, its open popup.
+      render: html
+  - type: input
+    id: version
+    attributes:
+      label: FormForge and Chrome versions
+      placeholder: FormForge 1.0.1 · Chrome 140 · macOS

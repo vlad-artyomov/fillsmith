@@ -72,7 +72,22 @@ for (const f of FILES) {
     writeFileSync(join(root, f), JSON.stringify(json, null, 2) + '\n');
 }
 
-console.log(`\n  ${manifest.version} -> ${version}   (${FILES.join(', ')})\n`);
+/* The lockfile carries the version twice more. npm rewrites them on the next
+ * install, which put a stray version bump into an unrelated diff — and left a
+ * lock that said 1.26.0 beside a manifest that said 1.0.1. */
+const LOCK = 'package-lock.json';
+let wrote = FILES.slice();
+try {
+    const lock = read(LOCK);
+    lock.version = version;
+    if (lock.packages && lock.packages['']) lock.packages[''].version = version;
+    writeFileSync(join(root, LOCK), JSON.stringify(lock, null, 2) + '\n');
+    wrote.push(LOCK);
+} catch (_) {
+    // No lockfile: nothing to keep in step.
+}
+
+console.log(`\n  ${manifest.version} -> ${version}   (${wrote.join(', ')})\n`);
 console.log('  Land it with the change it belongs to, then publish:\n');
 console.log(`    git commit -am "FormForge ${version}: what landed"`);
 console.log(`    git push origin main`);

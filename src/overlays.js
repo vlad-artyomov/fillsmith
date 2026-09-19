@@ -109,6 +109,33 @@
         });
     }
 
+    /* What to press to open a control. The deepest surface that is plausibly the
+     * trigger, because a press on a child reaches a listener on the root and a
+     * press on the root reaches nothing bound to a child: Tom Select binds its
+     * control, react-select binds its control div, Select2 its selection.
+     *
+     * And never the panel. Choices.js and Tom Select render their list inside
+     * the control, with "dropdown" in its class — so "the first thing whose
+     * class says dropdown" found the hidden list and pressed that, and both
+     * libraries reported "would not open" on every field, for ever. */
+    const TRIGGER_HINT = '[class*="dropdown"], [class*="arrow"], [class*="toggle"], [class*="control"], ' +
+        '[class*="trigger"], [class*="selection"], [class*="inner"], [role="combobox"]';
+
+    function triggerOf(widget) {
+        const panelish = [widget.lib.overlay, GENERIC_OVERLAYS, '[role="listbox"]'].filter(Boolean).join(',');
+        const isPanel = (el) => {
+            try {
+                return el.matches(panelish) || !!el.querySelector(panelish);
+            } catch (_) {
+                return false;
+            }
+        };
+        // Not an input: PrimeVue ignores container clicks whose target is one, and react-select's is invisible.
+        const hit = safeQuery(widget.root, TRIGGER_HINT).find(el =>
+            el.tagName !== 'INPUT' && !isPanel(el) && visible(el) && el.getBoundingClientRect().width > 4);
+        return hit || widget.root;
+    }
+
     /* Open a widget's overlay and return it. Accepts an empty panel after a short
      * grace period — that is how a dependent select with nothing to offer is told
      * apart from one that never opened — and gives up early when the combobox
@@ -116,10 +143,7 @@
     async function openOverlay(widget) {
         const before = new Set(overlayCandidates(widget));
         const wantId = linkedOverlayId(widget);
-        // PrimeVue ignores container clicks whose target is an INPUT: press the root or a trigger.
-        const trigger = widget.root.querySelector('[class*="dropdown"]:not(input), [class*="arrow"], [class*="toggle"]')
-            || widget.root;
-        press(trigger);
+        press(triggerOf(widget));
 
         // The overlay this control names cannot belong to anyone else; otherwise only a new one counts.
         const fresh = (o) => (wantId && o.id === wantId) || !before.has(o);

@@ -1,0 +1,29 @@
+{
+  "//": "Type checking without a build step: `npm run typecheck` reads the JSDoc and the declarations in types/, and emits nothing. popup.js and content.js are left out on purpose \u2014 they are almost entirely DOM narrowing, where the checker's ninety complaints about getElementById returning HTMLElement would bury the one that mattered. What is checked here is the logic: the generator, the worker, the adapters and the fillers.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "checkJs": true,
+    "allowJs": true,
+    "noEmit": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "types": [
+      "chrome"
+    ]
+  },
+  "include": [
+    "src/**/*.js",
+    "types/**/*.d.ts"
+  ],
+  "exclude": [
+    "src/popup.js",
+    "src/content.js",
+    "src/report.js",
+    "src/welcome.js"
+  ]
+}

@@ -177,6 +177,70 @@ check('generic content rules are weak', [strength.info, strength.desc, strength.
 check('rules encoding a fact stay strong', [strength.email, strength.postcode, strength.iban, strength.phone]
     .every(x => x === 'strong'), JSON.stringify(strength));
 
+/* Where a label goes, for the labels that used to go somewhere wrong. "Unit
+ * price" was the second address line, "Boarding pass" a password, "Cost center"
+ * a sum, "Mobile app version" a phone number, "Land area" a country, and a
+ * German Steuernummer came out in the shape of a VAT id — none of which any
+ * validator accepts. The right-hand side names the persona field a label must
+ * reach, or `none` for a label no rule may claim. */
+const routing = await page.evaluate(() => {
+    const G = globalThis.FormForgeGen;
+    const p = G.buildPersona('ROUTE1', 'de-DE', {});
+    const where = (label) => {
+        const d = G.matchRuleDetail(label, p);
+        if (!d) return 'none';
+        const v = Array.isArray(d.value) ? d.value[0] : d.value;
+        // The second address line is "Unit 4" for a persona with no street2 of its own.
+        const fields = Object.assign({}, p, {street2: p.street2 || 'Unit 4'});
+        for (const k of ['password', 'phone', 'street2', 'amount', 'country', 'vatId', 'taxNumber', 'company', 'postal', 'city', 'street', 'jobTitle', 'department']) {
+            if (String(fields[k]) === String(v)) return k;
+        }
+        return 'other';
+    };
+    const want = {
+        'Unit price': 'amount',
+        'Business unit': 'none',
+        'Unit of measure': 'none',
+        'Test suite': 'none',
+        'Apt / Suite | address2': 'street2',
+        'Address line 2': 'street2',
+        'Adresszusatz': 'street2',
+        'Boarding pass': 'none',
+        'Season pass': 'none',
+        'Password': 'password',
+        'Passwort': 'password',
+        'Confirm password': 'password',
+        'Cost center': 'none',
+        'Kostenstelle': 'none',
+        'Total cost': 'amount',
+        'Costs': 'amount',
+        'Mobile app version': 'none',
+        'Mobile': 'phone',
+        'Mobile number': 'phone',
+        'Cell phone': 'phone',
+        'Land area': 'none',
+        'Land': 'country',
+        'Country': 'country',
+        'Steuernummer': 'taxNumber',
+        'Tax number': 'taxNumber',
+        'Tax ID': 'vatId',
+        'VAT': 'vatId',
+        'USt-IdNr': 'vatId',
+        'Postal code * | address zip': 'postal',
+        'Firma': 'company',
+        'Role': 'jobTitle',
+        'Team': 'department'
+    };
+    const wrong = Object.entries(want).map(([label, k]) => [label, k, where(label)]).filter(([, k, got]) => k !== got);
+    return {wrong, total: Object.keys(want).length};
+});
+check(`${routing.total} labels reach the field they mean, and no other`, routing.wrong.length === 0,
+    routing.wrong.map(([l, k, got]) => `"${l}" → ${got}, wanted ${k}`).join('; ') || 'all routed');
+check('a German tax number and a VAT id have different shapes', await page.evaluate(() => {
+    const p = globalThis.FormForgeGen.buildPersona('TAX1', 'de-DE', {});
+    return /^\d{2}\/\d{3}\/\d{5}$/.test(p.taxNumber) && /^DE\d{9}$/.test(p.vatId);
+}));
+
 /* ------------------------------------------------------- vocabulary ----
  * src/vocab.js is generated from faker (`npm run vocab`) and folded into the
  * curated pools. What matters is what survived that: the reason for taking
@@ -194,10 +258,25 @@ const vocab = await page.evaluate(() => {
             for (const k of ['firstName', 'lastName', 'jobTitle', 'color', 'productName']) {
                 (at[k] = at[k] || new Set()).add(p[k]);
             }
+            /* A phone number outside a range reserved for fiction is somebody's
+             * number: US 555-01xx, and the Bundesnetzagentur's Drama-Nummern.
+             * And however a form wants it written, it has to be the same one. */
+            const DRAMA = {
+                'de-DE': /^(493023125|494066969|498999998|492214710|496990009)\d{3}$|^(4917139200|49176040690)\d{2}$/,
+                'en-US': /^1\d{3}55501\d{2}$/
+            };
+            if (!DRAMA[loc].test(p.phoneDigits)) broken.push(`${loc} phone outside the reserved ranges ${p.phoneDigits}`);
+            /* One number, four spellings. The pretty form may leave the country
+             * code off — "(312) 555-0186" — so what has to agree is the national
+             * number inside each of them. */
+            const nsn = p.phoneDigits.replace(/^(1|44|49)/, '');
+            if (p.phoneE164 !== '+' + p.phoneDigits || !p.phone.replace(/\D/g, '').endsWith(nsn)
+                || !p.phoneNational.replace(/\D/g, '').endsWith(nsn)) {
+                broken.push(`${loc} phone spellings disagree ${p.phone} / ${p.phoneNational} / ${p.phoneDigits}`);
+            }
             if (loc !== 'de-DE') continue;
             pairs.add(p.city + ' ' + p.postal);
             if (!/^\d{5}$/.test(p.postal)) broken.push('postal ' + p.postal);
-            if (!/^49\d{9}$/.test(p.phoneDigits)) broken.push('phone ' + p.phoneDigits);
             if (!/^DE\d{20}$/.test(p.iban)) broken.push('iban ' + p.iban);
             if (/\b(lorem|ipsum|dolor|repellendus)\b/i.test(p.paragraph)) broken.push('latin prose');
             if (/\b(Manager|Executive|Officer|Specialist|Director|Analyst)\b/.test(p.jobTitle)) {
@@ -350,7 +429,7 @@ check('email is syntactically valid', /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(vals.
  * rejects the same number written with a plus or with spaces, so a phone
  * field gets the plain-digit form regardless of how pretty the alternative
  * looks. Eleven digits is what a German number comes to. */
-check('phone is country-code digits, no plus', /^49\d{9}$/.test(vals.ph), vals.ph);
+check('phone is country-code digits, no plus', /^49\d{10,11}$/.test(vals.ph), vals.ph);
 check('city is a real German city', DE_CITIES.includes(vals.ct), vals.ct);
 check('postcode fits the city', vals.pc.length === 5 && /^\d{5}$/.test(vals.pc), vals.pc);
 check('street has a house number', /\d/.test(vals.s1), vals.s1);
@@ -445,8 +524,8 @@ const us = await page.evaluate(() => ({
     pc: document.getElementById('pc').value
 }));
 check('US locale: phone is country-code digits', /^1\d{10}$/.test(us.ph), us.ph);
-// The fiction block survives the reshaping: 555 is never a real subscriber.
-check('US phone stays inside the 555 range', /^1\d{3}555/.test(us.ph), us.ph);
+// Only 555-0100 to 555-0199 is reserved for fiction; 555-1234 is somebody's number.
+check('US phone stays inside the 555-01xx block', /^1\d{3}55501\d{2}$/.test(us.ph), us.ph);
 check('US locale: ZIP is 5 digits', /^\d{5}$/.test(us.pc), us.pc);
 check('US locale: country select picked US', us.cn === 'US', us.cn);
 
@@ -486,6 +565,79 @@ check('a sentinel prompt is not offered as an option',
     prompted.offered.join(' | '));
 check('and no fill ever writes it', prompted.picked.every(v => v !== '0' && v !== ''),
     `picked ${[...new Set(prompted.picked)].sort().join(',')}`);
+
+/* The popup's colours, read from its stylesheet and measured the way WCAG
+ * measures them: 4.5:1 for text, in both themes. The faint grey the footer,
+ * the source tags and the section headings were set in read at 3.1:1 in the
+ * light theme, and the tags on their own background at 2.7:1 — the smallest
+ * text in the window was the hardest to see. */
+const css = readFileSync(resolve(root, 'src/popup.css'), 'utf8');
+const tokens = (block) => Object.fromEntries([...block.matchAll(/--([a-z-]+):\s*(#[0-9a-f]{6})/gi)].map(m => [m[1], m[2].toLowerCase()]));
+const light = tokens(css.slice(css.indexOf(':root {'), css.indexOf('@media (prefers-color-scheme: dark)')));
+const darkBlock = css.slice(css.indexOf('@media (prefers-color-scheme: dark)'));
+const dark = Object.assign({}, light, tokens(darkBlock.slice(0, darkBlock.indexOf('}\n}') + 3)));
+const luminance = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    const c = [n >> 16, (n >> 8) & 255, n & 255].map(v => {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+};
+const contrast = (a, b) => {
+    const x = luminance(a), y = luminance(b);
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+};
+// Text token on the backgrounds it is actually drawn on.
+const PAIRS = [['fg', 'bg'], ['muted', 'bg'], ['muted', 'panel'], ['muted', 'line-soft'], ['faint', 'bg'], ['faint', 'panel'],
+    ['warn', 'bg'], ['warn', 'warn-soft'], ['accent', 'bg'], ['accent', 'accent-soft'], ['accent-fg', 'accent']];
+const low = [];
+for (const [name, t] of [['light', light], ['dark', dark]]) {
+    for (const [a, b] of PAIRS) {
+        if (!t[a] || !t[b]) {
+            low.push(`${name}: --${a} or --${b} missing`);
+            continue;
+        }
+        const ratio = contrast(t[a], t[b]);
+        if (ratio < 4.5) low.push(`${name} --${a} on --${b} ${ratio.toFixed(2)}:1`);
+    }
+}
+check('every text colour in the popup clears WCAG AA on the background it sits on, in both themes',
+    low.length === 0, low.join('; ') || `${PAIRS.length * 2} pairs at 4.5:1 or better`);
+
+/* What the control says it accepts, applied the way the browser applies it: a
+ * step counts from min, or from zero when there is no min; a pattern is
+ * compiled with the flags HTML compiles it with, or \p{L} never matches. */
+const limits = await page.evaluate(() => {
+    const G = globalThis.FormForgeGen;
+    return {
+        stepNoMin: G.constrain('12', {min: null, max: null, step: 5}),
+        stepMin: G.constrain('12', {min: 1, max: null, step: 5}),
+        floatStep: G.constrain('0.34', {min: 0, max: 1, step: 0.1}),
+        unicode: G.constrain('Anna Becker', {pattern: '[\\p{L} ]+'}),
+        digitsOnly: G.constrain('Anna 12', {pattern: '\\d+'})
+    };
+});
+check('a step with no min counts from zero', limits.stepNoMin === '10', limits.stepNoMin);
+check('a step with a min counts from the min', limits.stepMin === '11', limits.stepMin);
+check('a fractional step does not leave float noise', limits.floatStep === '0.3', limits.floatStep);
+check('a pattern using \\p{L} is honoured, not skipped', limits.unicode === 'Anna Becker', limits.unicode);
+check('a digits-only pattern narrows the value to its digits', limits.digitsOnly === '12', limits.digitsOnly);
+
+/* The email domain is whatever the tester typed into a box: "@acme.test",
+ * "acme" and "https://acme.test/" all used to reach the address as typed. */
+const domains = await page.evaluate(() => {
+    const G = globalThis.FormForgeGen;
+    const at = (d) => G.buildPersona('DOM1', 'en-US', {emailDomain: d}).email.split('@')[1];
+    return {
+        at: at('@acme.test'), bare: at('acme'), url: at('https://acme.test/x'),
+        upper: at('Example.ORG '), empty: at(''), fine: at('acme.co.uk')
+    };
+});
+check('an email domain is cleaned before it is used', domains.at === 'acme.test' && domains.url === 'acme.test'
+    && domains.upper === 'example.org' && domains.fine === 'acme.co.uk', JSON.stringify(domains));
+check('and one that cannot be a domain falls back to example.com',
+    domains.bare === 'example.com' && domains.empty === 'example.com', JSON.stringify(domains));
 
 // Clear
 await page.evaluate(() => window.__formforge.clearAll());

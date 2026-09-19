@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>FormForge is installed</title>
+    <link rel="stylesheet" href="popup.css">
+    <style>
+        /* One screen, three things to know. The popup's tokens, a page's width. */
+        body {
+            width: auto;
+            max-width: 640px;
+            margin: 0 auto;
+            padding: 48px 24px 64px;
+            font-size: 15px;
+        }
+
+        h1 {
+            font-size: 26px;
+            letter-spacing: -.02em;
+            margin: 18px 0 6px;
+        }
+
+        .lead {
+            color: var(--muted);
+            font-size: 16px;
+            margin: 0 0 28px;
+        }
+
+        ol.steps {
+            list-style: none;
+            counter-reset: step;
+            padding: 0;
+            margin: 0 0 28px;
+            display: grid;
+            gap: 12px;
+        }
+
+        ol.steps li {
+            counter-increment: step;
+            display: grid;
+            grid-template-columns: 34px 1fr;
+            gap: 14px;
+            padding: 14px 16px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: var(--panel);
+        }
+
+        ol.steps li::before {
+            content: counter(step);
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: var(--accent-fg);
+            font-weight: 700;
+            display: grid;
+            place-items: center;
+        }
+
+        ol.steps b {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        ol.steps span {
+            color: var(--muted);
+        }
+
+        kbd {
+            font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+            padding: 1px 6px;
+            border: 1px solid var(--line);
+            border-bottom-width: 2px;
+            border-radius: 5px;
+            background: var(--bg);
+            color: var(--fg);
+        }
+
+        .foot {
+            border-top: 0;
+            padding: 0;
+            font-size: 13px;
+        }
+
+        .foot a {
+            color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+<div class="brand"><span class="mark" aria-hidden="true">FF</span><span class="brand-name">FormForge</span></div>
+<h1>Installed. Nothing runs until you ask it to.</h1>
+<p class="lead">FormForge fills the form on the page you are looking at with data that belongs to one invented person,
+    reads every control back, and says what it did.</p>
+
+<ol class="steps">
+    <li>
+        <div><b>Open a page with a
+            form</b><span>Any page: a staging admin, a sign-up form, a checkout in test mode.</span></div>
+    </li>
+    <li>
+        <div><b>Press <kbd id="k-fill">Alt+Shift+F</kbd>, or the FormForge icon, then <em>Fill this page</em></b>
+            <span>Pin the icon in the toolbar puzzle menu if you want it in reach. A card in the corner of the page says
+                how many fields were filled and what was left.</span></div>
+    </li>
+    <li>
+        <div><b>Press <kbd id="k-refill">Alt+Shift+R</kbd> for a different person, <kbd id="k-clear">Alt+Shift+C</kbd>
+            to clear</b>
+            <span>Right-click a field for <em>Fill just this field</em>, or press <kbd id="k-field">Alt+Shift+D</kbd> with the
+                cursor in it. Settings has the data language and, when a bug needs the same data twice, a way to repeat
+                a fill.</span></div>
+    </li>
+</ol>
+
+<p class="lead" style="font-size:14px">The on-device model is optional: without it the rules fill every field they
+    recognise. If Chrome offers it, the popup shows a download button — one time, about two gigabytes, on your
+    machine.</p>
+
+<footer class="foot">
+    <a href="https://github.com/vlad-artyomov/formforge#-use" target="_blank" rel="noopener">How to use it</a> ·
+    <a href="https://github.com/vlad-artyomov/formforge/blob/main/PRIVACY.md" target="_blank" rel="noopener">What it
+        reads and keeps</a> ·
+    <a href="https://github.com/vlad-artyomov/formforge/issues" target="_blank" rel="noopener">Report a field it got
+        wrong</a>
+</footer>
+<script src="welcome.js"></script>
+</body>
+</html>

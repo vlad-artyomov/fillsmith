@@ -1,0 +1,41 @@
+name: A widget library FormForge does not drive
+description: A component library whose dropdowns, pickers or editors are skipped or filled blind.
+labels: [ adapter ]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An adapter is one entry in `LIBS`, and what it needs is the library's own DOM. Two snippets, captured from
+        the real thing, are worth more than a description.
+  - type: input
+    id: library
+    attributes:
+      label: Library and version
+      placeholder: Vuetify 3.7 · Chakra UI 2 · Kendo React
+    validations:
+      required: true
+  - type: input
+    id: docs
+    attributes:
+      label: A page that shows the control
+      description: The library's documentation demo, or a public page using it.
+      placeholder: https://…
+  - type: textarea
+    id: closed
+    attributes:
+      label: The closed control
+      description: Right-click → Inspect → Copy outerHTML of the control's root element.
+      render: html
+    validations:
+      required: true
+  - type: textarea
+    id: open
+    attributes:
+      label: The open popup
+      description: Open the control, then copy the outerHTML of the panel it rendered (often teleported to the end of <body>).
+      render: html
+  - type: textarea
+    id: dryrun
+    attributes:
+      label: What Dry run says about it
+      description: Popup → Dry run lists what FormForge saw and which adapter claimed each control.

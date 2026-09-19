@@ -271,12 +271,36 @@
         const root = widget.root;
         const bits = [];
         const inner = root.querySelector('input, select, textarea');
-        if (inner && describe) bits.push(describe(inner));
-        if (root.getAttribute('aria-label')) bits.push(root.getAttribute('aria-label'));
         // A Select without a native input keeps its accessible name on the inner combobox.
         const combo = root.matches('[role="combobox"]') ? root : root.querySelector('[role="combobox"]');
+        /* The name the control states, before anything inferred from what sits
+         * near it. A MUI Select names its label through `aria-labelledby` on the
+         * combobox and wraps a nameless input, so the first thing `describe()`
+         * found was the placeholder beside it — and three libraries came out
+         * called "Select…", or worse, called after the field above them. */
+        const named = (el) => {
+            if (!el) return;
+            const lb = el.getAttribute('aria-labelledby');
+            if (lb) lb.split(/\s+/).forEach(id => {
+                const n = document.getElementById(id);
+                if (n) bits.push(textOf(n));
+            });
+            const al = el.getAttribute('aria-label');
+            if (al && al.trim()) bits.push(al);
+        };
+        named(root);
+        if (combo && combo !== root) named(combo);
+        /* Then the inner control's own label, and only then a label pointing at
+         * the root: ids are not unique on real pages, and a file input sharing
+         * an id with a date picker's wrapper had the picker answering to the
+         * file field's caption. */
+        if (inner && describe) bits.push(describe(inner));
+        if (root.id) {
+            const l = document.querySelector(`label[for="${CSS.escape(root.id)}"]`);
+            if (l) bits.push(textOf(l));
+        }
         if (combo && combo !== root) {
-            ['aria-label', 'name', 'id'].forEach(a => {
+            ['name', 'id'].forEach(a => {
                 const v = combo.getAttribute(a);
                 if (v && v.trim()) bits.push(v.replace(/[_\-.\[\]]+/g, ' '));
             });
@@ -286,15 +310,6 @@
             const v = root.getAttribute(a);
             if (v && v.trim()) bits.push(v);
         });
-        const lb = root.getAttribute('aria-labelledby');
-        if (lb) lb.split(/\s+/).forEach(id => {
-            const n = document.getElementById(id);
-            if (n) bits.push(textOf(n));
-        });
-        if (root.id) {
-            const l = document.querySelector(`label[for="${CSS.escape(root.id)}"]`);
-            if (l) bits.push(textOf(l));
-        }
         /* A field wrapper usually holds the label as a sibling. Only trust one that
          * holds this single control, or that is explicitly a field by class —
          * otherwise a neighbour's caption bleeds onto this widget. */

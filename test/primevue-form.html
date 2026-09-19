@@ -659,6 +659,17 @@
             padding: 3px 0;
         }
 
+        .ff-danger {
+            margin-top: 8px;
+            padding: 4px 10px;
+            border: 1px solid #d9a3a3;
+            border-radius: 6px;
+            background: #fff;
+            color: #a33;
+            font: inherit;
+            font-size: 12px;
+        }
+
         #anhaenge-liste button {
             width: 22px;
             height: 22px;
@@ -881,7 +892,19 @@
         <div class="field">
             <label for="anhaenge">Attachments</label>
             <input id="anhaenge" name="anhaenge" type="file" multiple>
-            <ul id="anhaenge-liste"></ul>
+            <!-- One attachment was here before the fill, with the same delete button
+                 as the rows ours will get; and the card itself carries the record's
+                 own delete button. Clear must press neither: it removes what
+                 FormForge attached, never what the tester or the application owns. -->
+            <ul id="anhaenge-liste">
+                <li data-foreign>bestand-2024.pdf (48212 B)
+                    <button type="button" name="deleteFile" title="Delete" onclick="this.parentElement.remove()">×
+                    </button>
+                </li>
+            </ul>
+            <button type="button" class="ff-danger" aria-label="Delete location"
+                    onclick="window.__model.locationDeleted = true">Delete location
+            </button>
         </div>
 
         <!-- Per-file rows that exist only once the upload has come back from the
@@ -974,6 +997,10 @@
              read as skipped and nothing said why. -->
         <div class="field">
             <label for="vertragsdatum">Contract date</label>
+            <!-- This wrapper shares its id with the file input above, which is an
+                 accident real pages make all the time. The label that belongs to
+                 the control is the one pointing at the control, not the one
+                 pointing at a wrapper that happens to answer to the same name. -->
             <span class="p-datepicker p-component" data-pc-name="datepicker" id="vertrag"
                   previewdateformat="DD.MM.YYYY">
             <input id="vertragsdatum" class="p-inputtext p-datepicker-input" name="contractDate" inputmode="none">
@@ -1025,6 +1052,21 @@
                 <div class="p-checkbox-box"></div>
             </div>
             <label id="lbl-agb">Terms of use accepted</label>
+        </div>
+
+        <!-- A select with no placeholder: empty, it shows a blank label and no
+             "placeholder" class anywhere. It also drops its first value on the next
+             tick, as a store that rejects the write does. Reading "no placeholder
+             class" as "holds a value" left this one empty after the revert, because
+             the repair pass believed it had a selection. -->
+        <div class="field">
+            <label id="lbl-klasse">Priority class</label>
+            <div class="p-select p-component" data-pc-name="select" id="klasse" aria-labelledby="lbl-klasse">
+                <span class="p-select-label p-select-label-empty">&nbsp;</span>
+                <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
+                <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false"
+                       readonly>
+            </div>
         </div>
 
         <!-- A field that re-renders itself shortly after being written, replacing
@@ -1226,6 +1268,7 @@
             Schweiz: ['Zürich', 'Bern'], Niederlande: ['Amsterdam', 'Rotterdam']
         },
         typ: ['Filiale', 'Lager', 'Werkstatt', 'Bürostandort', 'Abholstation'],
+        klasse: ['Standard', 'Express', 'Economy'],
         'dlg-status': ['Sichtbar', 'Versteckt', 'Archiviert'],
         regionen: ['Nord', 'Süd', 'Ost', 'West', 'Zentral'],
         ansprechpartner: ['Anna Becker', 'Petra Schmidt', 'Thomas Fischer', 'Lukas Weber', 'Marie Wagner'],
@@ -1343,14 +1386,19 @@
         model['dlg-status'] = 'Sichtbar';
     })();
 
-    ['land', 'stadt', 'typ', 'dlg-status'].forEach(id => {
+    model.klasseWrites = [];
+    let klasseReverted = false;
+    ['land', 'stadt', 'typ', 'dlg-status', 'klasse'].forEach(id => {
         const root = document.getElementById(id);
         const label = root.querySelector('.p-select-label');
         const combo = root.querySelector('[role="combobox"]');
         root.addEventListener('click', (e) => {
             // PrimeVue's onContainerClick: ignore clicks that land on an input.
             if (e.target.tagName === 'INPUT') return;
-            const open = document.querySelector('.p-select-overlay[data-owner="' + id + '"]');
+            /* hide() clears overlayVisible at once; the panel then leaves on its own
+               time. A click that lands during the leave therefore opens again, as
+               PrimeVue's does — only a panel not yet closing toggles shut. */
+            const open = document.querySelector('.p-select-overlay[data-owner="' + id + '"]:not([data-leaving])');
             closeOverlays();
             if (open) return;
             const items = id === 'stadt' ? (DATA.stadt[model.land] || []) : DATA[id];
@@ -1365,6 +1413,18 @@
                     const sl = document.querySelector('#stadt .p-select-label');
                     sl.textContent = 'Please select';
                     sl.classList.add('p-select-label-empty');
+                }
+                if (id === 'klasse') {
+                    model.klasseWrites.push(val);
+                    if (!klasseReverted) {
+                        klasseReverted = true;
+                        // The store rejects the first value a tick later; the second one it keeps.
+                        setTimeout(() => {
+                            model.klasse = null;
+                            label.innerHTML = '&nbsp;';
+                            label.classList.add('p-select-label-empty');
+                        }, 0);
+                    }
                 }
                 closeOverlays();
                 root.dispatchEvent(new CustomEvent('change', {bubbles: true}));
@@ -1451,6 +1511,7 @@
         const input = document.getElementById('bilder');
         const list = document.getElementById('bilder-liste');
         const delay = 700;                // the server's round trip before the row exists
+        let rows = 0;
         input.addEventListener('change', () => {
             for (const f of Array.from(input.files)) {
                 setTimeout(() => {
@@ -1463,6 +1524,27 @@
                         '<label>Alternative text <input type="text" class="u-alt"></label>' +
                         '<label>Source <input type="text" class="u-src"></label>';
                     row.querySelector('.upload-name').textContent = f.name;
+                    /* The first row's alt text has a schema limit the way the prerequisite
+                       field does: a complaint after the write, named through
+                       aria-describedby. Several rows share this caption, so the report
+                       entry that gets the "shortened" note has to be found by seat, not by
+                       caption — by caption, the last row's entry was marked for a value the
+                       first row holds. */
+                    if (rows++ === 0) {
+                        const alt = row.querySelector('.u-alt');
+                        const err = document.createElement('small');
+                        err.className = 'p-error';
+                        err.id = 'alt-fehler';
+                        err.setAttribute('role', 'alert');
+                        err.hidden = true;
+                        alt.setAttribute('aria-describedby', err.id);
+                        alt.parentElement.appendChild(err);
+                        alt.addEventListener('input', () => {
+                            const over = alt.value.length > 12;
+                            err.hidden = !over;
+                            err.textContent = over ? 'Alternativtext darf maximal 12 Zeichen umfassen' : '';
+                        });
+                    }
                     list.appendChild(row);
                 }, delay);
             }
@@ -2278,6 +2360,8 @@
         land: model.land || null,
         stadt: model.stadt || null,
         typ: model.typ || null,
+        klasse: model.klasse || null,
+        klasseWrites: (model.klasseWrites || []).slice(),
         regionen: (model.regionen || []).slice(),
         anhaenge: (model.anhaenge || []).slice(),
         bilder: Array.from(document.querySelectorAll('#bilder-liste .upload-row')).map(r => ({
@@ -2291,6 +2375,8 @@
         telland: model.telland || null,
         staat: model.staat || null,
         sastaat: model.sastaat || null,
+        locationDeleted: !!model.locationDeleted,
+        foreignAttachment: !!document.querySelector('#anhaenge-liste [data-foreign]'),
         dialogOpen: !!model.dialogOpen,
         dlgStatus: model['dlg-status'] || null,
         dlgInput: document.getElementById('dlg-input').value,

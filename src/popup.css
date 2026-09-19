@@ -7,18 +7,22 @@
     --panel: #f7f8fa;
     --fg: #12151a;
     --muted: #626b78;
-    --faint: #8a93a0;
+    --faint: #636e7d;
     --line: #e3e6ec;
     --line-soft: #eef0f4;
     --field: #ffffff;
     --accent: #1f6f4f;
     --accent-soft: #e7f3ed;
     --accent-fg: #ffffff;
-    --warn: #b1741a;
+    --warn: #8f5d12;
     --warn-soft: #fdf3e3;
     --danger: #b3402f;
     --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 4px 12px rgba(16, 24, 40, .06);
     --radius: 10px;
+    /* Drawn here rather than left to the browser: a native select reserves its
+       arrow a slot at the right edge, which on a two-letter control is a hand's
+       width of nothing between the word and the mark. */
+    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6' viewBox='0 0 9 6'%3E%3Cpath d='M1 1l3.5 3.5L8 1' fill='none' stroke='%235a6472' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 @media (prefers-color-scheme: dark) {
@@ -27,7 +31,7 @@
         --panel: #1a1e24;
         --fg: #e9ebef;
         --muted: #9aa3ad;
-        --faint: #78828e;
+        --faint: #858f9b;
         --line: #2a2f37;
         --line-soft: #23272e;
         --field: #1b1f25;
@@ -38,6 +42,7 @@
         --warn-soft: #2a2115;
         --danger: #e0705c;
         --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 18px rgba(0, 0, 0, .35);
+        --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6' viewBox='0 0 9 6'%3E%3Cpath d='M1 1l3.5 3.5L8 1' fill='none' stroke='%2398a1ac' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     }
 }
 
@@ -86,7 +91,7 @@ body {
 }
 
 .brand-name {
-    font-weight: 620;
+    font-weight: 600;
     font-size: 13px;
     letter-spacing: -.01em;
 }
@@ -175,17 +180,19 @@ body {
     margin-top: 2px;
 }
 
-/* The locale sits with the actions: it changes the data, not the layout. */
-.actions select {
+/* The locale sits with the actions: it changes the data, not the layout. Named,
+   or it reads as a fourth button. */
+select.lang {
     flex: 0 0 auto;
-    background: var(--field);
-    color: var(--muted);
+    appearance: none;
+    background: var(--field) var(--chevron) no-repeat right 7px center;
+    color: var(--fg);
     border: 1px solid var(--line);
     border-radius: 8px;
-    padding: 6px 4px;
+    padding: 6px 21px 6px 10px;
     font: inherit;
     font-size: 12px;
-    max-width: 104px;
+    cursor: pointer;
 }
 
 .icon {
@@ -233,14 +240,12 @@ body {
     font-size: 11px;
 }
 
-/* The saved-timings row: two small buttons and how many fills are in the file. */
+/* The Debug tab's tools, first: on a long trail the bottom is five screens away. */
 .dbg-tools {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid var(--line);
+    margin-bottom: 4px;
 }
 
 .btn:hover {
@@ -255,7 +260,7 @@ body {
     background: var(--accent);
     color: var(--accent-fg);
     border-color: transparent;
-    font-weight: 620;
+    font-weight: 600;
     box-shadow: var(--shadow);
 }
 
@@ -326,8 +331,8 @@ body {
 }
 
 .result-title {
-    font-weight: 620;
-    font-size: 12.5px;
+    font-weight: 600;
+    font-size: 12px;
 }
 
 .result-note {
@@ -340,6 +345,12 @@ body {
 .rows {
     max-height: 188px;
     overflow-y: auto;
+}
+
+/* Overlay scrollbars leave no sign that seven rows are the top of forty-six, so
+   the last row fades. A hint, not an erasure: at 22px it took the row with it. */
+.rows.is-scrolly {
+    mask-image: linear-gradient(#000 calc(100% - 13px), transparent);
 }
 
 .row {
@@ -357,7 +368,7 @@ body {
 .row .k {
     flex: 0 0 38%;
     color: var(--muted);
-    font-size: 11.5px;
+    font-size: 11px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -366,7 +377,7 @@ body {
 .row .v {
     flex: 1;
     min-width: 0;
-    font: 11.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -378,11 +389,11 @@ body {
     flex: none;
     padding: 1px 6px;
     border-radius: 999px;
-    font-size: 9.5px;
+    font-size: 10px;
     letter-spacing: .03em;
     text-transform: uppercase;
     background: var(--line-soft);
-    color: var(--faint);
+    color: var(--muted);
     border: 1px solid transparent;
 }
 
@@ -398,7 +409,7 @@ body {
 
 .tag.widget {
     background: transparent;
-    color: var(--faint);
+    color: var(--muted);
     border-color: var(--line);
 }
 
@@ -445,7 +456,7 @@ body {
     border-radius: 7px;
     padding: 6px 8px;
     font: inherit;
-    font-size: 12.5px;
+    font-size: 12px;
 }
 
 .opts {
@@ -475,8 +486,8 @@ body {
 
 .opt b {
     display: block;
-    font-weight: 550;
-    font-size: 12.5px;
+    font-weight: 500;
+    font-size: 12px;
 }
 
 .opt i {
@@ -497,8 +508,8 @@ details {
 summary {
     cursor: pointer;
     color: var(--fg);
-    font-size: 12.5px;
-    font-weight: 550;
+    font-size: 12px;
+    font-weight: 500;
     display: flex;
     align-items: center;
     gap: 7px;
@@ -525,15 +536,25 @@ details[open] summary {
     margin: 0 0 10px;
 }
 
+/* Under a select, the hint explains the row above it rather than the section below. */
+.field + .hint {
+    margin: -4px 0 12px 104px;
+}
+
+.hint.first {
+    margin: 14px 2px 0;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
 /* -------------------------------------------------------------- debug -- */
 /* Dense on purpose: this is a reading surface, not a control panel. */
 .dbg-sec {
     margin-bottom: 12px;
 }
 
-/* The trail begins under the setup button, not against it. */
 #debugBody {
-    margin-top: 14px;
+    margin-top: 10px;
 }
 
 /* One line for the page, however long its title: the rest of the card is four
@@ -559,7 +580,8 @@ details[open] summary {
     font: inherit;
     font-size: 10px;
     line-height: 1.4;
-    padding: 3px 9px;
+    min-height: 24px;
+    padding: 4px 10px;
     border: 1px solid var(--line);
     border-radius: 999px;
     background: transparent;
@@ -568,18 +590,18 @@ details[open] summary {
 }
 
 .dbg-pin:hover {
-    color: var(--text);
+    color: var(--fg);
 }
 
 .dbg-pin.on {
     border-color: var(--accent);
     color: var(--accent);
-    font-weight: 650;
+    font-weight: 600;
 }
 
 .dbg-h {
     font-size: 10px;
-    font-weight: 650;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: .06em;
     color: var(--faint);
@@ -601,7 +623,7 @@ details[open] summary {
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: 7px;
-    font: 10.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+    font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
     white-space: pre-wrap;
     word-break: break-word;
     max-height: 190px;
@@ -624,7 +646,7 @@ details[open] summary {
 }
 
 .dbg-det > summary {
-    font-size: 11.5px;
+    font-size: 11px;
     font-weight: 500;
     color: var(--muted);
     cursor: pointer;
@@ -644,6 +666,12 @@ details[open] summary {
     border-bottom: 0;
 }
 
+/* The row above it is a decision; this is a control. Pressed against it, it read
+   as another line of the list. */
+.dbg-more {
+    margin-top: 10px;
+}
+
 .dbg-row-h {
     display: flex;
     align-items: baseline;
@@ -652,7 +680,7 @@ details[open] summary {
 
 .dbg-row-h .k {
     flex: 0 0 42%;
-    font-size: 11.5px;
+    font-size: 11px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -668,7 +696,7 @@ details[open] summary {
 }
 
 .why {
-    font-size: 10.5px;
+    font-size: 11px;
     margin-top: 1px;
 }
 
@@ -850,7 +878,7 @@ details[open] summary {
 
 .act.is-now .act-text {
     color: var(--fg);
-    font-weight: 560;
+    font-weight: 600;
 }
 
 .act.is-now .act-dot {

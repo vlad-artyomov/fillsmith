@@ -57,10 +57,11 @@
 #formforge-hud .ff-now.ff-rise{ animation:formforge-rise .22s ease-out!important; }
 #formforge-hud .ff-count{ flex:none!important; font-variant-numeric:tabular-nums!important;
   font-size:11px!important; color:#5d6672!important; }
-#formforge-hud .ff-x{ flex:none!important; width:16px!important; height:16px!important;
-  margin:-2px -3px -2px 0!important; border-radius:4px!important; background:transparent!important;
-  border:0!important; color:#9aa3ae!important; font:inherit!important; font-size:15px!important;
-  line-height:14px!important; text-align:center!important; cursor:pointer!important; }
+/* 24px square: a target a finger or a shaky pointer can hit, drawn as the same small glyph. */
+#formforge-hud .ff-x{ flex:none!important; width:24px!important; height:24px!important;
+  margin:-6px -8px -6px 0!important; border-radius:6px!important; background:transparent!important;
+  border:0!important; color:#6b7482!important; font:inherit!important; font-size:17px!important;
+  line-height:22px!important; text-align:center!important; cursor:pointer!important; }
 #formforge-hud .ff-x:hover{ background:#f1f3f6!important; color:#14171c!important; }
 /* An arc whose length changes as it turns reads as work; a fixed ring at 13px reads as a circle.
    The two rates must not divide each other or the loop stutters. */
@@ -86,10 +87,6 @@
 #formforge-hud .ff-bar i{ position:absolute!important; top:0!important; bottom:0!important;
   left:0!important; width:var(--ff-fill,0%)!important; border-radius:2px!important;
   background:#1f6f4f!important; overflow:hidden!important; transition:width .16s linear!important; }
-#formforge-hud.ff-busy .ff-bar i::after{ content:""!important; position:absolute!important;
-  top:0!important; bottom:0!important; left:0!important; width:100%!important;
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent)!important;
-  animation:formforge-sheen 1.1s linear infinite!important; }
 /* Wraps for the same reason the title does: this line is our own sentence, and
    the default nowrap-with-ellipsis cut it at "16 fields still to i...". Two
    lines at most, so an unexpectedly long one cannot grow the card. */
@@ -107,7 +104,6 @@
 #formforge-hud .ff-off{ display:none!important; }
 @keyframes formforge-spin{ to{ transform:rotate(360deg) } }
 @keyframes formforge-breathe{ 0%,100%{ --ff-arc:70deg } 50%{ --ff-arc:300deg } }
-@keyframes formforge-sheen{ 0%{ transform:translateX(-100%) } 100%{ transform:translateX(100%) } }
 @keyframes formforge-shimmer{ 0%{ background-position:120% 0 } 100%{ background-position:-120% 0 } }
 @keyframes formforge-pop{ 0%{ transform:scale(.4) } 60%{ transform:scale(1.12) } 100%{ transform:scale(1) } }
 @keyframes formforge-rise{ 0%{ opacity:0; transform:translateY(3px) } 100%{ opacity:1; transform:none } }
@@ -132,10 +128,9 @@
 @media (prefers-reduced-motion: reduce){
   #formforge-hud,#formforge-hud .ff-bar i{ transition:none!important; }
   #formforge-hud .ff-spin,#formforge-hud .ff-tick,#formforge-hud .ff-now,
-  #formforge-hud.ff-busy .ff-title,#formforge-hud.ff-busy .ff-bar i::after{ animation:none!important; }
+  #formforge-hud.ff-busy .ff-title{ animation:none!important; }
   #formforge-hud.ff-busy .ff-title{ background-image:none!important; color:inherit!important;
     -webkit-text-fill-color:currentColor!important; }
-  #formforge-hud.ff-busy .ff-bar i::after{ display:none!important; }
 }`;
 
     /* One bar for the whole job, and it only moves forward: each stage owns a
@@ -272,9 +267,12 @@
         const el = box();
         clearTimeout(hudTimer);
         el.classList.add('ff-busy');
+        /* Quiet while it works: a live region that changes with every field is
+         * forty-six announcements for one fill. The verdict is what gets read. */
+        el.setAttribute('aria-live', 'off');
         closable(el);
-        el.querySelector('.ff-top').firstChild.className = 'ff-spin';
-        const now = el.querySelector('.ff-now');
+        el.querySelector('.ff-spin, .ff-tick').className = 'ff-spin';
+        const now = /** @type {HTMLElement} */ (el.querySelector('.ff-now'));
         if (at && at.total) {
             clearInterval(trickle);
             const [from, to] = BANDS[stage] || BANDS.fill;
@@ -321,9 +319,10 @@
         const p = d.persona;
         clearTimeout(hudTimer);
         el.classList.remove('ff-busy');
+        el.setAttribute('aria-live', 'polite');
         closable(el);
 
-        el.querySelector('.ff-top').firstChild.className =
+        el.querySelector('.ff-spin, .ff-tick').className =
             'ff-tick' + (d.hint || (d.skipped && d.skipped.length) ? ' ff-warn' : '');
         el.querySelector('.ff-title').textContent = title;
         el.querySelector('.ff-count').textContent = d.ms != null ? fmtMs(d.ms) : '';
@@ -332,7 +331,7 @@
         setBar(el, 1);
         el.querySelector('.ff-bar').classList.toggle('ff-off', !(d.persona || d.ms != null));
 
-        const now = el.querySelector('.ff-now');
+        const now = /** @type {HTMLElement} */ (el.querySelector('.ff-now'));
         now.classList.add('ff-off');
 
         const tags = el.querySelector('.ff-tags');

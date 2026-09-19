@@ -14,14 +14,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Chromium is a 150 MB download per run; keep it between runs, keyed by the version the lockfile pins.
+      - name: playwright version
+        id: pw
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
       - run: npx playwright install --with-deps chromium
       - run: npm test
+
+      # Types without a build step: the JSDoc and types/ read over the logic
+      # files. popup.js and content.js are excluded — see jsconfig.json.
+      - run: npm run typecheck
 
       # The generated vocabulary is committed; regenerating it must not change it.
       - name: vocab is up to date

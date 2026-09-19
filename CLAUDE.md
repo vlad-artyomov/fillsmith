@@ -9,15 +9,17 @@ real bugs. Read both before changing behaviour.
 ```bash
 npm test                # all four suites; must be green before you are done
 npm run test:native     # generator + native controls (fast)
-npm run test:widgets    # widget layer against test/primevue-form.html (fast)
+npm run test:widgets    # widget layer: test/primevue-form.html and test/libraries-form.html
 npm run test:complete   # one fill on a clean page leaves nothing empty
 npm run test:ext        # unpacked extension + popup in Chromium (slowest)
 npm run audit           # drive the real extension and judge the page
+npm run typecheck       # the JSDoc and types/, over the logic files; emits nothing
+npm run screenshots     # the store pictures and the README's, at the size the store wants
 npm run vocab           # regenerate src/vocab.js (only when changing tools/vendor-faker.mjs)
-npm run release -- patch # move the version on in manifest.json and package.json together
+npm run release -- patch # move the version on in manifest.json, package.json and the lockfile together
 ```
 
-`npm test` runs the four suites in parallel (about a minute and a half; the extension suite is the long pole). While
+`npm test` runs the four suites in parallel (about three minutes; the widget suite is the long pole). While
 iterating,
 run only the suite that observes the change — `test:native` for rules and the generator, `test:widgets` for anything
 that drives a control, `test:ext` for the popup, manifest or worker — and the full set once at the end. `npm run audit`
@@ -29,7 +31,8 @@ one. `test/primevue-form.html?latency=slow` makes the fixture's remote pickers s
 ## Where things live
 
 - `src/background.js` owns `FILLER_FILES`, the ordered list of injected scripts. Every suite and tool parses it from
-  there. Adding a file is one line here and nowhere else.
+  there. Adding a file is one line here and nowhere else. It also owns the record of what each fill did: `askPage()`
+  adds the frames up and writes it once, so nothing in the page writes to storage.
 - `RULES` in `src/generator.js` decides values from labels. Specific patterns above general ones.
 - `LIBS` in `src/adapters.js` recognises widget libraries. `root` and `kind` are required; the rest are hints. Only the
   outermost match survives, so `root` must be something only that library renders — an application's own wrapper class
@@ -45,6 +48,9 @@ one. `test/primevue-form.html?latency=slow` makes the fixture's remote pickers s
   do not make it a seventh.
 - **No `Math.random()` in a fill path.** `rng` is the persona's RNG; the seed must reproduce every choice.
 - **Nothing to the console** from content scripts or the worker. Use `note()` from `dom.js`; it lands in the Debug tab.
+- **Keep the prompt short.** On the on-device model its length is most of the latency, so every line added to a
+  prompt is paid on every batch of every fill. A batch of twelve fits in 1100 characters and a check in `test:ext`
+  holds it there; before adding a line, look for one that is saying the same thing twice.
 - **Never block on the model.** Every await has a budget, and the fill does not wait for it: the request goes out as
   soon as the form is read and writing starts immediately. A missing, slow or wedged model changes how good the values
   are, never whether they arrive — or when.

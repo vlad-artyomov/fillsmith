@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>FormForge report</title>
+    <link rel="stylesheet" href="popup.css">
+    <link rel="stylesheet" href="report.css">
+</head>
+<body class="report">
+<header class="rp-head">
+    <div class="brand">
+        <span class="mark" aria-hidden="true">FF</span>
+        <span class="brand-name">FormForge</span>
+        <span class="rp-title">Report</span>
+    </div>
+    <div class="rp-tools">
+        <span id="env" class="dim"></span>
+        <button id="copy" class="btn small">Copy as text</button>
+        <button id="download" class="btn small primary">Download .txt</button>
+    </div>
+</header>
+
+<!-- Rendered from the same records the Debug tab reads: the timings of the
+     last hundred fills, and the last ten fills in full. Nothing here is
+     fetched; it is what this profile already holds. -->
+<main id="body" aria-live="polite">
+    <div class="empty">Reading the fills kept in this profile…</div>
+</main>
+
+<script src="report-text.js"></script>
+<script src="report.js"></script>
+</body>
+</html>

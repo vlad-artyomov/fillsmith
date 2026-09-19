@@ -21,9 +21,10 @@ already listening), and each file depends only on the ones above it:
 | `hud.js`       | What does the person watching see?             | nothing                         |
 | `content.js`   | In what order, and did it stick?               | all of the above                |
 
-Outside the page, `background.js` owns the model and **the list of injected files**; the popup, the shortcuts and every
-test suite read that list rather than carrying a copy. `popup.*` is a Fill button, a dry run, a clear, settings and a
-debug trail.
+Outside the page, `background.js` owns the model, **the list of injected files**, the record of what every fill did,
+and the one migration a profile from an older build needs; the popup, the shortcuts and every test suite read that
+list rather than carrying a copy. `popup.*` is a Fill button, a dry run, a clear, settings and a debug trail;
+`report.*` is the same trail on a page of its own, and `welcome.html` is the one screen a fresh install opens.
 
 Why these seams: `generator.js` never touches the DOM, so every rule is a pure function. *Identifying* a control
 (permissive: an unknown library should still work through ARIA) and *driving* it (exact: this one commits on blur, that
@@ -92,10 +93,19 @@ what was clicked.
 
 `#formforge-hud` on the page shows the stage, the progress and the result in one element, and relays each stage to the
 popup through `fill-progress`; the toolbar icon animates off the same signal. The result names what did not work. The
-Debug tab keeps the whole trail in `chrome.storage.local`, written by `content.js` so keyboard-triggered fills are
-recorded too — the last ten fills in full (`fillHistory`), not one. "It worked a minute ago" is a comparison, and the
-trail of the fill before the broken one is the half that makes it; the tab points at any of the ten and the saved
-report describes every one.
+whole trail lives in `chrome.storage.local`, written **by the worker** in `remember()` after `askPage` has added the
+frames up — the last ten fills in full (`fillHistory`) and the last hundred in outline (`fillLog`). "It worked a
+minute ago" is a comparison, and the trail of the fill before the broken one is the half that makes it; the Debug tab
+points at any of the ten, and `src/report.html` renders all of them on a page of its own.
+
+Three surfaces, and each is the size of its job. The card is the verdict, four words wide, and takes itself off
+screen. The Debug tab is the last fill, in a 360px column: what every field got, why, and how the run of fills has
+been going. The report page is a tab — read it, copy it, or save it as one text file to attach to a ticket. It is a
+page rather than a button because a popup closes the moment a save dialog takes focus, which is what the `downloads`
+permission was for.
+
+`src/welcome.html` opens once, on install: three steps and the shortcuts as Chrome actually bound them. Before it,
+a first press on a page with no form was indistinguishable from nothing happening.
 
 ## Verification
 
@@ -103,6 +113,34 @@ Judge a fill by the page, not by our report. Every filler reads its control back
 `test/complete.mjs` presses Fill once on a clean page and asks the page whether every required control now holds a
 value. `tools/audit.mjs` drives the real extension and watches the indicator, the overlays, the console and the icon
 *while* a fill runs — a still screenshot cannot tell a working progress bar from a frozen one.
+
+The fixtures are where a library's markup lives: `test/primevue-form.html` is the hard page (remote lists, a modal,
+an editor, uploads that answer late), `test/libraries-form.html` holds one select per library `LIBS` claims, and
+`test/demo-form.html` is the quick one the README's recording is made on.
+
+`npm run typecheck` reads the JSDoc and `types/` over the logic — the generator, the worker, the adapters, the
+overlays and the fillers — and emits nothing. `popup.js` and `content.js` are left out on purpose: they are almost
+entirely DOM narrowing, and ninety complaints that `getElementById` returns an `HTMLElement` would bury the one that
+mattered. What it is for is the shapes that travel between files, where a misremembered property name is silent at
+run time and reads as a control that would not take a value.
+
+## Why `<all_urls>`
+
+It is the permission that costs the most at install — "read and change all your data on all websites" — so it was
+measured rather than argued about. An extension with `activeTab` and `<all_urls>` as an *optional* permission was
+built and driven against a page with a form, and a page whose form is partly inside a frame from another origin:
+
+- `chrome.scripting.executeScript` fails outright with *"Cannot access contents of the page. Extension manifest must
+  request permission to access the respective host"* on any path that did not start with a user gesture Chrome
+  itself counts. The three real entry points do; **nothing automated does**, so the extension suite and
+  `tools/audit.mjs` — the two things that judge FormForge by the page — could no longer drive a fill at all.
+- `chrome.tabs.query` stops reporting `url` and `title`, which is how the suites and the audit find the tab.
+- A cross-origin frame needs the optional grant anyway, and asking for it opens a dialog no test can answer. An
+  embedded payment or booking form is exactly the case a tester needs filled.
+
+So the permission stays, and the Store listing says why in the same words. The thing that makes it defensible is not
+the manifest but the behaviour: there is no declared content script, nothing runs while you browse, and the filler is
+injected into one tab, on your action, and never on its own.
 
 ## Rules learned the hard way
 
@@ -116,7 +154,23 @@ Each of these was a bug on a real form and has a regression check.
   wrapper hid the PrimeVue MultiSelect inside it: no label selector, no option selector, and a read-back that
   returned the caption the wrapper holds.
 
+- The name a control states beats anything guessed from what sits near it. A MUI Select names its label through
+  `aria-labelledby` on the combobox and wraps a nameless input, so the first thing `describe()` found was the
+  placeholder beside it: three libraries came out called "Select…", and one took the caption of the field above it.
+  The order is ARIA, then the inner control's own label, then a label pointing at the root — ids are not unique on
+  real pages, and putting the root's label first had a date picker answering to the caption of a file input that
+  shared its wrapper's id.
+- Nine libraries, nine markups, and `test/libraries-form.html` carries one of each. Eight of them had never been
+  driven by anything — they were selectors nobody had watched match, and a wrong one does not miss a control, it
+  claims one and drives it blind.
+
 **Overlays**
+
+- The trigger is never the panel, and a press lands on the deepest surface rather than the root. Choices.js and Tom
+  Select render their list inside the control with "dropdown" in its class, so "the first thing whose class says
+  dropdown" pressed the hidden list and both reported "would not open" on every field; and a listener bound to a
+  child — Tom Select's control, react-select's control div, Select2's selection — never hears a press on the root
+  above it, while a listener on the root hears one on a child.
 
 - Every overlay question is scoped to the widget that owns it — through `aria-controls`, or by being an element that was
   not there before the press. "Any open panel" belongs to somebody else's control.
@@ -177,6 +231,17 @@ Each of these was a bug on a real form and has a regression check.
 - A file input is never offered to the model. The bytes are made in the page from the seed to match the input's own
   `accept`; asked anyway, it replied "image1.jpeg" and "Technical specifications.pdf" — two slots of a batch of
   twelve spent on names nothing reads.
+- Clear presses a remove button only inside a row that names a file we generated. "The nearest ancestor holding any
+  delete button" is the card the uploader sits in as soon as our rows are gone, and the delete button in that card
+  belongs to the record: Clear removed an attachment the tester had uploaded and pressed "Delete location".
+- The uploads a fill waits for belong to that fill. The list lived for the page, holding a DOM zone per attached
+  file, and on an SPA every fill pinned a few more detached subtrees for good.
+- A report row is found by seat, not by caption. An uploader's rows all read "Alternative text", and a complaint
+  about the first row's length marked the last row's entry — which then carried the first row's shortened value
+  while the first row's entry kept the long one, a form that did not exist.
+- Only a positive sign means a choice has been made: a selected option, a value in the inner input. "No placeholder
+  class in sight" used to pass for one, and a select that had reverted its value — blank label, no placeholder —
+  was believed to hold a choice, so the repair pass left it empty.
 
 **Finding fields**
 
@@ -236,9 +301,18 @@ Each of these was a bug on a real form and has a regression check.
   answered only when somebody pressed Fill four or five times in a row, fast enough that the presses themselves kept
   the worker awake. So the build holds the worker up while it runs, and the session it produces holds it up for ten
   minutes after the last use. One ticker does both; a hold that never expires is a worker that never sleeps.
-- The worker warms wherever somebody is about to fill — the popup opening, a shortcut, a menu click — rather than on
-  every start: bringing the model into memory alongside whatever woke the worker made the browser itself feel slow.
-  Nothing is downloaded on that path — a model that is not on disk is left alone.
+- The worker warms wherever somebody is about to fill — the popup opening, a shortcut, a menu click — and nowhere
+  else: bringing the model into memory alongside whatever woke the worker made the browser itself feel slow, and a
+  warm-up on `onStartup` did the same at every Chrome launch, on days no form was ever opened. Nothing is downloaded
+  on that path — a model that is not on disk is left alone.
+- Answers go back to the frame that asked, never to the tab. Every frame runs the filler and numbers its own fields
+  from zero, so a batch broadcast to the tab landed in every frame that was filling: an iframe's form took the top
+  form's answers under the same numbers, and its own batch, arriving later, found those fields already written.
+- One record per request. The worker kept a single "last exchange", and two frames asking at once pushed their
+  batches into whichever record was created last — each frame's Debug tab then showed two prompts for its three
+  fields, and the worker wrote one request's session time into the other's record.
+- A value that says "no value" is not an answer. "N/A" in a city box is a form that looks filled and validates
+  nothing; the field falls through to the rules or the filler instead.
 - How long a session has been coming up is reported, not just that it is. The number rising from one fill to the
   next is a build on its way; the same number twice is one that is starting over.
 - Ask it, then get on with the form. The deadline runs from the request rather than from the moment somebody starts
@@ -254,6 +328,15 @@ Each of these was a bug on a real form and has a regression check.
   so the German half of every rule pattern keeps a test: that check is what found `\btelefon\b` never reaching
   "Telefonnummer".
 - Declare the languages a fill uses when creating the session; undeclared, a German form gets English values back.
+- And then say which one to use, in the request. Left to infer it from the labels — which is what "match the page
+  language" asked for — the model reads the labels, and a German application is very often labelled in English: a
+  tester who picked DE got German from every rule, the city, the postcode, the prose, and English sentences from the
+  model in the same form. The language is a setting, so it comes from the setting.
+- The prompt has a budget, because on a small on-device model its length is most of the latency. A batch of twelve
+  fits in 1100 characters and a check holds it there. What that budget buys is an argument every line has to win:
+  the ids were listed three times — on each field line, in a prose line, and in the JSON skeleton — and the skeleton
+  is the one that made a batch answer in full, so the prose copy went. `(custom widget)` after the type said nothing
+  about the value. Two cells of a grid offered as examples of shape were "1" and "2".
 - Standing instructions live in the session; each batch runs on a `clone()` so requests do not grow; batches run
   together.
 - "Still loading" and "no model" are different answers and get different advice.
@@ -280,6 +363,32 @@ Each of these was a bug on a real form and has a regression check.
   spelled out in the prompt (`omitResponseConstraintInput`), so the skeleton on the last line is the only shape the
   model ever sees — and a skeleton holding one `{"id":N}` came back with one value for a batch of twelve, in under
   two seconds, looking for all the world like a model that simply had nothing to say. List every id.
+
+**Data**
+
+- Phone numbers come only from ranges reserved for fiction. One German block applied to every city gave Leipzig a
+  number somebody in Leipzig may well have, and a three-digit area code cut the block in half; the US "digits" form
+  used 555-1000 to 555-9999, of which only 555-0100 to 555-0199 is reserved. Five German cities have a block of their
+  own; the rest get one of the two reserved mobile blocks, because a mobile number is from nowhere in particular.
+- A locale is a country, and the picker names it as a language: EN and DE. A third entry for British English was
+  built and taken out again — which English it is is not a distinction anyone filling these forms wanted to make,
+  and two entries reading "English" would have been worse than one.
+- "Apt", "Suite" and "Unit" are the second address line only in an address. On their own they are a unit price, a
+  business unit, a test suite — and every one of them was getting "Unit 4".
+- A rule word that is also an ordinary word needs its context: "pass" alone was a boarding pass, "cost" a cost
+  centre, "mobile" an app version, "land" a plot. The German Steuernummer and the USt-IdNr are different numbers with
+  different shapes, and a validator for one rejects the other.
+- A step counts from `min`, or from zero when there is none, as the browser counts it; a `pattern` is compiled with
+  the `v` flag HTML compiles it with, or `\p{L}` fails to compile and the value goes through unchecked.
+- The email domain is whatever the tester typed into a box. "@acme.test", "acme" and "https://acme.test/" all
+  reached the address as typed.
+
+**Tools**
+
+- A tool that drives "the page" finds its tab by address, never by which one is active. `tools/audit.mjs` took the
+  active tab, which was right until the extension began opening its own on a fresh install — and every audit run
+  starts from a fresh profile, so every audit run was a fresh install. It filled the welcome page instead and hung
+  waiting for an answer from a tab with no filler in it.
 
 **Showing the work**
 
