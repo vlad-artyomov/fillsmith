@@ -87,7 +87,6 @@ const SYSTEM_PROMPT = [
     'Match the persona given. Write values in the language the request names, not the labels\' own.',
     'Infer from the label: "Project code" -> "PRJ-2481", not a name.',
     'Obey stated limits: maxLength, min, max, pattern. If options are listed, copy one verbatim.',
-    'HTML (<p>, <strong>, <em>, <ul><li>) only where a field says html.',
     'Never output: test, asdf, lorem ipsum, string, N/A, example, or leading/trailing spaces.'
 ].join('\n');
 
@@ -149,10 +148,11 @@ function buildUserPrompt(persona, pageTitle, fields, context, examples) {
         if (f.maxLength) bits.push(`max${f.maxLength}`);
         if (f.min != null || f.max != null) bits.push(`${f.min ?? ''}..${f.max ?? ''}`);
         if (f.pattern) bits.push(`pattern ${String(f.pattern).slice(0, 30)}`);
-        if (f.richText) bits.push('html');
         /* A field with no declared maximum gets one anyway when it is prose: one
          * richtext answer ran to seven hundred characters, spent the reply's whole
-         * token budget and left the other two fields of its batch unanswered. */
+         * token budget and left the other two fields of its batch unanswered.
+         * Markup is not asked for — the on-device model ignored the line that
+         * asked, and the page lays the answer out itself. */
         if (!f.maxLength && (f.richText || f.type === 'textarea')) bits.push('max300');
         if (f.options && f.options.length) {
             bits.push(`one of: ${f.options.slice(0, 12).map(o => `"${String(o).slice(0, 30)}"`).join(', ')}`);

@@ -284,6 +284,15 @@ Each of these was a bug on a real form and has a regression check.
   field back as full. Markup goes in as a **paste**, which is the door an editor converts rather than the one it
   polices, and the readback happens on the far side of the editor's own pass. An editor that kept nothing is given
   the words without the markup. `test/primevue-form.html` models both halves of Quill so the suite can see it.
+- Plain words go into an editor as paragraphs, never at a caret. `insertText` applies the formatting of wherever the
+  selection starts: a model's answer dropped over content that opened with `<strong>Note:</strong>` came out bold,
+  every line of it, and read as a worse answer than the one it replaced.
+- The model answers such a field in prose, and prose exercises nothing the control does. Its sentences are laid into
+  the same skeleton the rule builds — a bold lead-in, a paragraph with the italic note, a list — so the words are
+  the model's and the markup is ours. Asking the model for markup instead was a line in every prompt that the
+  on-device model ignored. The layout draws on its own stream, seeded from the persona and the answer: batches
+  finish in whatever order they finish, and taking from the persona's sequence here would make the rest of the page
+  depend on that order.
 
 **The model**
 
@@ -357,6 +366,8 @@ Each of these was a bug on a real form and has a regression check.
   lives behind a popup is not asked at all.
 - A field the seed decided is reported as a choice, not as a fallback. "The model had no answer for it" against a
   toggle nobody asked it about sends the reader looking in the wrong place.
+- A bare `contenteditable` is a rich-text field like a library's editor: same length cap in the prompt, same layout
+  on the way back. Treating only the recognised widgets as rich text left the plain ones with no stated maximum.
 - A prose field with no declared maximum gets one in the prompt. One richtext answer ran to seven hundred
   characters, spent the reply's token budget and left the other two fields of its batch unanswered.
 - The model copies the shape of the example it is shown. The response schema constrains the decoder but is never

@@ -639,6 +639,41 @@ check('an email domain is cleaned before it is used', domains.at === 'acme.test'
 check('and one that cannot be a domain falls back to example.com',
     domains.bare === 'example.com' && domains.empty === 'example.com', JSON.stringify(domains));
 
+/* The model answers a rich-text field in prose, and prose tests nothing the
+ * editor does. Its words are laid into the shape the rule builds, so a form
+ * exercises the bold, the italic and the list whichever answered the field. */
+const laidOut = await page.evaluate(() => {
+    const G = globalThis.FormForgeGen;
+    const en = G.buildPersona('RICH1', 'en-US', {});
+    const de = G.buildPersona('RICH1', 'de-DE', {});
+    const prose = 'The release fixes intermittent API failures. Query times are down by 15%. Accessibility was reviewed.';
+    return {
+        en: G.richLayout(prose, en),
+        de: G.richLayout(prose, de),
+        short: G.richLayout('One sentence only.', en),
+        again: G.richLayout('One sentence only.', en),
+        // A different seed is a different page, and its made-up half says so.
+        elsewhere: G.richLayout('One sentence only.', G.buildPersona('RICH2', 'en-US', {})),
+        unsafe: G.richLayout('A <script>alert(1)</script> and an & sign.', en)
+    };
+});
+check('the model\'s words come back as markup an editor can hold',
+    /<strong>Note:<\/strong>/.test(laidOut.en) && /<em>/.test(laidOut.en) && /<ul><li>/.test(laidOut.en),
+    laidOut.en.slice(0, 90));
+check('and its sentences are the ones used, not replaced',
+    /intermittent API failures/.test(laidOut.en) && /Query times are down by 15%/.test(laidOut.en),
+    laidOut.en.slice(0, 120));
+check('a German fill gets the German skeleton',
+    /<strong>Hinweis:<\/strong>/.test(laidOut.de) && /Bitte vor Freigabe prüfen/.test(laidOut.de),
+    laidOut.de.slice(0, 90));
+check('an answer too short for the shape is made up, and the same seed says the same thing',
+    (laidOut.short.match(/<li>/g) || []).length === 2 && laidOut.short === laidOut.again
+    && laidOut.elsewhere !== laidOut.short,
+    laidOut.short.slice(0, 90));
+check('and markup the model sent as text is escaped, not run',
+    !/<script>/.test(laidOut.unsafe) && /&lt;script&gt;/.test(laidOut.unsafe) && /&amp; sign/.test(laidOut.unsafe),
+    laidOut.unsafe.slice(0, 110));
+
 // Clear
 await page.evaluate(() => window.__formforge.clearAll());
 const cleared = await page.evaluate(() => document.getElementById('fn').value);

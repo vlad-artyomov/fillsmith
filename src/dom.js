@@ -205,12 +205,22 @@
      * far side of it: reading in the same tick reported a field as filled that
      * the editor had emptied a moment later. An editor that kept nothing is
      * given the words without the markup, which every editor keeps. */
+    /* Words with no markup of their own, given a shape an editor can hold. A
+     * model answers a rich-text field in prose, and prose inserted at a caret
+     * takes the formatting it lands on: dropped over content that opened with
+     * <strong>, an entire release note came out bold. Paragraphs replace the
+     * selection instead of typing into it, so nothing is inherited. */
+    const asParagraphs = (str) => str.split(/\n{2,}|\r?\n/).map(s => s.trim()).filter(Boolean)
+        .map(s => `<p>${s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`)
+        .join('') || '<p></p>';
+
     async function typeIntoRich(el, text) {
-        const str = String(text);
+        const plain = String(text);
+        const str = /<[a-z]/i.test(plain) ? plain : asParagraphs(plain);
         typeInto(el, str);
         await sleep(0);                                  // the editor's turn, not a wait for a duration
         const held = () => (el.innerText || el.textContent || '').trim();
-        if (held() || !/<[a-z]/i.test(str)) return held() || null;
+        if (held()) return held();
         typeInto(el, plainText(str));
         await sleep(0);
         return held() || null;

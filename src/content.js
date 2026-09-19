@@ -29,6 +29,9 @@
     const MARK = 'data-formforge-id';
     const SKIP_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image']);
     const CHOICE_KINDS = new Set(['choice', 'multichoice', 'inline-choice', 'autocomplete', 'radio', 'radio-group', 'select']);
+    /* A library's editor and a bare contenteditable are the same field to a
+     * tester: both take markup, and both are worth a length the prompt states. */
+    const RICH_KINDS = new Set(['richtext', 'contenteditable']);
     // Their options are in the page, not behind a popup, so they can be read at collect time.
     const INLINE_OPTIONS = new Set(['inline-choice', 'radio-group']);
     const CAPTCHA = /\b(captcha|recaptcha|hcaptcha|turnstile|otp|one-?time|2fa|mfa|verification\s*code|sicherheitscode)\b/i;
@@ -785,7 +788,7 @@
                 placeholder: f.placeholder || undefined,
                 min: f.min != null ? f.min : undefined,
                 max: f.max != null ? f.max : undefined,
-                richText: f.type === 'richtext' || undefined,
+                richText: RICH_KINDS.has(f.type) || undefined,
                 type: f.type,
                 maxLength: f.maxLength,
                 pattern: f.pattern,
@@ -983,7 +986,14 @@
 
         const modelAnswer = (f) => {
             const v = answers[String(f.idx)] ?? answers[f.idx];
-            return v != null && String(v).trim() !== '' ? v : null;
+            if (v == null || String(v).trim() === '') return null;
+            /* Prose into a rich-text field is a worse answer than the one it
+             * replaces: what such a control is worth testing is what its editor
+             * does with bold, italic and a list. The model's words go into the
+             * shape the rule would have built, so the words are its and the
+             * markup is ours. */
+            if (RICH_KINDS.has(f.type) && !/<[a-z]/i.test(String(v))) return G.richLayout(String(v), persona);
+            return v;
         };
         // Why a field ended up on the filler, in the words of whatever went wrong.
         const whyFallback = (f) => f.matchedRule ? 'a rule matched but produced nothing'

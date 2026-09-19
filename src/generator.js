@@ -209,8 +209,11 @@
     }
 
     // A rich-text editor exists to hold formatting, so give it some to exercise.
-    function richHtml(r, langKey) {
-        const s = someSentences(r, langKey, 4);
+    const escapeHtml = (t) => String(t)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    function richHtml(r, langKey, sentences) {
+        const s = (sentences || someSentences(r, langKey, 4)).map(escapeHtml);
         const de = langKey === 'de';
         return [
             `<p><strong>${de ? 'Hinweis' : 'Note'}:</strong> ${s[0]}</p>`,
@@ -220,6 +223,30 @@
             `<li>${s[3] || s[0]}</li>`,
             '</ul>'
         ].join('');
+    }
+
+    /* The model's words in the shape the control is worth testing with. It answers
+     * a rich-text field in prose, and prose exercises nothing the editor does —
+     * the bold, the italic and the list are the point of it. Asking for markup in
+     * the prompt was a line paid for on every batch that the on-device model
+     * ignored anyway, so the layout is built here instead. Short answers are made
+     * up from the same pool the rules draw on, so the page reads of a piece. */
+    function richLayout(text, persona) {
+        const langKey = persona.prose || 'en';
+        /* Its own stream, seeded from the persona and the answer. The persona's
+         * RNG is a sequence, and model answers arrive in whatever order the
+         * batches finish: drawing from it here would make the rest of the fill
+         * depend on that order, and the seed would stop reproducing the page. */
+        const r = mulberry32(seedFromString(`${persona.seed}|rich|${text}`));
+        const given = String(text).replace(/\s+/g, ' ').trim()
+            .split(/(?<=[.!?])\s+/).map(x => x.trim()).filter(Boolean);
+        for (let guard = 0; given.length < 4 && guard < 4; guard++) {
+            const more = someSentences(r, langKey, 4 - given.length);
+            if (!more.length) break;
+            given.push(...more);
+        }
+        while (given.length < 4) given.push(given[given.length - 1] || '');
+        return richHtml(r, langKey, given.slice(0, 4));
     }
 
     // ------------------------------------------------------------ checksums ----
@@ -414,6 +441,7 @@
             sentence: someSentences(r, L.prose, 1)[0],
             paragraph: someSentences(r, L.prose, 2 + Math.floor(r() * 2)).join(' '),
             richText: richHtml(r, L.prose),
+            prose: L.prose,
             _rng: r
         };
     }
@@ -689,6 +717,7 @@
 
     globalThis.FormForgeGen = {
         LOCALES, buildPersona, matchRule, matchRuleDetail, byType, fallbackText, constrain, numberFor,
-        fitMask, looksLikeMask, formatDate, shortenTo, cleanDomain, newSeed, mulberry32, seedFromString
+        fitMask, looksLikeMask, formatDate, shortenTo, cleanDomain, newSeed, mulberry32, seedFromString,
+        richLayout
     };
 })();

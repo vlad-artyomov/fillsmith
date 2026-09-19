@@ -164,6 +164,35 @@ check('and writing to one reports nothing rather than claiming success',
 check('so once the form enables it the markup goes in as markup',
     /<strong>/.test(switchedOff.html) && !/&lt;/.test(switchedOff.html),
     switchedOff.html.slice(0, 70));
+
+/* A model answers a rich-text field in prose, and it lands on whatever the
+ * rules already wrote there. Inserted at a caret, prose takes the formatting
+ * around it: over content opening with <strong>Note:</strong>, a whole release
+ * note came out bold, which read as a worse answer than the one it replaced. */
+const overwritten = await page.evaluate(async () => {
+    const D = globalThis.FormForgeDom;
+    const host = document.createElement('div');
+    host.innerHTML = '<div class="ql-editor" contenteditable="true"></div>';
+    document.body.appendChild(host);
+    try {
+        const editor = host.querySelector('.ql-editor');
+        await D.typeIntoRich(editor, '<p><strong>Note:</strong> one</p><ul><li>two</li></ul>');
+        const rules = editor.innerHTML;
+        await D.typeIntoRich(editor, 'A plain sentence from the model.\nAnd a second one.');
+        return {rules, model: editor.innerHTML, text: editor.innerText.trim()};
+    } finally {
+        host.remove();
+    }
+});
+check('a plain answer replacing marked-up content does not inherit its formatting',
+    !/<strong>|<em>|<b>|<i>/.test(overwritten.model),
+    overwritten.model.slice(0, 120));
+check('and arrives as paragraphs rather than one run of text',
+    (overwritten.model.match(/<p>/g) || []).length === 2 && /A plain sentence/.test(overwritten.text),
+    overwritten.model.slice(0, 120));
+check('markup of its own still goes in untouched',
+    /<strong>Note:<\/strong>/.test(overwritten.rules) && /<li[^>]*>two<\/li>/.test(overwritten.rules),
+    overwritten.rules.slice(0, 120));
 check('detects the autocomplete', widgetKinds.includes('primevue-autocomplete'));
 check('detects the datepicker', widgetKinds.includes('primevue-datepicker'));
 check('detects the inputnumber', widgetKinds.includes('primevue-inputnumber'));

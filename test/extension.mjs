@@ -1044,11 +1044,19 @@ if (worker) {
             kind: 'fill',
             settings: {seed: 'AI1', locale: 'de-DE', useAI: true, overwrite: true, emailDomain: 'example.com'}
         });
+        const editor = await chrome.scripting.executeScript({
+            target: {tabId: tab.id},
+            func: () => {
+                const el = document.querySelector('.ql-editor');
+                return el ? el.innerHTML : '';
+            }
+        });
         await chrome.tabs.remove(tab.id);
         chrome.runtime.onMessage.removeListener(stub);
         const weak = (res.filled || []).find(f => /notiz|comment|description|information/i.test(f.label));
         return {
             aiUsed: res.aiUsed,
+            editor: (editor[0] && editor[0].result) || '',
             weakOverridden: !!(weak && String(weak.source).startsWith('ai')),
             weakSample: weak ? `${weak.label}=${weak.value} [${weak.source}]` : '',
             fallbacks: (res.filled || []).filter(f => String(f.source).startsWith('fallback')).map(f => f.label),
@@ -1065,6 +1073,16 @@ if (worker) {
         (answered && (answered.error || answered.fallbacks.join(', '))) || '');
     check('a field that appears mid-fill is answered by the model too',
         answered && answered.late.some(x => /MODEL-/.test(x)), (answered && answered.late.join(' ')) || 'none');
+    /* The model answers a rich-text field in prose, and the editor is the one
+     * control where prose is a worse answer than the markup it replaces: its
+     * bold, its italic and its list are what a tester is there to exercise.
+     * Dropped in as text it also took the formatting it landed on, and a whole
+     * release note came out bold. */
+    check('a model answer reaches the editor as markup, in the shape a rule would have built',
+        answered && /MODEL-/.test(answered.editor || '')
+        && /<strong>Hinweis:<\/strong>/.test(answered.editor || '')
+        && /<em>/.test(answered.editor) && /<li/.test(answered.editor),
+        (answered && (answered.editor || '').slice(0, 130)) || '');
 
     /* Pressing the shortcut used to do nothing visible until six files had been
      * injected and the first field read — a second or more of a page that looks
