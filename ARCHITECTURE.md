@@ -363,6 +363,12 @@ Each of these was a bug on a real form and has a regression check.
   spelled out in the prompt (`omitResponseConstraintInput`), so the skeleton on the last line is the only shape the
   model ever sees — and a skeleton holding one `{"id":N}` came back with one value for a batch of twelve, in under
   two seconds, looking for all the world like a model that simply had nothing to say. List every id.
+- The skeleton is a map keyed by id, `{"0":"","1":""}`, and the schema is built per batch: one property per id, all
+  of them `required`, nothing else admitted. The grammar is then what makes a reply complete, rather than the
+  model's willingness to copy a long example. A list of `{"id":N,"value":""}` objects spent twenty characters on a
+  field where the map spends eight, and on a batch of twelve it was a third of the whole prompt.
+- Keep off the field lines anything the model cannot act on. `text` was the type of almost every field and `required`
+  was true of many, and neither changes the value written: every field in a batch is being answered regardless.
 
 **Data**
 

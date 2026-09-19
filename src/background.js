@@ -96,25 +96,25 @@ const SYSTEM_PROMPT = [
  * back, or a refusal. Keep in step with LOCALES in generator.js. */
 const LANGUAGES = ['en', 'de'];
 
-const RESPONSE_SCHEMA = {
-    type: 'object',
-    properties: {
-        values: {
-            type: 'array',
-            items: {
-                type: 'object',
-                properties: {id: {type: 'integer'}, value: {type: 'string'}},
-                required: ['id', 'value']
-            }
-        }
-    },
-    required: ['values']
-};
-
-/* The schema constrains the decoder without being spelled out to the model:
- * on a small on-device model the prompt length is most of the latency, and the
- * shape is already stated in the last line of every prompt. */
-const CONSTRAIN = {responseConstraint: RESPONSE_SCHEMA, omitResponseConstraintInput: true};
+/* One property per field id, every one of them required. The schema is built
+ * per batch because the ids differ, and it is what makes a reply complete: a
+ * permissive one let the decoder close the object after a single entry, and the
+ * other eleven fields of a batch fell through to the filler unanswered.
+ *
+ * It constrains the decoder without being spelled out to the model — on a small
+ * on-device model the prompt length is most of the latency, and the last line of
+ * every prompt already states the shape. A model too old to take the schema
+ * throws, and askBatch asks again without it. */
+function constrain(fields) {
+    const properties = {};
+    for (const f of fields) properties[String(f.id)] = {type: 'string'};
+    return {
+        responseConstraint: {
+            type: 'object', properties, required: Object.keys(properties), additionalProperties: false
+        },
+        omitResponseConstraintInput: true
+    };
+}
 
 const BATCH = 12;
 
@@ -138,11 +138,14 @@ function buildUserPrompt(persona, pageTitle, fields, context, examples) {
     const language = persona.language || '';
     lines.push('');
     for (const f of fields) {
-        const bits = [`${f.id}`, f.type];
+        /* Only the unusual type is named. "text" was on almost every line and
+         * told the model nothing it could not see from the label. Neither did
+         * "required": every field in the batch is being answered anyway. */
+        const bits = [`${f.id}`];
+        if (f.type && f.type !== 'text') bits.push(f.type);
         const label = String(f.label || '').split('|')[0].replace(/\s+/g, ' ').trim().slice(0, 60);
         bits.push(`"${label}"`);
         if (f.section) bits.push(`in "${String(f.section).slice(0, 40)}"`);
-        if (f.required) bits.push('required');
         if (f.maxLength) bits.push(`max${f.maxLength}`);
         if (f.min != null || f.max != null) bits.push(`${f.min ?? ''}..${f.max ?? ''}`);
         if (f.pattern) bits.push(`pattern ${String(f.pattern).slice(0, 30)}`);
@@ -156,17 +159,19 @@ function buildUserPrompt(persona, pageTitle, fields, context, examples) {
         }
         lines.push(bits.join(' '));
     }
-    /* One entry per field in the skeleton, never a single {"id":N}. The schema
-     * is deliberately not spelled out to the model (omitResponseConstraintInput
-     * keeps the prompt short), so this line is the only shape it ever sees — and
-     * it copies that shape literally. A one-entry example got exactly one value
-     * back for a batch of twelve, and the other eleven fields fell through to
-     * the filler with "the model had no answer for it". */
-    /* The ids are listed once, here. They are on every field line above and in
+    /* One entry per field, keyed by id. The schema is deliberately not spelled
+     * out to the model (omitResponseConstraintInput keeps the prompt short), so
+     * this line is the only shape it ever sees — and it copies that shape
+     * literally, which is why every field appears in it: a one-entry example got
+     * exactly one value back for a batch of twelve. A map spends eight characters
+     * on a field where a list of {"id":N,"value":""} objects spent twenty, and on
+     * a batch of twelve that skeleton was a third of the whole prompt.
+     *
+     * The ids are listed once, here. They are on every field line above and in
      * this skeleton; a third listing in prose was the same list a third time. */
     const ids = fields.map(f => f.id);
     lines.push('', `Answer all ${ids.length} field${ids.length === 1 ? '' : 's'}${language ? ' in ' + language : ''}, one each:`);
-    lines.push(`{"values":[${ids.map(id => `{"id":${id},"value":""}`).join(',')}]}`);
+    lines.push(`{${ids.map(id => `"${id}":""`).join(',')}}`);
     return lines.join('\n');
 }
 
@@ -211,7 +216,14 @@ function parseValues(text, asked, tally) {
         }
     }
     if (!data) return out;
-    const list = Array.isArray(data) ? data : data.values;
+    /* Two shapes arrive. The map keyed by id is what the prompt asks for and what
+     * the grammar enforces; the list survives because a hosted model, which gets
+     * no grammar, sometimes sends one, and because replies recorded before the
+     * map still sit in the debug log. */
+    let list = Array.isArray(data) ? data : data.values;
+    if (!Array.isArray(list) && data && typeof data === 'object') {
+        list = Object.entries(data).map(([id, value]) => ({id, value}));
+    }
     if (!Array.isArray(list)) return out;
 
     /* A value that says "no value" is not an answer: written, "N/A" in a city
@@ -439,7 +451,7 @@ async function askBatch(session, persona, pageTitle, group, context, examples, b
     let text = '';
     try {
         try {
-            text = await turn.prompt(prompt, withSignal(CONSTRAIN));
+            text = await turn.prompt(prompt, withSignal(constrain(group)));
         } catch (err) {
             if (err && err.name === 'AbortError') throw err;
             text = await turn.prompt(prompt, withSignal({}));
@@ -686,7 +698,7 @@ async function nanoCheck(onStage = (/** @type {string} */ _stage) => {
         const {s: turn, temporary} = await statelessSession(session);
         onStage('waiting for the on-device reply');
         const t0 = Date.now();
-        const reply = await turn.prompt(probePrompt, CONSTRAIN);
+        const reply = await turn.prompt(probePrompt, constrain(PROBE_FIELD));
         out.replyMs = Date.now() - t0;
         out.reply = String(reply || '').slice(0, 200);
         if (temporary) {

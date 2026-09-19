@@ -49,8 +49,9 @@ one. `test/primevue-form.html?latency=slow` makes the fixture's remote pickers s
 - **No `Math.random()` in a fill path.** `rng` is the persona's RNG; the seed must reproduce every choice.
 - **Nothing to the console** from content scripts or the worker. Use `note()` from `dom.js`; it lands in the Debug tab.
 - **Keep the prompt short.** On the on-device model its length is most of the latency, so every line added to a
-  prompt is paid on every batch of every fill. A batch of twelve fits in 1100 characters and a check in `test:ext`
-  holds it there; before adding a line, look for one that is saying the same thing twice.
+  prompt is paid on every batch of every fill. A batch of twelve fits in 750 characters and a check in `test:ext`
+  holds it there; before adding a line, look for one that is saying the same thing twice. The reply's shape is the
+  grammar's job, not the prompt's: the schema is built per batch and names every id, so the skeleton can stay short.
 - **Never block on the model.** Every await has a budget, and the fill does not wait for it: the request goes out as
   soon as the form is read and writing starts immediately. A missing, slow or wedged model changes how good the values
   are, never whether they arrive — or when.

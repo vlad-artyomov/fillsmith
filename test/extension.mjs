@@ -20,10 +20,15 @@ const withTimeout = (p, ms, label) => Promise.race([
     Promise.resolve(p),
     new Promise(r => setTimeout(() => r({__timeout: label}), ms))
 ]);
+/* A wall against a hang, not a runtime budget. Set just above the local time it
+ * caught the suite at 173 of 179 checks on a CI runner, which is a red build
+ * that says nothing about the code. Every individual step has its own timeout;
+ * this one only has to be longer than all of them together. */
+const WATCHDOG_MS = 300000;
 const watchdog = setTimeout(() => {
-    console.log('\nWATCHDOG: suite exceeded 160s, aborting');
+    console.log(`\nWATCHDOG: suite exceeded ${WATCHDOG_MS / 1000}s, aborting`);
     process.exit(1);
-}, 160000);
+}, WATCHDOG_MS);
 watchdog.unref?.();
 
 // --- static manifest validation -------------------------------------------
@@ -985,7 +990,11 @@ if (worker) {
          * data rather than as a miss, which is worse than an empty field. */
         tooMany: parseValues('{"values":[{"value":"A"},{"value":"X"},{"value":"B"}]}', [{id: 4}, {id: 7}]),
         tooFew: parseValues('{"values":[{"value":"A"}]}', [{id: 4}, {id: 7}]),
-        mixed: parseValues('{"values":[{"id":4,"value":"A"},{"value":"X"}]}', [{id: 4}, {id: 7}])
+        mixed: parseValues('{"values":[{"id":4,"value":"A"},{"value":"X"}]}', [{id: 4}, {id: 7}]),
+        /* The shape the prompt asks for and the grammar enforces. */
+        map: parseValues('{"4":"A","7":"B"}', [{id: 4}, {id: 7}]),
+        mapJunk: parseValues('{"4":"A","7":"N/A"}', [{id: 4}, {id: 7}]),
+        mapStrange: parseValues('{"4":"A","99":"B"}', [{id: 4}, {id: 7}])
     })).catch(e => ({error: e.message})), 10000, 'reconcile');
 
     check('an answer with a shifted id is still used',
@@ -1006,6 +1015,13 @@ if (worker) {
     check('and an odd entry among named ones is dropped, not slid into the next slot',
         reconciled && reconciled.mixed && reconciled.mixed['4'] === 'A' && reconciled.mixed['7'] === undefined,
         JSON.stringify(reconciled && reconciled.mixed));
+    check('a reply keyed by id is read straight off',
+        reconciled && reconciled.map && reconciled.map['4'] === 'A' && reconciled.map['7'] === 'B',
+        JSON.stringify(reconciled && reconciled.map));
+    check('a keyed reply is held to the same rules as a listed one',
+        reconciled && reconciled.mapJunk && reconciled.mapJunk['7'] === undefined
+        && reconciled.mapStrange && reconciled.mapStrange['4'] === 'A' && reconciled.mapStrange['7'] === undefined,
+        `${JSON.stringify(reconciled && reconciled.mapJunk)} / ${JSON.stringify(reconciled && reconciled.mapStrange)}`);
 
     /* A field with no rule should get a model answer, not a fallback — including
      * one that only appears part-way through the fill, which earlier went
@@ -1139,6 +1155,7 @@ if (worker) {
         const realGlobal = self.LanguageModel, realSession = nanoSession;
         nanoSession = null;
         let seen = '';
+        let constrained = null;
         self.LanguageModel = {
             availability: async () => 'available',
             create: async () => ({
@@ -1146,11 +1163,14 @@ if (worker) {
                     return {...this};
                 },
                 // As many answers as the example shows, in the order the fields were listed.
-                prompt: async (p) => {
+                prompt: async (p, opts) => {
                     seen = p;
-                    const shown = (p.split('\n').pop().match(/\{"id":/g) || []).length;
+                    constrained = opts && opts.responseConstraint;
+                    const shown = (p.split('\n').pop().match(/":""/g) || []).length;
                     const ids = [...p.matchAll(/^(\d+) /gm)].map(m => +m[1]);
-                    return JSON.stringify({values: ids.slice(0, shown).map(id => ({id, value: 'Wert ' + id}))});
+                    const out = {};
+                    for (const id of ids.slice(0, shown)) out[id] = 'Wert ' + id;
+                    return JSON.stringify(out);
                 },
                 destroy() {
                 }
@@ -1161,23 +1181,33 @@ if (worker) {
         const res = await generate({persona: {fullName: 'W'}, pageTitle: 'w', context: {}, examples: [], fields});
         self.LanguageModel = realGlobal;
         nanoSession = realSession;
-        return {answered: Object.keys(res.values || {}).length, tail: seen.split('\n').pop()};
+        return {
+            answered: Object.keys(res.values || {}).length, tail: seen.split('\n').pop(),
+            required: (constrained && constrained.required) || [],
+            closed: !!constrained && constrained.additionalProperties === false
+        };
     }).catch(e => ({error: e.message})), 25000, 'skeleton');
 
     check('a batch of twelve comes back with twelve values',
         skeleton && !skeleton.error && skeleton.answered === 12,
         skeleton && skeleton.error ? skeleton.error : `${skeleton && skeleton.answered} answered`);
     check('and the example the model is shown holds every id, not just one',
-        skeleton && !skeleton.error && (skeleton.tail.match(/\{"id":/g) || []).length === 12,
+        skeleton && !skeleton.error && (skeleton.tail.match(/":""/g) || []).length === 12,
         skeleton && skeleton.tail ? skeleton.tail.slice(0, 120) : '');
+    /* The example is what the model copies; the grammar is what stops it copying
+     * only the first line of it. Both name all twelve or neither is worth having. */
+    check('and the grammar requires every id and admits nothing else',
+        skeleton && !skeleton.error && skeleton.closed === true
+        && (skeleton.required || []).join(',') === '0,1,2,3,4,5,6,7,8,9,10,11',
+        skeleton ? `${(skeleton.required || []).length} required, closed=${skeleton.closed}` : '');
 
     /* On a small on-device model the length of the request is most of the
      * latency, so the prompt has a budget and this is it. A full batch of twelve
-     * fields, each with a label, a section and a limit, fits in 1100 characters
+     * fields, each with a label, a section and a limit, fits in 750 characters
      * — and a line added to every prompt has to earn its place against that.
-     * The instruction that names the language is the whole of what was added
-     * today; it paid for itself by taking the ids out of the prose line, where
-     * they were listed a third time. */
+     * The skeleton is a map keyed by id rather than a list of objects naming it,
+     * which is where a third of the prompt went; "text" and "required" came off
+     * the field lines because neither told the model anything. */
     const budget = await withTimeout(worker.evaluate(() => {
         const fields = Array.from({length: 12}, (_, i) => ({
             id: i, type: i % 4 ? 'text' : 'textarea', label: `Attribute ${i + 1}`,
@@ -1193,7 +1223,7 @@ if (worker) {
         };
     }).catch(e => ({error: e.message})), 10000, 'prompt size');
     check('a batch of twelve stays inside its character budget',
-        budget.prompt > 0 && budget.prompt <= 1100 && budget.system <= 650,
+        budget.prompt > 0 && budget.prompt <= 750 && budget.system <= 650,
         budget.error || `${budget.prompt} chars, on a system prompt of ${budget.system}`);
 
     /* The first create() after the extension loads is where the browser brings a
@@ -2052,8 +2082,9 @@ if (worker) {
                 },
                 prompt: async (p) => {
                     await new Promise(r => setTimeout(r, /Delta/.test(p) ? 1500 : 300));
-                    const rows = [...p.matchAll(/^(\d+) \S+ "([^"]+)"/gm)];
-                    return JSON.stringify({values: rows.map(m => ({id: +m[1], value: 'Model:' + m[2]}))});
+                    // The type is on the line only when it is not "text".
+                    const rows = [...p.matchAll(/^(\d+) (?:\S+ )?"([^"]+)"/gm)];
+                    return JSON.stringify(Object.fromEntries(rows.map(m => [m[1], 'Model:' + m[2]])));
                 },
                 destroy() {
                 }
