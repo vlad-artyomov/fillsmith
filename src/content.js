@@ -804,7 +804,13 @@
          * together lost one of them, and the Debug tab described a form that was
          * one of several on the page. */
         toast(`Filled ${filled.length} field${filled.length === 1 ? '' : 's'}`,
-            {persona, aiUsed, filled, widgets: widgetCount, skipped, ms: phase.total, total: fields.length});
+            {
+                persona, aiUsed, filled, widgets: widgetCount, skipped, ms: phase.total, total: fields.length,
+                /* The one ending that otherwise looks like the AI does not work:
+                 * every field from a rule, no chip saying "from the model", and
+                 * no reason given anywhere the person is looking. */
+                warming: modelAsked && !aiUsed && M.modelWarming
+            });
         return {
             url: location.href.slice(0, 200), title: document.title.slice(0, 80),
             fieldCount: fields.length,
@@ -1048,6 +1054,14 @@
     if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.onMessage) return;
 
     function exclusive(job, respond) {
+        /* A fill that is only waiting for the model is not doing anything the
+         * next press should queue behind: the form it wrote is finished. It is
+         * cut short instead, and the press that cut it goes ahead. */
+        if (busy && M.abandon) {
+            M.abandon();
+            waitFree().then(() => exclusive(job, respond));
+            return true;
+        }
         if (busy) {
             respond({ok: false, error: 'a fill is already running'});
             return false;
@@ -1058,6 +1072,9 @@
         });
         return true;
     }
+
+    // Up to a second for the abandoned fill to let go; longer than it needs.
+    const waitFree = () => H.waitFor(() => !busy, 1000, 20);
 
     chrome.runtime.onMessage.addListener((msg, sender, respond) => {
         // "Are you there?" — the worker's way of telling a live frame from one whose script died with an update.

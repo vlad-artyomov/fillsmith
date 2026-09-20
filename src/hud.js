@@ -358,6 +358,11 @@
         if (by.ai) tag(`${by.ai} from the model`, 'ff-ai');
         if (by.choice) tag(`${by.choice} chosen`);
         if (by.fallback) tag(`${by.fallback} filler`);
+        if (d.warming) {
+            tag('AI still starting', 'ff-ai');
+            now.textContent = 'it keeps loading in the background — the next fill has it';
+            now.classList.remove('ff-off');
+        }
         if (d.skipped && d.skipped.length) {
             tag(`${d.skipped.length} left empty`, 'ff-miss');
             const names = d.skipped.slice(0, 2).map(s => s.label).filter(Boolean).join(', ');
