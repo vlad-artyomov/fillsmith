@@ -1243,7 +1243,15 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
         return false;
     }
     if (msg.kind === 'nano-status') {
-        nanoStatus().then(s => respond({ok: true, status: s}));
+        /* Weights on the disk are not a session. `available` meant the first, the
+         * pill read "model ready", and the fill that followed had no model at all
+         * because building one takes half a minute. The two are reported apart. */
+        nanoStatus().then(s => respond({
+            ok: true, status: s,
+            ready: !!nanoSession,
+            building: nanoBuilding || !!nanoPending,
+            buildingMs: nanoBuildStarted ? Date.now() - nanoBuildStarted : 0
+        }));
         return true;
     }
     return false;

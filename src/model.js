@@ -26,6 +26,8 @@
         modelLoading: false,
         modelRequestMs: 0,
         warmProbe: null,
+        // Set while a fill is doing nothing but wait for the model; see abandon().
+        abandon: null,
         modelBatch: null,
         waiters: []
     };
@@ -43,7 +45,14 @@
      * nothing, and one that does not is left to finish in the background, ready
      * for the fill after this one. A first fill without the model is a form
      * filled from the rules; a first fill that hangs is an uninstall. */
-    const SESSION_ALLOWANCE_MS = 3000;
+    /* How long a fill will sit with a session that is still coming up. Three
+     * seconds against a cold create that takes twenty-eight meant the first fill
+     * after the worker starts never had a model, and the person who had just
+     * installed the extension for its AI saw a form filled entirely by rules and
+     * nothing to say why. The form is complete in eighty milliseconds either way,
+     * so the wait costs nothing but the card staying up — and the card now says
+     * what it is waiting for. A second press cuts it short. */
+    const SESSION_ALLOWANCE_MS = 25000;
     const LATER_PASS_SHARE = 0.5;
     /* Answers arriving mid-request: the worker sends each batch as it lands, and
      * whoever is waiting on a field is woken by it rather than by the whole
@@ -183,18 +192,32 @@
             const loading = !(warm && warm.ready) && !S.modelWarm;
             if (loading) {
                 S.modelLoading = true;
-                progress('model', 'Warming up the model', null);
+                /* Said in full, because this is the moment the promise looks
+                 * broken: the form is done, nothing is happening, and the reason
+                 * is a one-off cost nobody was told about. */
+                progress('model', 'Starting the AI', {
+                    label: 'the form is filled — the AI takes a moment the first time'
+                });
             }
             payload.budgetMs = budget;
             payload.sessionWaitMs = loading ? SESSION_ALLOWANCE_MS : 0;
             const tAsk = Date.now();
+            /* Pressing Fill again while the last one is only waiting for the
+             * model should start the new fill, not be told the page is busy.
+             * The wait gives up instead; the worker keeps building, and the fill
+             * that follows is the one that gets the session. */
+            const dropped = new Promise(r => {
+                S.abandon = () => r({ok: false, timedOut: true, abandoned: true});
+            });
             const res = await Promise.race([
                 chrome.runtime.sendMessage({kind: 'generate', payload}),
+                dropped,
                 new Promise(r => setTimeout(() => r({
                     ok: false,
                     timedOut: true
                 }), budget + (loading ? SESSION_ALLOWANCE_MS : 0)))
             ]);
+            S.abandon = null;
             S.modelLoading = false;
             S.modelRequestMs += Date.now() - tAsk;
             if (res && !res.timedOut) S.modelWarm = true;

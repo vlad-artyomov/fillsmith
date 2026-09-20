@@ -165,9 +165,33 @@ async function load() {
         const text = $('statusText');
         const status = res && res.status;
         if (status === 'available') {
-            pill.className = 'pill ok';
-            text.textContent = 'model ready';
-            pill.title = 'Gemini Nano answers the fields no rule recognises.';
+            /* Downloaded is not running. A session takes about half a minute to
+             * build and dies with the worker, so "model ready" over a cold one
+             * was the extension promising what the next fill could not deliver.
+             * Opening this popup has already started the build (nano-warm above),
+             * so the pill watches it rather than guessing. */
+            const settle = (res2) => {
+                if (res2 && res2.ready) {
+                    pill.className = 'pill ok';
+                    text.textContent = 'model ready';
+                    pill.title = 'Gemini Nano is loaded and answers the fields no rule recognises.';
+                    return true;
+                }
+                pill.className = 'pill warn';
+                const secs = Math.round(((res2 && res2.buildingMs) || 0) / 1000);
+                text.textContent = secs > 1 ? `model starting — ${secs}s` : 'model starting';
+                pill.title = 'Downloaded, but not loaded yet. It takes about half a minute, '
+                    + 'and the fill you start meanwhile is filled by the rules.';
+                return false;
+            };
+            if (settle(res)) return;
+            const poll = setInterval(() => {
+                chrome.runtime.sendMessage({kind: 'nano-status'}, (r) => {
+                    void chrome.runtime.lastError;
+                    if (settle(r)) clearInterval(poll);
+                });
+            }, 1000);
+            addEventListener('unload', () => clearInterval(poll));
             return;
         }
         if (status === 'downloadable' || status === 'downloading') {

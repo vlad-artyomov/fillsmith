@@ -1322,6 +1322,134 @@ if (worker) {
         warming && warming.warming === true && /still loading/.test(warming.note || ''),
         (warming && warming.note) || String(warming && warming.warming));
 
+    /* Half a minute is what a cold `create()` costs, and a fill used to walk away
+     * from it after three seconds — so the first fill after Chrome starts, on the
+     * day somebody installs this for its AI, had no AI in it and said nothing
+     * about why. The form is finished long before the window opens, so the wait
+     * costs nothing but the card staying up. */
+    step('a session that is still being built when the fill starts');
+    const cold = await withTimeout(worker.evaluate(async ({files, url}) => {
+        const real = self.LanguageModel, realSession = nanoSession;
+        nanoSession = null;
+        nanoPending = null;
+        nanoBuilding = false;
+        self.LanguageModel = {
+            availability: async () => 'available',
+            create: async () => {
+                await new Promise(r => setTimeout(r, 5000));   // past the window a fill used to allow
+                return {
+                    clone: async function () {
+                        return {...this};
+                    },
+                    prompt: async (p) => {
+                        const ids = [...p.matchAll(/^(\d+) /gm)].map(m => m[1]);
+                        return JSON.stringify(Object.fromEntries(ids.map(id => [id, 'COLD-' + id])));
+                    },
+                    destroy() {
+                    }
+                };
+            }
+        };
+        const tab = await chrome.tabs.create({url, active: false});
+        await new Promise(r => setTimeout(r, 700));
+        await chrome.scripting.executeScript({target: {tabId: tab.id, allFrames: true}, files});
+        const t0 = Date.now();
+        const res = await chrome.tabs.sendMessage(tab.id, {
+            kind: 'fill', settings: {seed: 'COLD1', locale: 'en-US', useAI: true, overwrite: true}
+        });
+        const ms = Date.now() - t0;
+        await chrome.tabs.remove(tab.id);
+        self.LanguageModel = real;
+        nanoSession = realSession;
+        return {ms, aiUsed: res.aiUsed, via: res.modelVia, firstPass: res.phase && res.phase.firstPass};
+    }, {files: INJECTED, url: fixtureUrl}).catch(e => ({error: e.message})), 60000, 'cold');
+
+    check('a session five seconds in the building is still used by the fill that started it',
+        cold && !cold.error && cold.aiUsed > 0 && cold.via === 'on-device',
+        cold && cold.error ? cold.error : `${cold.aiUsed} answered via ${cold.via} in ${cold.ms}ms`);
+    check('and the form itself was finished before the model was even up',
+        cold && !cold.error && cold.ms > 4000 && cold.firstPass < cold.ms - 1000,
+        cold && !cold.error ? `form in ${cold.firstPass}ms, fill returned at ${cold.ms}ms` : '');
+
+    /* A window that long must not make the page unusable. A fill waiting on the
+     * model has finished writing; the next press should start, not be told the
+     * page is busy for half a minute. */
+    step('pressing Fill again while the model is still coming up');
+    const cutShort = await withTimeout(worker.evaluate(async ({files, url}) => {
+        const real = self.LanguageModel, realSession = nanoSession;
+        nanoSession = null;
+        nanoPending = null;
+        nanoBuilding = false;
+        self.LanguageModel = {
+            availability: async () => 'available',
+            create: () => new Promise(() => {           // never comes up
+            })
+        };
+        const tab = await chrome.tabs.create({url, active: false});
+        await new Promise(r => setTimeout(r, 700));
+        await chrome.scripting.executeScript({target: {tabId: tab.id, allFrames: true}, files});
+        const settings = {seed: 'CUT1', locale: 'en-US', useAI: true, overwrite: true};
+        const tFirst = Date.now();
+        let firstMs = 0;
+        const first = chrome.tabs.sendMessage(tab.id, {kind: 'fill', settings})
+            .then(r => {
+                firstMs = Date.now() - tFirst;
+                return r;
+            });
+        await new Promise(r => setTimeout(r, 1500));
+        const t0 = Date.now();
+        const second = await chrome.tabs.sendMessage(tab.id, {kind: 'fill', settings: {...settings, seed: 'CUT2'}});
+        const ms = Date.now() - t0;
+        const firstRes = await first;
+        await chrome.tabs.remove(tab.id);
+        self.LanguageModel = real;
+        nanoSession = realSession;
+        return {ms, firstMs, secondOk: !!(second && second.ok), secondCount: second && second.count, firstOk: !!(firstRes && firstRes.ok)};
+    }, {files: INJECTED, url: `${origin}/form.html`}).catch(e => ({error: e.message})), 60000, 'cut short');
+
+    check('the second press fills the form instead of being told the page is busy',
+        cutShort && !cutShort.error && cutShort.secondOk && cutShort.secondCount > 0,
+        cutShort && cutShort.error ? cutShort.error : `ok=${cutShort && cutShort.secondOk}, ${cutShort && cutShort.secondCount} field(s)`);
+    /* The one that was waiting lets go at once rather than sitting out the rest
+     * of its window, and still answers with the form it had already written. */
+    check('and the fill it interrupted lets go at once, with the form it had written',
+        cutShort && !cutShort.error && cutShort.firstOk && cutShort.firstMs < 4000,
+        cutShort && !cutShort.error
+            ? `the first fill returned after ${cutShort.firstMs}ms of a 25s window`
+            : '');
+
+    /* Downloaded is not running, and the pill said "model ready" over a session
+     * that did not exist yet. */
+    step('what the popup says about the model');
+    const pill = await (async () => {
+        const read = async () => {
+            const page = await ctx.newPage();
+            await page.goto(`chrome-extension://${id}/src/popup.html`);
+            await page.waitForTimeout(900);
+            const text = await page.evaluate(() => (document.getElementById('statusText') || {}).textContent || '');
+            await page.close();
+            return text.trim();
+        };
+        await worker.evaluate(() => {
+            self.LanguageModel = {availability: async () => 'available', create: () => new Promise(() => {
+            })};
+            nanoSession = null;
+            nanoPending = null;
+            nanoBuilding = false;
+        });
+        const cold = await read();
+        await worker.evaluate(() => {
+            nanoSession = {prompt: async () => '{}', destroy() {
+            }};
+        });
+        const warm = await read();
+        return {cold, warm};
+    })().catch(e => ({error: e.message}));
+
+    check('the pill says the model is starting rather than ready while it is still coming up',
+        pill && !pill.error && /starting/i.test(pill.cold) && /ready/i.test(pill.warm),
+        pill && pill.error ? pill.error : `cold "${pill.cold}", warm "${pill.warm}"`);
+
     /* The first `create()` after a reload is where the browser brings a
      * multi-gigabyte model into memory — twenty-eight seconds, measured on a cold
      * one. The fill used to wait out most of that so its first run could have

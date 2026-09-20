@@ -330,6 +330,15 @@ Each of these was a bug on a real form and has a regression check.
 
 **The model**
 
+- Weights on the disk are not a running model. `availability()` says the first; a session takes about half a minute
+  to build and dies with the worker. The pill read "model ready" over a cold one, which is the extension promising
+  what the next fill cannot deliver, so the two are reported apart and the popup watches the build it started.
+- A fill waits out a session that is coming up, because the form is finished before the window opens. Three seconds
+  against a twenty-eight-second create meant the first fill after Chrome starts never had a model — on the day
+  somebody installs this for its AI — and nothing on screen said why. The window is twenty-five seconds now, the
+  card says what it is waiting for, and a fill that ends without the model still says the model is on its way.
+- A window that long must not make the page unusable. A fill that is only waiting for the model has finished
+  writing, so the next press cuts it short and goes ahead instead of being told the page is busy.
 - Never block on the model, and that includes bringing it up. A cold `create()` takes as long as it takes —
   twenty-eight seconds, measured — so the session gets a small grace on top of the work the fill is doing anyway,
   not its whole cold start. A session that arrives while the form is being written costs nothing; one that does not
