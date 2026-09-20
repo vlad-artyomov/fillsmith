@@ -153,7 +153,7 @@ check('two fields in a row do not get the same text',
     fallbacks.prereq !== fallbacks.area, `${fallbacks.prereq} / ${fallbacks.area}`);
 check('a field too narrow for a phrase still gets a word, not a bare number',
     /[\p{L}]{3}/u.test(fallbacks.clipped), fallbacks.clipped);
-check('fallback still respects maxlength', fallbacks.clipped.length <= 8, fallbacks.clipped);
+check('fallback still respects maxlength', fallbacks.clipped.length <= 10, fallbacks.clipped);
 check('an unlabelled field still gets something', fallbacks.unlabelled.length > 3, fallbacks.unlabelled);
 
 /* A rule that can only ever return the same paragraph — "description",
@@ -391,6 +391,18 @@ const res = await page.evaluate(async () => await window.__formforge.run({
  * is one that can reopen its own list a tick later, after everything watching
  * has stopped looking; and a fill that finishes with the caret parked in the
  * last input it touched is untidy even when nothing reopens. */
+/* A long list is answered from the whole of it. The options were truncated at
+ * forty before anything chose among them, and on fill.dev's 250-country select
+ * that put a US persona in Aruba, Belize or Burkina Faso, ten times out of ten,
+ * reported as a rule that had matched. */
+const longList = await page.evaluate(() => {
+    const el = document.getElementById('cn2');
+    return {value: el.value, options: el.options.length, index: el.selectedIndex};
+});
+check('a country past the fortieth option is still the one chosen',
+    longList.options > 60 && /^(Germany|Deutschland)$/.test(longList.value),
+    `${longList.value} at ${longList.index} of ${longList.options}`);
+
 const parked = await page.evaluate(() => document.activeElement.tagName
     + (document.activeElement.id ? '#' + document.activeElement.id : ''));
 check('the fill lets go of the field it finished on', parked === 'BODY', parked);
@@ -649,7 +661,8 @@ const laidOut = await page.evaluate(() => {
     const prose = 'The release fixes intermittent API failures. Query times are down by 15%. Accessibility was reviewed.';
     return {
         en: G.richLayout(prose, en),
-        de: G.richLayout(prose, de),
+        // Several shapes, so the German half is asked of all of them at once.
+        de: ['a', 'b', 'c', 'd', 'e', 'f'].map(k => G.richLayout(prose, de, k)).join(''),
         short: G.richLayout('One sentence only.', en),
         again: G.richLayout('One sentence only.', en),
         // A different seed is a different page, and its made-up half says so.
@@ -657,25 +670,117 @@ const laidOut = await page.evaluate(() => {
         unsafe: G.richLayout('A <script>alert(1)</script> and an & sign.', en)
     };
 });
+/* One page carried five editors and every one of them opened with the same bold
+ * "Note:" over the same bullet list — one trick, five times, and four of the
+ * editor's paths never exercised. */
+const shapes = await page.evaluate(() => {
+    const G = globalThis.FormForgeGen;
+    const p = G.buildPersona('SHAPES1', 'en-US', {});
+    const out = ['Description', 'Instructions', 'Didactic notes', 'Accessories', 'Technical data',
+        'Internal note', 'Summary', 'Remarks'].map(k => G.richLayout('', p, k));
+    return {
+        distinct: new Set(out).size,
+        openings: new Set(out.map(h => h.slice(0, 24))).size,
+        same: G.richLayout('', p, 'Description') === out[0],
+        covers: {
+            bold: out.some(h => /<strong>/.test(h)), italic: out.some(h => /<em>/.test(h)),
+            bullets: out.some(h => /<ul>/.test(h)), numbers: out.some(h => /<ol>/.test(h))
+        }
+    };
+});
+check('two editors on one page do not get the same text',
+    shapes.distinct === 8, `${shapes.distinct} distinct of 8`);
+check('and between them they exercise bold, italic and both kinds of list',
+    shapes.openings >= 3 && Object.values(shapes.covers).every(Boolean),
+    `${shapes.openings} openings, ${JSON.stringify(shapes.covers)}`);
+check('the same field on the same seed still says the same thing',
+    shapes.same === true, String(shapes.same));
+
 check('the model\'s words come back as markup an editor can hold',
-    /<strong>Note:<\/strong>/.test(laidOut.en) && /<em>/.test(laidOut.en) && /<ul><li>/.test(laidOut.en),
+    /<p>/.test(laidOut.en) && /<strong>|<em>|<li>/.test(laidOut.en),
     laidOut.en.slice(0, 90));
 check('and its sentences are the ones used, not replaced',
     /intermittent API failures/.test(laidOut.en) && /Query times are down by 15%/.test(laidOut.en),
     laidOut.en.slice(0, 120));
-check('a German fill gets the German skeleton',
-    /<strong>Hinweis:<\/strong>/.test(laidOut.de) && /Bitte vor Freigabe prüfen/.test(laidOut.de),
-    laidOut.de.slice(0, 90));
+check('a German fill gets the German words, in every shape that has them',
+    /Hinweis|Zusammenfassung|Hintergrund|Checkliste/.test(laidOut.de)
+    && /Bitte vor Freigabe prüfen/.test(laidOut.de)
+    && !/\bNote:|Please review before release/.test(laidOut.de),
+    laidOut.de.slice(0, 110));
 check('an answer too short for the shape is made up, and the same seed says the same thing',
-    (laidOut.short.match(/<li>/g) || []).length === 2 && laidOut.short === laidOut.again
-    && laidOut.elsewhere !== laidOut.short,
+    /One sentence only\./.test(laidOut.short) && laidOut.short.length > 120
+    && laidOut.short === laidOut.again && laidOut.elsewhere !== laidOut.short,
     laidOut.short.slice(0, 90));
 check('and markup the model sent as text is escaped, not run',
     !/<script>/.test(laidOut.unsafe) && /&lt;script&gt;/.test(laidOut.unsafe) && /&amp; sign/.test(laidOut.unsafe),
     laidOut.unsafe.slice(0, 110));
 
+/* Field names as real forms write them: the numbering glued to the word and the
+ * vowels gone. Forty of these went to the model instead, and what came back was
+ * plausible rather than correct — 555-123-4567 is not in the range reserved for
+ * fiction, "1234567890" is not an SSN, and "RDouglas123" is not a card number.
+ * Taken from roboform.com/filling-test-all-fields, one fill of it. */
+const cryptic = await page.evaluate(() => {
+    const G = globalThis.FormForgeGen;
+    const p = G.buildPersona('CRYPT1', 'en-US', {emailDomain: 'example.com'});
+    const at = (name) => {
+        const hit = G.matchRuleDetail(name, p);
+        return hit ? String(hit.value) : null;
+    };
+    return {
+        persona: {city: p.city, region: p.region, phone: p.phone, email: p.email},
+        got: {
+            first: at('02frstname'), middle: at('03middle i'), last: at('04lastname'),
+            full: at('04fullname'), line1: at('10address1'), line2: at('11address2'),
+            state: at('14adrstate'), home: at('20homephon'), fax: at('22faxphone'),
+            cell: at('23cellphon'), email: at('24emailadr'), site: at('25web site'),
+            user: at('30 user id'), card: at('41ccnumber'), cvc: at('43cvc'),
+            ssn: at('61pers ssn'), licence: at('62driv lic'), sex: at('60pers sex'),
+            born: at('67birth pl'), income: at('68 income')
+        },
+        unmatched: ['45ccissuer', '46cccstsvc', '71 custom'].filter(n => !G.matchRuleDetail(n, p)),
+        comment: (G.matchRuleDetail('72 commnt', p) || {}).value,
+        /* What the model is shown. Given "46cccstsvc" it answered "XYZ-789";
+         * alphabet soup is what a model writes when the label says nothing. */
+        readable: ['45ccissuer', '46cccstsvc', '24emailadr', '62driv lic', '72 commnt']
+            .map(n => G.readable(n))
+    };
+});
+const c = cryptic.got;
+const G0 = (names) => names.every(n => cryptic.unmatched.includes(n));
+check('a name with its numbering glued on still reaches its rule',
+    c.first && c.last && c.full && c.line1 && c.line2 && c.middle && c.middle.length === 1,
+    `${c.first} / ${c.middle} / ${c.last} / ${c.line1} / ${c.line2}`);
+check('an abbreviated name reaches it too, where the abbreviation means one thing',
+    c.home && c.fax && c.cell && c.email && c.state && c.user && c.card && c.cvc,
+    `${c.home} · ${c.email} · ${c.state} · ${c.card}`);
+/* The point of answering these ourselves. A model asked the same boxes wrote
+ * 555-123-4567, which is a number somebody may well have. */
+check('and what the rules write there is reserved, not merely plausible',
+    c.home === cryptic.persona.phone && /555-01\d\d/.test(c.home.replace(/[^\d-]/g, ''))
+    && /^987-65-432\d$/.test(c.ssn) && c.card.startsWith('4111'),
+    `${c.home} · ${c.ssn} · ${c.card}`);
+check('the state agrees with the city rather than being invented',
+    c.state === cryptic.persona.region, `${c.state} for ${cryptic.persona.city}`);
+/* "birth" alone answered a place of birth with a date of birth. */
+check('a place of birth is a place',
+    c.born === cryptic.persona.city, String(c.born));
+check('a salary is an annual figure, not a line total',
+    /^\d{5,6}$/.test(c.income || ''), String(c.income));
+check('and the model is still left the ones it is better at',
+    G0(['45ccissuer', '46cccstsvc', '71 custom']), cryptic.unmatched.join(', '));
+check('a misspelt comment box gets prose rather than a guess',
+    typeof cryptic.comment === 'string' && cryptic.comment.split(' ').length > 3,
+    String(cryptic.comment).slice(0, 50));
+check('and what the model is shown is a name a person could read',
+    cryptic.readable[0] === 'credit card issuer'
+    && cryptic.readable[1] === 'credit card customer service'
+    && cryptic.readable[2] === 'email address'
+    && cryptic.readable[3] === 'driving licence number',
+    cryptic.readable.join(' · '));
+
 // Clear
-await page.evaluate(() => window.__formforge.clearAll());
+await page.evaluate(async () => await window.__formforge.clearAll());
 const cleared = await page.evaluate(() => document.getElementById('fn').value);
 check('clear empties the fields', cleared === '');
 

@@ -17,6 +17,8 @@ const FILLER_FILES = [
     'src/fillers.js',
     'src/uploads.js',
     'src/hud.js',
+    'src/collect.js',
+    'src/model.js',
     'src/content.js'
 ];
 
@@ -85,7 +87,7 @@ const SYSTEM_PROMPT = [
     'You invent realistic test data for QA engineers filling forms on their own staging sites.',
     'Given form fields, return one believable value each. Data only, never commentary.',
     'Match the persona given. Write values in the language the request names, not the labels\' own.',
-    'Infer from the label: "Project code" -> "PRJ-2481", not a name.',
+    'Let the label decide the kind of value: a code field takes a code, not a name.',
     'Obey stated limits: maxLength, min, max, pattern. If options are listed, copy one verbatim.',
     'Never output: test, asdf, lorem ipsum, string, N/A, example, or leading/trailing spaces.'
 ].join('\n');
@@ -106,7 +108,11 @@ const LANGUAGES = ['en', 'de'];
  * throws, and askBatch asks again without it. */
 function constrain(fields) {
     const properties = {};
-    for (const f of fields) properties[String(f.id)] = {type: 'string'};
+    /* One character at least. The decoder was free to close a required key on an
+     * empty string, and on a form of sixteen it did so five times: the fields
+     * fell through to the filler and got "Cyan Chair 16" where the model had
+     * simply declined to answer. */
+    for (const f of fields) properties[String(f.id)] = {type: 'string', minLength: 1};
     return {
         responseConstraint: {
             type: 'object', properties, required: Object.keys(properties), additionalProperties: false
@@ -115,7 +121,12 @@ function constrain(fields) {
     };
 }
 
-const BATCH = 12;
+/* Batches of one request run one after another, because one session answers one
+ * prompt at a time, so the size barely moves the total: it is roughly the sum of
+ * the prompts' lengths either way. What it moves is when the first values reach
+ * the page. On a form of forty fields, twelve at a time put the first batch in
+ * at 5.5 seconds; eight puts it in at about 3.5. */
+const BATCH = 8;
 
 function buildUserPrompt(persona, pageTitle, fields, context, examples) {
     const c = context || {};
@@ -234,7 +245,25 @@ function parseValues(text, asked, tally) {
     const ids = (asked || []).map(f => String(f.id));
     const known = new Set(ids);
     const clean = (v) => v.trim().slice(0, 2000);
-    const named = items.filter(x => x.id != null && known.has(String(x.id)));
+    /* A field named "46cccstsvc" came back as "46cccstsvc", and "60pers sex" as
+     * "60pers Male": asked about a label it cannot read, the model answers with
+     * the label. Only a leading token carrying a digit is taken off, so a real
+     * answer that opens with a word from its own label is left alone. */
+    const labels = new Map((asked || []).map(f => [String(f.id), String(f.label || '')]));
+    for (const item of items) {
+        const label = labels.get(String(item.id));
+        if (!label) continue;
+        const head = label.trim().split(/\s+/)[0];
+        let v = item.value.trim();
+        if (v.toLowerCase() === label.trim().toLowerCase()) v = '';
+        else if (/\d/.test(head) && head) {
+            if (v.toLowerCase() === head.toLowerCase()) v = '';
+            else if (v.toLowerCase().startsWith(head.toLowerCase() + ' ')) v = v.slice(head.length).trim();
+        }
+        item.value = v;
+    }
+
+    const named = items.filter(x => x.id != null && known.has(String(x.id)) && x.value !== '');
     const count = (how, n) => {
         if (tally) tally[how] = n;
     };
@@ -244,9 +273,10 @@ function parseValues(text, asked, tally) {
         count('dropped', items.length - named.length);
         return out;
     }
-    if (items.length === ids.length) {
-        items.forEach((item, i) => (out[ids[i]] = clean(item.value)));
-        count('byPosition', items.length);
+    const left = items.filter(x => x.value !== '');
+    if (left.length === ids.length) {
+        left.forEach((item, i) => (out[ids[i]] = clean(item.value)));
+        count('byPosition', left.length);
         return out;
     }
     count('dropped', items.length);

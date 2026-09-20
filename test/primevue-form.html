@@ -1210,6 +1210,15 @@
             </div>
         </div>
 
+        <!-- A bare contenteditable, no library around it. It takes markup like an
+             editor but reaches the filler down a different path, and nothing here
+             used one: every helper that path needs was missing from the bundle
+             content.js reads, so writing to one threw. -->
+        <div class="field">
+            <label for="freitext">Handover note</label>
+            <div id="freitext" class="plain-editor" contenteditable="true"></div>
+        </div>
+
         <h2 class="sec">Booking</h2>
         <div class="field" id="bestaetigung">
             <label id="lbl-best">Booking confirmation</label>
@@ -1522,7 +1531,10 @@
                         '<span class="upload-name"></span>' +
                         '<label><input type="checkbox" class="u-show"> Show in public listing</label>' +
                         '<label>Alternative text <input type="text" class="u-alt"></label>' +
-                        '<label>Source <input type="text" class="u-src"></label>';
+                        '<label>Source <input type="text" class="u-src"></label>' +
+                        /* One field per row that no rule can answer, so the fill that
+                           revealed it has to go back to the model for it. */
+                        '<label>Rights holder <input type="text" class="u-rights"></label>';
                     row.querySelector('.upload-name').textContent = f.name;
                     /* The first row's alt text has a schema limit the way the prerequisite
                        field does: a complaint after the write, named through

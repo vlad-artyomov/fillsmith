@@ -226,6 +226,39 @@
         return held() || null;
     }
 
+    /* Emptying an editor through the door it converts, not the one it polices.
+     * `textContent = ''` edits the DOM an editor is showing, not the model it
+     * keeps, and Quill puts its own content straight back on the next tick — so
+     * Clear reported five editors emptied and five editors still held their
+     * text. A selection and a delete produce the beforeinput/input the editor
+     * is listening for. */
+    async function clearRich(el) {
+        if (!el || !el.isContentEditable) return false;
+        try {
+            el.focus({preventScroll: true});
+            const r = document.createRange();
+            r.selectNodeContents(el);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(r);
+        } catch (_) { /* no selection to make; the fallback below still runs */
+        }
+        let done = false;
+        try {
+            done = document.activeElement === el && document.execCommand('delete', false, undefined);
+        } catch (_) {
+        }
+        await sleep(0);
+        const held = () => (el.innerText || el.textContent || '').trim();
+        if (held()) {
+            el.innerHTML = '';
+            el.dispatchEvent(new InputEvent('input', {bubbles: true, composed: true, inputType: 'deleteByCut'}));
+            el.dispatchEvent(new Event('change', {bubbles: true}));
+            await sleep(0);
+        }
+        return done || !held();
+    }
+
     // Poll a condition instead of sleeping for a fixed time; most waits then cost one tick.
     async function settle(check, max = 250, step = 25) {
         const until = Date.now() + max;
@@ -304,7 +337,7 @@
 
     globalThis.FormForgeDom = {
         note, takeNotes, dialogOf, neutralSpot,
-        sleep, visible, textOf, norm, press, key, setNativeValue, typeInto, typeIntoRich, plainText,
+        sleep, visible, textOf, norm, press, key, setNativeValue, typeInto, typeIntoRich, clearRich, plainText,
         commit, settle, waitFor, safeQuery, PLACEHOLDER
     };
 })();

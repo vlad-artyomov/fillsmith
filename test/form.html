@@ -29,6 +29,8 @@
             <option value="GB">United Kingdom</option>
             <option value="US">United States</option>
         </select>
+        <label for="cn2">Country of residence</label>
+        <select id="cn2" name="residenceCountry"></select>
     </fieldset>
 
     <fieldset>
@@ -79,6 +81,18 @@
 </form>
 
 <script>
+    /* A real country list is 250 long and "United States" sits near the end of
+       it. The options a page offers were truncated at forty before anything
+       chose among them, so every such list was answered out of its A's and B's.
+       This one is long enough to reach past forty and no longer. */
+    (function () {
+        const long = document.getElementById('cn2');
+        const names = ['Select…'];
+        for (let i = 0; i < 60; i++) names.push('Testland ' + String.fromCharCode(65 + i % 26) + i);
+        names.push('Germany', 'Deutschland', 'United States', 'Zimbabwe');
+        names.forEach((t, i) => long.add(new Option(t, i ? t : '')));
+    })();
+
     window.__events = {input: 0, change: 0};
     document.getElementById('f').addEventListener('input', () => window.__events.input++, true);
     document.getElementById('f').addEventListener('change', () => window.__events.change++, true);

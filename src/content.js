@@ -13,6 +13,20 @@
     const U = globalThis.FormForgeUploads;
     const Hud = globalThis.FormForgeHud;
     const H = W.helpers;
+    const M = globalThis.FormForgeModel;
+    /* Its state is read off the object, because the model outlives the fill
+     * that started it: a session built for one press answers the next. */
+    const {wake, modelBudget, pageContext, nearbyExamples, sendMessage, mergeDebug, askModel} = M;
+    const C = globalThis.FormForgeCollect;
+    /* The page-reading layer, pulled in by name so the call sites below read the
+     * same as when it lived here. */
+    const {
+        MARK, SKIP_TYPES, INLINE_OPTIONS, CAPTCHA, APP_CHROME, FIXED_LENGTH, RICH_KINDS,
+        isVisible, textOf, describe, limitsOf, sectionOf, inDomOrder,
+        popupSurfaces, modalScope, collectFields,
+        captionOf, fieldKey, baseKey, captionKey, ruleName, alreadyWritten,
+        hasSelection, complaintFor, askedMaxChars, currentValue
+    } = C;
     const {progress, toast, ping} = Hud;
 
     /* Every frame on the page runs this file. A subframe with nothing to fill or
@@ -26,17 +40,13 @@
         }
     })();
 
-    const MARK = 'data-formforge-id';
-    const SKIP_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image']);
     const CHOICE_KINDS = new Set(['choice', 'multichoice', 'inline-choice', 'autocomplete', 'radio', 'radio-group', 'select']);
-    /* A library's editor and a bare contenteditable are the same field to a
-     * tester: both take markup, and both are worth a length the prompt states. */
-    const RICH_KINDS = new Set(['richtext', 'contenteditable']);
+    /* What tells a laid-out answer from prose. Inline tags do not: the model
+     * wrapped a whole release note in <em> once, and taken as markup it went in
+     * as one italic run, which is the same flat answer with a slant on it. */
+    const BLOCK_MARKUP = /<(?:p|div|ul|ol|li|h[1-6]|br|table|blockquote|pre)\b/i;
     // Their options are in the page, not behind a popup, so they can be read at collect time.
-    const INLINE_OPTIONS = new Set(['inline-choice', 'radio-group']);
-    const CAPTCHA = /\b(captcha|recaptcha|hcaptcha|turnstile|otp|one-?time|2fa|mfa|verification\s*code|sicherheitscode)\b/i;
     // Page chrome that happens to be a form control: filling a language switcher rewrites every label mid-run.
-    const APP_CHROME = /locale\s*switcher|switch\s+language|change\s+language|language\s+switcher|sprache\s+(wechseln|ändern)|theme\s+switcher/i;
     /* Choices whose candidate is a real-world fact an application's list may
      * hold — a country, a city, a salutation. Only these are worth filtering and
      * scrolling for; an invented company name is in nobody's list. */
@@ -45,413 +55,6 @@
     const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
     let rng = Math.random;             // replaced by the persona's RNG at fill time
-
-    // ------------------------------------------------------------ discovery ----
-    // Visible itself, or a visually-hidden native input inside a visible wrapper (styled checkboxes, switches).
-    function isVisible(el) {
-        if (!el) return false;
-        if (el.disabled || el.readOnly) return false;
-        if (H.visible(el)) return true;
-        const type = (el.type || '').toLowerCase();
-        if (type === 'checkbox' || type === 'radio' || el.tagName === 'INPUT') {
-            const wrap = el.closest('label, span, div');
-            if (wrap && wrap !== el && H.visible(wrap) && wrap.getBoundingClientRect().width > 4) return true;
-        }
-        return false;
-    }
-
-    function textOf(node) {
-        if (!node) return '';
-        return (node.innerText || node.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 120);
-    }
-
-    // Every scrap of naming a rule could match on, joined with " | ": label, aria, placeholder, name, id.
-    function describe(el) {
-        const bits = [];
-        if (el.labels && el.labels.length) bits.push(textOf(el.labels[0]));
-        if (el.id) {
-            const lbl = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
-            if (lbl) bits.push(textOf(lbl));
-        }
-        const wrap = el.closest('label');
-        if (wrap) bits.push(textOf(wrap));
-        if (el.getAttribute('aria-label')) bits.push(el.getAttribute('aria-label'));
-        const labelledBy = el.getAttribute('aria-labelledby');
-        if (labelledBy) {
-            labelledBy.split(/\s+/).forEach(id => {
-                const n = document.getElementById(id);
-                if (n) bits.push(textOf(n));
-            });
-        }
-        ['placeholder', 'name', 'id', 'autocomplete', 'title'].forEach(a => {
-            const v = el.getAttribute(a);
-            if (a === 'autocomplete' && /^(off|on|nope|false|none)$/i.test(v || '')) return;
-            if (v) bits.push(v.replace(/[_\-.\[\]]+/g, ' '));
-        });
-        if (bits.filter(Boolean).length < 2) {
-            let prev = el.previousElementSibling;
-            for (let hops = 0; prev && hops < 3; hops++, prev = prev.previousElementSibling) {
-                const t = textOf(prev);
-                if (t && t.length < 80) {
-                    bits.push(t);
-                    break;
-                }
-            }
-        }
-        return bits.filter(Boolean).join(' | ');
-    }
-
-    // Required by attribute, or by an asterisk in any caption-shaped fragment of the label.
-    function looksRequired(el, label) {
-        if (el.matches && el.matches('[required], [aria-required="true"]')) return true;
-        if (el.querySelector && el.querySelector('[required], [aria-required="true"]')) return true;
-        return String(label || '').split('|').some(bit =>
-            bit.includes('*') && (bit.match(/\p{L}/gu) || []).length >= 2);
-    }
-
-    // What the control says it accepts; for a widget these live on the input it wraps.
-    function limitsOf(el) {
-        if (!el) return {
-            placeholder: '',
-            maxLength: null,
-            pattern: null,
-            min: null,
-            max: null,
-            step: null,
-            autocomplete: ''
-        };
-        const num = (v) => (v === '' || v == null || isNaN(Number(v)) ? null : Number(v));
-        return {
-            placeholder: el.getAttribute('placeholder') || '',
-            maxLength: el.maxLength > 0 ? el.maxLength : null,
-            pattern: el.getAttribute('pattern') || null,
-            min: num(el.getAttribute('min')),
-            max: num(el.getAttribute('max')),
-            step: num(el.getAttribute('step')),
-            autocomplete: el.getAttribute('autocomplete') || ''
-        };
-    }
-
-    // The nearest heading *above* the field, not the first one in its container.
-    function sectionOf(el) {
-        const HEADINGS = 'legend, h1, h2, h3, h4, h5, [role="heading"]';
-        const BOXES = 'fieldset, section, form, [role="group"], [role="dialog"]';
-        for (let box = el.closest(BOXES); box; box = box.parentElement && box.parentElement.closest(BOXES)) {
-            const above = Array.from(box.querySelectorAll(HEADINGS)).filter(h =>
-                !h.contains(el) && (el.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_PRECEDING));
-            if (above.length) return textOf(above[above.length - 1]);
-        }
-        return '';
-    }
-
-    function inDomOrder(fields) {
-        return fields.sort((a, b) => {
-            const p = a.el.compareDocumentPosition(b.el);
-            if (p & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
-            if (p & Node.DOCUMENT_POSITION_PRECEDING) return 1;
-            return 0;
-        });
-    }
-
-    /* A control's own popup is not part of the form: a dropdown's search box or
-     * a date panel's month select exist to drive the widget. A popup is told from
-     * an accordion or a tab panel (which are full of real fields) by two plain
-     * ARIA facts: it floats, and a control names it through aria-controls. A
-     * modal dialog is a form container, not a popup. */
-    function popupSurfaces() {
-        const roots = [];
-        const add = (el) => {
-            if (el && el !== document.body && !roots.includes(el)) roots.push(el);
-        };
-        const floats = (el) => /^(absolute|fixed)$/.test(getComputedStyle(el).position);
-        const floatingRoot = (el) => {
-            let out = null;
-            for (let n = el; n && n !== document.body; n = n.parentElement) if (floats(n)) out = n;
-            return out;
-        };
-
-        for (const el of document.querySelectorAll('[data-formforge-overlay], [data-formforge-opened]')) add(el);
-        for (const el of document.querySelectorAll(O.GENERIC_OVERLAYS)) {
-            if (!el.matches('[role="dialog"]')) add(el);
-        }
-        const LIST = '[role="listbox"], [role="menu"], [role="tree"], [role="grid"], [role="dialog"]';
-        for (const owner of document.querySelectorAll('[aria-controls], [aria-owns]')) {
-            const ids = ((owner.getAttribute('aria-controls') || '') + ' ' + (owner.getAttribute('aria-owns') || '')).trim().split(/\s+/);
-            for (const id of ids) {
-                const target = id && document.getElementById(id);
-                if (!target || target.contains(owner)) continue;
-                if (!target.matches(LIST) && !target.querySelector(LIST)) continue;
-                const root = floatingRoot(target);
-                if (!root || root.matches('[role="dialog"]') || root.querySelector('[role="dialog"]')) continue;
-                add(root);
-            }
-        }
-        return roots;
-    }
-
-    /* A modal dialog is the whole form while it is up. What lies under its mask
-     * the tester cannot reach either, and closing the dialog to get there throws
-     * away the one thing they opened it for. */
-    function modalScope() {
-        const modal = (d) => {
-            if (d.getAttribute('aria-modal') === 'true') return true;
-            try {
-                return d.matches(':modal');
-            } catch (_) {
-                return false;
-            }
-        };
-        const open = Array.from(document.querySelectorAll('[role="dialog"], dialog[open]')).filter(d => isVisible(d) && modal(d));
-        return open.length ? open[open.length - 1] : null;
-    }
-
-    function collectFields(opts) {
-        let fields = [];
-        const popups = popupSurfaces();
-        const scope = modalScope();
-        const inPopup = (el) => popups.some(p => p.contains(el)) || (scope && !scope.contains(el));
-
-        // 1. Component-library widgets, and the native inputs they own.
-        const widgets = W.detect(document);
-        const claimed = new Set();
-        for (const w of widgets) W.claimed(w).forEach(el => claimed.add(el));
-
-        for (const w of widgets) {
-            if (inPopup(w.root)) continue;
-            const label = W.labelFor(w, describe);
-            if (CAPTCHA.test(label) || APP_CHROME.test(label)) continue;
-            const shown = W.displayedValue(w);
-            const filled = shown && !H.PLACEHOLDER.test(shown);
-            const keepsItsValue = filled && !opts.overwrite && w.kind !== 'bool';
-            const f = {
-                keepsItsValue,
-                kind: 'widget', widget: w, el: w.root, type: w.kind, lib: w.id,
-                label, section: sectionOf(w.root),
-                required: looksRequired(w.root, label),
-                ...limitsOf(w.root.querySelector('input, textarea'))
-            };
-            /* A control whose choices are already on screen can say what they are.
-             * Only native <select> and radio used to, so every component-library
-             * list reached the model blind — and blind it invents: "Standard" for
-             * a Yes/No radio group, "Office" for a list holding "Branch". The
-             * filler then threw the invention away and picked a valid option
-             * itself, which is the whole answer wasted. */
-            if (INLINE_OPTIONS.has(w.kind)) {
-                const seen = O.asTexts(O.optionsIn(w.root, w.lib))
-                    .filter(o => o.text).slice(0, 40);
-                if (seen.length) f.options = seen.map(o => ({value: o.value, text: o.text.slice(0, 60)}));
-            }
-            fields.push(f);
-        }
-
-        // 2. Plain native controls.
-        const nodes = Array.from(document.querySelectorAll('input, textarea, select, [contenteditable="true"], [contenteditable=""]'));
-        const seenRadioGroups = new Set();
-        for (const el of nodes) {
-            if (claimed.has(el) || inPopup(el)) continue;
-            const tag = el.tagName.toLowerCase();
-            const type = tag === 'input' ? (el.type || 'text').toLowerCase()
-                : tag === 'textarea' ? 'textarea'
-                    : tag === 'select' ? 'select' : 'contenteditable';
-            if (SKIP_TYPES.has(type) || !isVisible(el)) continue;
-
-            const label = describe(el);
-            if (CAPTCHA.test(label) || APP_CHROME.test(label)) continue;
-
-            if (type === 'radio') {
-                const key = el.name || label;
-                if (seenRadioGroups.has(key)) continue;
-                seenRadioGroups.add(key);
-            }
-
-            const hasValue = type === 'checkbox' || type === 'radio' ? el.checked
-                : type === 'file' ? !!(el.files && el.files.length)
-                    : type === 'contenteditable' ? !!textOf(el) : !!el.value;
-            const keepsItsValue = hasValue && !opts.overwrite;
-
-            const f = {
-                keepsItsValue,
-                kind: 'native', el, tag, type, label, section: sectionOf(el),
-                required: el.required || looksRequired(el, label),
-                ...limitsOf(el)
-            };
-            if (type === 'select') {
-                /* The first option is the control's prompt, not a choice, when it
-                 * carries a sentinel value: "(Select Card Type)", "Month", "Year"
-                 * are all value="0" beside real options, and a seeded pick that
-                 * lands on one writes the empty state as if it were data. Judged
-                 * by the page's own convention rather than by reading the caption,
-                 * which is a different word in every language — and only on a list
-                 * long enough to need a prompt, so a three-row yes/no keeps every
-                 * answer it has. */
-                const SENTINEL = new Set(['', '0', '-1', 'none', 'null']);
-                const prompting = el.options.length >= 4;
-                f.options = Array.from(el.options)
-                    .filter(o => o.value !== '' && !o.disabled)
-                    .filter(o => !(prompting && o.index === 0 && SENTINEL.has(String(o.value).trim().toLowerCase())))
-                    .map(o => ({value: o.value, text: textOf(o).slice(0, 60)})).slice(0, 40);
-            }
-            if (type === 'radio') {
-                const group = Array.from(document.querySelectorAll(`input[type="radio"][name="${CSS.escape(el.name || '')}"]`)).filter(isVisible);
-                f.group = group;
-                f.options = group.map(g => ({value: g.value, text: describe(g).slice(0, 60)}));
-            }
-            fields.push(f);
-        }
-
-        // DOM order: dependent dropdowns (country → region) need the parent committed first.
-        inDomOrder(fields);
-        /* Rows a page renders one per item — an uploaded file's alt text, its
-         * source, its "show this one" switch — carry no name and no id, and the
-         * same caption as the row above. Their label key is therefore the same
-         * key, and four rows read as one field: the second gets the first one's
-         * value back as though a re-render had eaten it, and a later one is
-         * passed over as already written. Number them in DOM order. The first of
-         * a group keeps the bare key, so nothing that was unique before moves. */
-        const nth = new Map();
-        for (const f of fields) {
-            const base = baseKey(f);
-            if (base.charCodeAt(0) !== 108) continue;          // 'l:', the label-derived key
-            const n = (nth.get(base) || 0) + 1;
-            nth.set(base, n);
-            if (n > 1) f.nth = n;
-        }
-        /* Numbered over every such row on the page, including the ones this pass
-         * is not going to write. A later pass collects only what is still empty,
-         * so counting the collected fields alone gave the third row the first
-         * row's number — and with it the first row's value. */
-        fields = fields.filter(f => !f.keepsItsValue);
-        fields.forEach((f, i) => {
-            f.idx = i;
-            try {
-                f.el.setAttribute(MARK, String(i));
-            } catch (_) {
-            }
-        });
-        return fields;
-    }
-
-    // --------------------------------------------------------------- naming ----
-    /* The shortest honest name for a field: the first label fragment with at
-     * least two letters (a component library's chevron glyph is a real
-     * fragment), minus the required marker. */
-    function captionOf(f, max) {
-        for (const bit of String(f.label || '').split('|')) {
-            const t = bit.replace(/[\s*﹡＊]*$/, '').replace(/\s*\((required|pflichtfeld)\)\s*$/i, '').trim();
-            if (t && (t.match(/\p{L}/gu) || []).length >= 2) return t.slice(0, max || 40);
-        }
-        const ph = String(f.placeholder || '').trim();
-        if (ph && /[\p{L}]/u.test(ph)) return ph.slice(0, max || 40);
-        const kind = String(f.lib || '').replace(/^primevue-/, '') || f.type;
-        const sec = String(f.section || '').trim();
-        return (sec ? `${sec} · ${kind}` : kind).slice(0, max || 40);
-    }
-
-    /* A field's identity across re-renders. A framework replaces the node in
-     * response to our own write, so identity is name/id, then the caption. */
-    function fieldKey(f) {
-        const base = baseKey(f);
-        return f.nth ? `${base}#${f.nth}` : base;
-    }
-
-    function baseKey(f) {
-        const el = f.el;
-        const named = (el.getAttribute && (el.getAttribute('name') || el.getAttribute('id'))) || '';
-        if (named) return `n:${named}`;
-        const inner = el.querySelector && el.querySelector('input, textarea, select');
-        const innerNamed = inner && (inner.name || inner.id);
-        if (innerNamed) return `n:${innerNamed}`;
-        return `l:${f.type}:${(f.section || '').slice(0, 40)}:${(f.label || '').slice(0, 80)}`;
-    }
-
-    function captionKey(f) {
-        return `c:${(f.label || '').split('|')[0].replace(/[*\s]+/g, ' ').trim().toLowerCase()}`;
-    }
-
-    /* A rule's short name for the report: the first word of its pattern, so a
-     * row reads "matched the street rule" and the whole regex sits in the
-     * tooltip. A tester reads the word; whoever edits RULES reads the regex. */
-    function ruleName(pattern) {
-        const words = String(pattern || '').replace(/\\[bswdBSWD]|[()^$?*+|\\\/]/g, ' ');
-        const m = words.match(/[\p{L}][\p{L}-]{2,}/u);
-        return m ? m[0].toLowerCase() : 'a';
-    }
-
-    // The caption is only trusted when the original node has left the DOM: two fields can share one.
-    function alreadyWritten(wrote, f) {
-        const k = fieldKey(f);
-        const byKey = wrote.find(w => w.key === k);
-        if (byKey) return byKey;
-        const c = captionKey(f);
-        if (c.length <= 3) return undefined;
-        return wrote.find(w => w.caption === c && !document.contains(w.f.el));
-    }
-
-    // -------------------------------------------------------------- reading ----
-    /* "Has a choice been made", which for a picker showing only a flag differs
-     * from "what does it show". Only a positive sign counts: "no placeholder
-     * class in sight" used to pass for one, and a select that had reverted its
-     * value — blank label, no placeholder — was believed to hold a choice, so
-     * the repair pass left it empty. */
-    function hasSelection(f) {
-        const root = f.kind === 'widget' ? f.el : null;
-        if (!root) return !!(f.el && f.el.value);
-        if (root.querySelector('[aria-selected="true"], [class*="-option-selected"]')) return true;
-        const combo = root.matches('[role="combobox"]') ? root : root.querySelector('[role="combobox"]');
-        if (combo) {
-            if (combo.getAttribute('aria-activedescendant')) return true;
-            if (combo.getAttribute('data-test-select-value') || combo.getAttribute('data-value')) return true;
-        }
-        const inner = root.querySelector('input, select');
-        return !!(inner && inner.value);
-    }
-
-    // What the page says the field holds right now.
-    /* A limit set in a validation schema reaches the DOM only as the complaint
-     * shown after a write. That message is the one place the limit exists, so
-     * it is read the way a tester reads it: the error the form attached to the
-     * field, or the nearest one that belongs to no other field. */
-    const COMPLAINT = '[role="alert"], .p-message-error, .p-error, [class*="error"], [class*="invalid"]';
-    const MAX_CHARS = /(?:maximum of|at most|no more than|up to|max\.?|maximal|höchstens|maximaal|massimo)\s*(\d{1,4})\s*(?:characters?|chars?|zeichen|tekens|caratteri)|(\d{1,4})\s*(?:characters?|chars?|zeichen)\s*(?:or (?:fewer|less)|maximum|max\.?|oder weniger)/i;
-    const CONTROLS = 'input, textarea, select, [role="combobox"], [contenteditable="true"]';
-
-    function complaintFor(f) {
-        const input = f.kind === 'widget' ? (f.el.querySelector('input, textarea') || f.el) : f.el;
-        const ids = `${input.getAttribute('aria-describedby') || ''} ${input.getAttribute('aria-errormessage') || ''}`
-            .split(/\s+/).filter(Boolean);
-        const texts = ids.map(id => document.getElementById(id)).filter(Boolean).map(n => n.textContent);
-        for (let node = input.parentElement, up = 0; node && up < 4 && !texts.length; node = node.parentElement, up++) {
-            const others = Array.from(node.querySelectorAll(CONTROLS)).some(c => c !== input && !f.el.contains(c));
-            if (others) break;
-            node.querySelectorAll(COMPLAINT).forEach(n => texts.push(n.textContent));
-        }
-        return texts.join(' ').replace(/\s+/g, ' ').trim();
-    }
-
-    function askedMaxChars(text) {
-        const m = MAX_CHARS.exec(text);
-        return m ? Number(m[1] || m[2]) : null;
-    }
-
-    const FIXED_LENGTH = new Set(['file', 'date', 'number', 'range', 'color', 'time', 'datetime-local', 'month', 'week', 'checkbox', 'radio']);
-
-    function currentValue(f) {
-        try {
-            if (f.kind === 'widget') {
-                const shown = W.displayedValue(f.widget);
-                if (shown && !H.PLACEHOLDER.test(shown)) return shown;
-                const inner = f.el.querySelector('input, textarea');
-                if (inner && typeof inner.checked === 'boolean' && /bool|radio/.test(f.type)) return inner.checked ? 'on' : '';
-                return inner && inner.value ? inner.value : '';
-            }
-            if (f.type === 'file') return Array.from(f.el.files || []).map(x => x.name).join(', ');
-            if (f.type === 'checkbox' || f.type === 'radio') return f.el.checked ? 'on' : '';
-            if (f.type === 'contenteditable') return (f.el.innerText || '').trim();
-            return f.el.value || '';
-        } catch (_) {
-            return '';
-        }
-    }
 
     // ----------------------------------------------------------- resolution ----
     /* Decide a value locally: rule, then type default. Returns null when only
@@ -468,7 +71,7 @@
         if (value != null && value !== '') {
             // A rich-text control wants markup even when a prose rule matched it.
             if (f.type === 'richtext' && typeof value === 'string' && !/^\s*</.test(value)) {
-                return {value: persona.richText, source: 'rule'};
+                return {value: G.richLayout('', persona, fieldKey(f)), source: 'rule'};
             }
             // A date widget wants the locale's format; a date in the past (a birth date) is typed, not picked.
             if (f.kind === 'widget' && f.type === 'date' && typeof value === 'string' && ISO_DATE.test(value)) {
@@ -488,7 +91,9 @@
                 return {value: isEnd ? persona.futureDateLateLocal : persona.futureDateLocal, source: 'type'};
             }
             if (f.type === 'number') return {value: G.numberFor(f.label, persona), source: 'type'};
-            if (f.type === 'richtext') return {value: persona.richText, source: 'type'};
+            /* Its own text and its own shape. One page carried five editors and
+             * every one of them held the same bold "Note:" over the same list. */
+            if (f.type === 'richtext') return {value: G.richLayout('', persona, fieldKey(f)), source: 'type'};
             if (f.type === 'bool' || CHOICE_KINDS.has(f.type)) return {value: null, source: 'choice'};
             return null;
         }
@@ -649,221 +254,26 @@
         ]);
     }
 
-    // ---------------------------------------------------------------- model ----
-    /* Budgets. The first call after a browser start also pays for bringing the
-     * model into memory, so it is budgeted separately (SESSION_ALLOWANCE_MS) from
-     * patience with the model's answer (modelBudget). Later passes in one fill
-     * get half the patience, and there are at most two of them. */
-    /* Bringing the model into memory takes as long as it takes — twenty-eight
-     * seconds, measured, on a cold one. That is not a wait to put in front of
-     * somebody who has just pressed Fill for the first time, so the allowance is
-     * a grace on top of the work the fill is doing anyway, not the model's whole
-     * cold start: a session that comes up while the form is being written costs
-     * nothing, and one that does not is left to finish in the background, ready
-     * for the fill after this one. A first fill without the model is a form
-     * filled from the rules; a first fill that hangs is an uninstall. */
-    const SESSION_ALLOWANCE_MS = 3000;
-    const LATER_PASS_SHARE = 0.5;
-    let modelWarm = false;
-    let modelCalls = 0;
-    let modelSettings = {};
-    let modelTimedOut = false;
-    let modelDebug = null;
-    let modelVia = '';
-    let modelError = '';
-    let modelWarming = false;
-    let modelWarmingMs = 0;         // how long the session has been coming up, which outlives this fill
-    let modelLoading = false;
-    let modelRequestMs = 0;         // how long the model took, which is not how long the fill waited
-    let warmProbe = null;           // "is the session already up?", asked before the form is read
-    /* Answers arriving mid-request: the worker sends each batch as it lands, and
-     * whoever is waiting on a field is woken by it rather than by the whole
-     * request finishing. */
-    let modelBatch = null;
-    let waiters = [];
-
-    function wake() {
-        const w = waiters;
-        waiters = [];
-        for (const r of w) r();
-    }
-
-    function modelBudget(n, settings) {
-        const override = Number(settings && settings.modelTimeout) || 0;
-        if (override > 0) return override * 1000;
-        /* Measured against Gemini Nano: a batch of twelve answers in four to eight
-         * seconds, and the batches of one request run one after another, because
-         * one session answers one prompt at a time. A ceiling of twelve seconds
-         * was therefore below the work on any form of more than two batches: a
-         * form of twenty-eight fields needs about eighteen, so its last batch was
-         * cut off on every fill, for ever, and the fields it held went to the
-         * filler — twenty-four of twenty-eight, three runs out of three.
-         *
-         * Nothing blocks on this window. The form is complete before it opens, so
-         * a longer one costs a better answer arriving later, never a wait. */
-        const work = Math.min(45000, 1500 + 600 * n);
-        return modelWarm ? work : Math.max(15000, work);
-    }
-
-    // What this screen is, in the page's own words. document.title alone is the product name on every SPA screen.
-    function pageContext(el) {
-        const one = (sel, within) => {
-            const n = (within || document).querySelector(sel);
-            return n ? textOf(n) : '';
-        };
-        const dialog = el && el.closest('[role="dialog"], .p-dialog, dialog, [class*="modal"]');
-        return {
-            title: document.title.slice(0, 80),
-            breadcrumb: (one('[aria-label*="readcrumb"], .p-breadcrumb, nav[class*="breadcrumb"]') || '').slice(0, 120),
-            heading: (one('main h1, main h2, h1, [role="main"] h1') || '').slice(0, 100),
-            dialog: dialog ? (one('h1, h2, h3, [class*="title"], [class*="header"]', dialog) || '').slice(0, 100) : ''
-        };
-    }
-
-    // A few existing rows of the list being added to: nothing describes a value's shape better.
-    function nearbyExamples() {
-        const out = [];
-        try {
-            const table = document.querySelector('table, [role="table"], [role="grid"], .p-datatable');
-            if (table) {
-                for (const cell of Array.from(table.querySelectorAll('td, [role="gridcell"]')).slice(0, 6)) {
-                    const t = textOf(cell);
-                    if (t && t.length < 40 && !out.includes(t)) out.push(t);
-                }
-            }
-        } catch (_) {
-        }
-        return out.slice(0, 5);
-    }
-
-    const sendMessage = (msg) => new Promise(r => {
-        try {
-            chrome.runtime.sendMessage(msg, (v) => {
-                void chrome.runtime.lastError;
-                r(v || {});
-            });
-        } catch (_) {
-            r({});
-        }
-    });
-
-    /* One record per request, and a fill can make more than one: the form's own
-     * fields first, then whatever an upload or a switch revealed. Keeping only
-     * the last one left the Debug tab showing the second prompt and no trace of
-     * the first — which is the half that explains most of the form. The session
-     * and the page context belong to the fill, not to the request, so the first
-     * answer for them stands. */
-    function mergeDebug(before, next) {
-        if (!before) return next;
-        if (!next) return before;
-        return Object.assign({}, before, next, {
-            at: before.at,
-            sessionMs: before.sessionMs != null ? before.sessionMs : next.sessionMs,
-            context: before.context || next.context,
-            examples: before.examples && before.examples.length ? before.examples : next.examples,
-            batches: (before.batches || []).concat(next.batches || []),
-            pending: !!next.pending
-        });
-    }
-
-    /* Ask the model about the fields nothing local could answer. Always bounded:
-     * whatever has not answered by the deadline is filled by the rules. */
-    async function askModel(unresolved, persona) {
-        if (!unresolved.length) return {};
-        const payload = {
-            persona: {
-                fullName: persona.fullName, email: persona.email, company: persona.company,
-                city: persona.city, country: persona.country, jobTitle: persona.jobTitle,
-                locale: persona.locale, language: persona.language, seed: persona.seed
-            },
-            pageTitle: document.title.slice(0, 120),
-            context: pageContext(unresolved[0] && unresolved[0].el),
-            examples: nearbyExamples(),
-            // The field's whole contract, so the answer arrives inside it rather than being clipped.
-            fields: unresolved.map(f => ({
-                id: f.idx,
-                label: f.label.slice(0, 140),
-                section: f.section.slice(0, 60),
-                required: f.required || undefined,
-                placeholder: f.placeholder || undefined,
-                min: f.min != null ? f.min : undefined,
-                max: f.max != null ? f.max : undefined,
-                richText: RICH_KINDS.has(f.type) || undefined,
-                type: f.type,
-                maxLength: f.maxLength,
-                pattern: f.pattern,
-                options: f.options ? f.options.map(o => o.text).slice(0, 20) : undefined
-            }))
-        };
-        try {
-            const want = modelBudget(unresolved.length, modelSettings);
-            const budget = modelCalls === 0 ? want : Math.round(want * LATER_PASS_SHARE);
-            modelCalls++;
-            /* Whether the session is already up decides how long to wait, and the
-             * answer is wanted here rather than a round trip later: run() sends
-             * this probe before it reads the form, so by now it has usually come
-             * back. A probe that has not is not worth blocking on. */
-            if (!warmProbe) warmProbe = sendMessage({kind: 'nano-warm'});
-            const warm = await Promise.race([warmProbe, H.sleep(120).then(() => null)]);
-            const loading = !(warm && warm.ready) && !modelWarm;
-            if (loading) {
-                modelLoading = true;
-                progress('model', 'Warming up the model', null);
-            }
-            payload.budgetMs = budget;
-            payload.sessionWaitMs = loading ? SESSION_ALLOWANCE_MS : 0;
-            const tAsk = Date.now();
-            const res = await Promise.race([
-                chrome.runtime.sendMessage({kind: 'generate', payload}),
-                new Promise(r => setTimeout(() => r({
-                    ok: false,
-                    timedOut: true
-                }), budget + (loading ? SESSION_ALLOWANCE_MS : 0)))
-            ]);
-            modelLoading = false;
-            modelRequestMs += Date.now() - tAsk;
-            if (res && !res.timedOut) modelWarm = true;
-            if (res && res.debug) modelDebug = mergeDebug(modelDebug, res.debug);
-            if (res && res.via) modelVia = res.via;
-            if (res && res.error) modelError = String(res.error);
-            modelWarming = !!(res && res.warming);
-            modelWarmingMs = (res && res.warmingMs) || 0;
-            if (res && res.timedOut) {
-                modelTimedOut = true;
-                // The worker keeps generating; the popup collects the late answer for the Debug tab.
-                modelDebug = modelDebug || {
-                    at: tAsk, asked: unresolved.length, waitedMs: Date.now() - tAsk,
-                    note: `gave up after ${Date.now() - tAsk}ms of a ${budget}ms budget`,
-                    batches: [], pending: true
-                };
-            }
-            return (res && res.ok && res.values) ? res.values : {};
-        } catch (err) {
-            H.note(`the model could not be reached — ${err && err.message || err}`);
-            return {};
-        }
-    }
-
     // ------------------------------------------------------------------ run ----
     async function run(settings) {
-        modelSettings = settings || {};
+        M.modelSettings = settings || {};
         // Bring the model session up while the form is being read; nothing waits on it.
-        warmProbe = null;
-        if (modelSettings.useAI !== false) {
-            warmProbe = sendMessage({kind: 'nano-warm'});
-            warmProbe.then(r => {
-                if (r && r.ready) modelWarm = true;
+        M.warmProbe = null;
+        if (M.modelSettings.useAI !== false) {
+            M.warmProbe = sendMessage({kind: 'nano-warm'});
+            M.warmProbe.then(r => {
+                if (r && r.ready) M.modelWarm = true;
             });
         }
         globalThis.__formforgeRuns = (globalThis.__formforgeRuns || 0) + 1;   // observable double-injection
-        modelTimedOut = false;
-        modelDebug = null;
-        modelVia = '';
-        modelError = '';
-        modelWarming = false;
-        modelWarmingMs = 0;
-        modelCalls = 0;
-        modelRequestMs = 0;
+        M.modelTimedOut = false;
+        M.modelDebug = null;
+        M.modelVia = '';
+        M.modelError = '';
+        M.modelWarming = false;
+        M.modelWarmingMs = 0;
+        M.modelCalls = 0;
+        M.modelRequestMs = 0;
         filesAttached.clear();
         uploads = [];
         Hud.reset();
@@ -969,9 +379,9 @@
         let pending = null;
         let modelAsked = false;
         let aiUsed = 0;
-        modelBatch = (values, via) => {
+        M.modelBatch = (values, via) => {
             Object.assign(answers, values || {});
-            if (via && !modelVia) modelVia = via;      // a request that runs out of time never returns one
+            if (via && !M.modelVia) M.modelVia = via;      // a request that runs out of time never returns one
             wake();
         };
         if (settings.useAI !== false && askAbout.length) {
@@ -992,15 +402,17 @@
              * does with bold, italic and a list. The model's words go into the
              * shape the rule would have built, so the words are its and the
              * markup is ours. */
-            if (RICH_KINDS.has(f.type) && !/<[a-z]/i.test(String(v))) return G.richLayout(String(v), persona);
+            if (RICH_KINDS.has(f.type) && !BLOCK_MARKUP.test(String(v))) {
+                return G.richLayout(H.plainText(String(v)), persona, fieldKey(f));
+            }
             return v;
         };
         // Why a field ended up on the filler, in the words of whatever went wrong.
         const whyFallback = (f) => f.matchedRule ? 'a rule matched but produced nothing'
             : settings.useAI === false ? 'no rule matched; the model was switched off'
-                : modelWarming ? 'no rule matched; the model was still loading'
-                    : modelTimedOut ? 'no rule matched; the model ran out of time'
-                        : modelError ? `no rule matched; the model answered with an error: ${modelError.slice(0, 120)}`
+                : M.modelWarming ? 'no rule matched; the model was still loading'
+                    : M.modelTimedOut ? 'no rule matched; the model ran out of time'
+                        : M.modelError ? `no rule matched; the model answered with an error: ${M.modelError.slice(0, 120)}`
                             : modelAsked ? 'no rule matched; the model had no answer for it'
                                 : 'no rule matched; the model was not available';
         /* What to write, decided as late as possible: the model's answer if it
@@ -1155,7 +567,7 @@
                 done: done.size, total: owed.length,
                 label: `the form is filled — ${left} field${left === 1 ? '' : 's'} still to improve`
             });
-            await new Promise(r => waiters.push(r));
+            await new Promise(r => M.waiters.push(r));
             await catchUp();
         }
         if (pending) await pending;                 // its own deadline; the form has not waited on it
@@ -1166,11 +578,11 @@
             ping({
                 stage: 'model',
                 text: `Asking the model about ${askAbout.length} field${askAbout.length === 1 ? '' : 's'}`,
-                detail: modelWarming ? 'still loading — try again in a moment'
-                    : modelTimedOut ? 'out of time'
+                detail: M.modelWarming ? 'still loading — try again in a moment'
+                    : M.modelTimedOut ? 'out of time'
                         : aiUsed ? `${aiUsed} answered`
-                            : modelError ? `error — ${modelError.slice(0, 80)}`
-                                : modelVia && modelVia !== 'none' ? 'answered none' : 'no model available'
+                            : M.modelError ? `error — ${M.modelError.slice(0, 80)}`
+                                : M.modelVia && M.modelVia !== 'none' ? 'answered none' : 'no model available'
             });
         }
 
@@ -1405,15 +817,15 @@
             upgraded,
             leftOpen,
             notes,
-            modelTimedOut,
-            modelWarming,
-            modelWarmingMs,
-            modelVia,
-            modelError,
-            modelDebug,
+            modelTimedOut: M.modelTimedOut,
+            modelWarming: M.modelWarming,
+            modelWarmingMs: M.modelWarmingMs,
+            modelVia: M.modelVia,
+            modelError: M.modelError,
+            modelDebug: M.modelDebug,
             modelAsked,
             modelSwitchedOff: settings.useAI === false,
-            modelRequestMs,
+            modelRequestMs: M.modelRequestMs,
             unresolvedCount: askedCount,
             filled,
             skipped,
@@ -1516,7 +928,12 @@
         'button[name="deleteFile"]', '[aria-label*="remove" i]', '[aria-label*="delete" i]', '[aria-label*="löschen" i]',
         '[aria-label*="entfernen" i]', '[title*="remove" i]', '[title*="delete" i]', '[title*="löschen" i]', '[title*="entfernen" i]'
     ].join(', ');
-    const OUR_FILE = /\bformforge-[a-z0-9]+(?:-\d+)?\.[a-z0-9]{2,4}\b/i;
+    /* No word boundary on either side. A tile renders the name against its
+     * neighbouring labels with nothing between them — "PDFformforge-a1.pdf" in
+     * front, "formforge-a1.pngGröße" behind — and a `\b` there sits between two
+     * letters, so a row holding our own file did not look like one and Clear
+     * left the attachment on the page. The prefix is ours; it needs no fence. */
+    const OUR_FILE = /formforge-[a-z0-9]+(?:-\d+)?\.[a-z0-9]{2,4}/i;
 
     /* The row a remove button belongs to is the nearest ancestor that names one
      * of our files; a container naming one through some other row holds more
@@ -1541,9 +958,9 @@
         return 0;
     }
 
-    function clearAll() {
+    async function clearAll() {
         let n = 0;
-        document.querySelectorAll(`[${MARK}]`).forEach(el => {
+        for (const el of document.querySelectorAll(`[${MARK}]`)) {
             const type = (el.type || '').toLowerCase();
             if (type === 'file') {
                 const had = (el.files && el.files.length) || 0;
@@ -1557,21 +974,45 @@
                     n++;
                 }
             } else if (el.isContentEditable) {
-                el.textContent = '';
-                fire(el, ['input', 'change']);
+                await H.clearRich(el);
                 n++;
             } else if ('value' in el) {
                 H.setNativeValue(el, '');
                 fire(el, ['input', 'change']);
                 n++;
             } else {
+                /* A library's editor is marked on the wrapper it renders, not on
+                 * the surface inside it, so the branch above never sees it: the
+                 * five editors of a device form were reported cleared and held
+                 * their text. */
+                const editable = el.querySelector('[contenteditable="true"]');
                 const clear = el.querySelector('[class*="clear"], [data-pc-section="clearicon"]');
-                if (clear) {
+                if (editable) {
+                    await H.clearRich(editable);
+                    n++;
+                } else if (clear) {
                     H.press(clear);
                     n++;
                 }
             }
-        });
+        }
+        /* A file the page took off us is no longer the input's to give back, and
+         * the component that took it often rebuilds the input, so the node the
+         * fill marked is gone by the time Clear runs. The rows it rendered are
+         * still there, naming our own files. Sweep for them by name: the same
+         * test that guards a foreign attachment, asked of the whole page. */
+        /* One at a time, asking again each time. Removing an attachment re-renders
+         * the list, so every other button in a list taken beforehand is a node
+         * that is no longer on the page: pressed, it does nothing, and four
+         * attachments came off as two. */
+        for (let i = 0; i < 40; i++) {
+            const button = Array.from(document.querySelectorAll(REMOVE_FILE))
+                .find(b => !b.disabled && removesOurFile(b, document.body));
+            if (!button) break;
+            H.press(button);
+            n++;
+            await H.sleep(0);
+        }
         if (n || !SUBFRAME) toast(`Cleared ${n} fields`, null);
         return {count: n};
     }
@@ -1626,17 +1067,17 @@
         }
         if (msg.kind === 'fill') return exclusive(async () => ({ok: true, ...(await run(msg.settings || {}))}), respond);
         if (msg.kind === 'fill-one') return exclusive(() => fillOne(msg.settings || {}, {focusFirst: !!msg.focusFirst}), respond);
-        if (msg.kind === 'clear') return exclusive(async () => ({ok: true, ...clearAll()}), respond);
+        if (msg.kind === 'clear') return exclusive(async () => ({ok: true, ...(await clearAll())}), respond);
         // The worker says when the model has finished loading, so the card can stop saying "warming up".
         // A batch of answers, ahead of the request it belongs to finishing.
         if (msg.kind === 'model-batch') {
-            if (modelBatch) modelBatch(msg.values, msg.via);
+            if (M.modelBatch) M.modelBatch(msg.values, msg.via);
             respond({ok: true});
             return false;
         }
         if (msg.kind === 'model-stage') {
-            if (busy && modelLoading && msg.stage === 'asking') {
-                modelLoading = false;
+            if (busy && M.modelLoading && msg.stage === 'asking') {
+                M.modelLoading = false;
                 progress('model', msg.text || 'Asking the model', null);
             }
             respond({ok: true});
