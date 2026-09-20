@@ -212,17 +212,33 @@
     const escapeHtml = (t) => String(t)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+    /* Four shapes, not one. A form with five editors on it filled all five with
+     * the same bold "Note:" over the same bullet list, which reads as a filler
+     * that has one trick — and exercises one path through the editor five times
+     * instead of four paths once each. Between them these cover bold, italic,
+     * a bullet list and a numbered list. */
+    const RICH_WORDS = {
+        en: {lead: ['Note', 'Summary', 'Background', 'Checklist'], review: 'Please review before release.'},
+        de: {lead: ['Hinweis', 'Zusammenfassung', 'Hintergrund', 'Checkliste'], review: 'Bitte vor Freigabe prüfen.'}
+    };
+
     function richHtml(r, langKey, sentences) {
         const s = (sentences || someSentences(r, langKey, 4)).map(escapeHtml);
-        const de = langKey === 'de';
-        return [
-            `<p><strong>${de ? 'Hinweis' : 'Note'}:</strong> ${s[0]}</p>`,
-            `<p>${s[1]} <em>${de ? 'Bitte vor Freigabe prüfen.' : 'Please review before release.'}</em></p>`,
-            '<ul>',
-            `<li>${s[2]}</li>`,
-            `<li>${s[3] || s[0]}</li>`,
-            '</ul>'
-        ].join('');
+        const w = RICH_WORDS[langKey] || RICH_WORDS.en;
+        const shape = Math.floor(r() * 4);
+        const lead = w.lead[shape];
+        if (shape === 1) {
+            return `<p>${s[0]}</p><ol><li>${s[1]}</li><li>${s[2]}</li><li>${s[3] || s[1]}</li></ol>`;
+        }
+        if (shape === 2) {
+            return `<p>${s[0]} <strong>${s[1]}</strong></p><p><em>${s[2]}</em></p>`;
+        }
+        if (shape === 3) {
+            return `<p><strong>${lead}</strong></p><ul><li>${s[0]}</li><li>${s[1]}</li><li>${s[2]}</li></ul>`
+                + `<p><em>${w.review}</em></p>`;
+        }
+        return `<p><strong>${lead}:</strong> ${s[0]}</p><p>${s[1]} <em>${w.review}</em></p>`
+            + `<ul><li>${s[2]}</li><li>${s[3] || s[0]}</li></ul>`;
     }
 
     /* The model's words in the shape the control is worth testing with. It answers
@@ -231,14 +247,14 @@
      * the prompt was a line paid for on every batch that the on-device model
      * ignored anyway, so the layout is built here instead. Short answers are made
      * up from the same pool the rules draw on, so the page reads of a piece. */
-    function richLayout(text, persona) {
+    function richLayout(text, persona, salt) {
         const langKey = persona.prose || 'en';
         /* Its own stream, seeded from the persona and the answer. The persona's
          * RNG is a sequence, and model answers arrive in whatever order the
          * batches finish: drawing from it here would make the rest of the fill
          * depend on that order, and the seed would stop reproducing the page. */
-        const r = mulberry32(seedFromString(`${persona.seed}|rich|${text}`));
-        const given = String(text).replace(/\s+/g, ' ').trim()
+        const r = mulberry32(seedFromString(`${persona.seed}|rich|${salt || ''}|${text}`));
+        const given = String(text || '').replace(/\s+/g, ' ').trim()
             .split(/(?<=[.!?])\s+/).map(x => x.trim()).filter(Boolean);
         for (let guard = 0; given.length < 4 && guard < 4; guard++) {
             const more = someSentences(r, langKey, 4 - given.length);
@@ -383,7 +399,7 @@
         const past = new Date(now.getTime() - (7 + Math.floor(r() * 400)) * 864e5);
         const futureLate = new Date(future.getTime() + (7 + Math.floor(r() * 21)) * 864e5);
 
-        return {
+        const persona = {
             seed: String(seed),
             locale: localeKey,
             localeLabel: L.label,
@@ -434,6 +450,17 @@
             taxNumber: L.countryCode === 'DE' ? `${digits(r, 2)}/${digits(r, 3)}/${digits(r, 5)}` : makeEin(r),
             cardNumber: makeTestCard(r),
             cardCvc: digits(r, 3),
+            /* 987-65-4320 to 987-65-4329 is the block the SSA reserves for
+             * advertising, the same reasoning as the 555-01xx phone range: a
+             * number that cannot belong to anybody. Germany's analogue is a
+             * different thing with a different shape, so a DE fill has none and
+             * the field falls through. */
+            ssn: L.countryCode === 'US' ? `987-65-432${Math.floor(r() * 10)}` : '',
+            driverLicence: `${L.countryCode === 'US' ? place.region : 'B'}${digits(r, 7)}`,
+            income: String((30 + Math.floor(r() * 90)) * 1000),
+            altText: L.prose === 'de'
+                ? `${pick(r, vocab(localeKey, 'product') || ['Notebook'])} auf einem Schreibtisch`
+                : `${pick(r, vocab(localeKey, 'product') || ['Notebook'])} on a desk`,
             cardExpiry: `${pad(1 + Math.floor(r() * 12))}/${String(now.getFullYear() + 2 + Math.floor(r() * 3)).slice(2)}`,
             website: `https://www.${companySlug}.example`,
             amount: (Math.floor(r() * 90000) + 1000) / 100,
@@ -444,6 +471,7 @@
             prose: L.prose,
             _rng: r
         };
+        return persona;
     }
 
     // ---------------------------------------------------------------- rules ----
@@ -467,9 +495,9 @@
         [/\b(password|passwd|pwd|kennwort|passwort)\b/i, p => p.password],
         [/\b(first\s*-?name|firstname|given\s*-?name|vorname|fname)\b/i, p => p.firstName],
         [/\b(last\s*-?name|lastname|surname|family\s*-?name|nachname|lname)\b/i, p => p.lastName],
-        [/\b(middle\s*-?(name|initial)|initials)\b/i, p => p.initials[0]],
+        [/\b(middle\s*-?(name|initials?|i)|initials)\b/i, p => p.initials[0]],
         [/\b(full\s*-?name|your\s*name|name\s*\(|contact\s*(name|person)|kontaktperson|ansprechpartner)\b/i, p => p.fullName],
-        [/\b(user\s*-?name|nickname|handle|login|benutzername)\b/i, p => p.username],
+        [/\b(user\s*-?(name|id)|nickname|handle|login|benutzername)\b/i, p => p.username],
         [/\b(e-?mail|mail\s*address|emailaddress|e-?post)\b/i, p => p.email],
         // The country picker of an international phone input, before the phone rules claim it.
         [/countrylist|countrycode|phonecountry/i, p => [p.country, p.countryEn, ...(p.countryNames || []), p.countryCode]],
@@ -497,10 +525,11 @@
         // "Land" is a country in German and a plot in English; the plot's labels say what kind.
         [/\b(country|staat)\b|\bland\b(?!\s*-?\s*(area|size|use|parcel|plot|register|registry|owner|lord))/i, p => [p.country, p.countryEn, ...(p.countryNames || []), p.countryCode]],
         [/\b(street|address|addr|line1|anschrift|strasse|straße)\b/i, p => p.street],
-        [/\b(salutation|anrede|gender|geschlecht|prefix)\b/i, p => ['Mr', 'Ms', 'Herr', 'Frau', 'Mx']],
+        [/\b(salutation|anrede|gender|geschlecht|sex|prefix)\b/i, p => ['Mr', 'Ms', 'Herr', 'Frau', 'Mx']],
         // Narrow on purpose: a bare /time/ would also claim "Minimum lead time", a number.
         [/\b(start|begin|beginn|von|opening|öffnung)\s*-?\s*(time|zeit)\b|\bstarttime\b/i, () => '09:00'],
         [/\b(end|finish|ende|bis|closing|schluss)\s*-?\s*(time|zeit)\b|\bendtime\b/i, () => '17:00'],
+        [/\bbirth\s*-?(place|pl|city|town|ort)\b|\bgeburtsort\b|\bpob\b/i, p => p.city],
         [/\b(birth\w*|dob|geburt\w*|geboren)\b/i, p => p.birthDate],
         [/\b(iban|bank\s*account|kontonummer|bankverbindung)\b/i, p => p.iban],
         // Two shapes: a VAT id (DE123456789) and a tax number (12/345/67890 or 12-3456789) fail each other's validators.
@@ -519,24 +548,110 @@
         [/\b(cvc|cvv|security\s*code|prüfziffer)\b/i, p => p.cardCvc],
         [/\b(expir|valid\s*(thru|until)|gültig|mm\s*\/\s*yy)\b/i, p => p.cardExpiry],
         [/\b(sub)?domain\b/i, p => p.companyDomain, WEAK],
-        [/\b(website|url|homepage|webseite|link)\b/i, p => p.website],
+        [/\b(alt(ernative)?\s*-?te?xt|alt-?tag|bildbeschreibung|image\s*description)\b/i, p => altTextFor(p)],
+        [/\b(web\s*-?site|url|home\s*-?page|webseite|link)\b/i, p => p.website],
+        // A source is usually where a picture came from; the model may know better.
+        [/\b(source|quelle|herkunft|origin)\b/i, p => sourceFor(p), WEAK],
         // A cost centre is a code, not a sum.
         [/\b(amount|price|total|betrag|preis|summe|kosten)\b|\bcosts?\b(?!\s*-?\s*(cent(er|re)|code|type|unit|stelle|category))/i, p => String(p.amount)],
+        [/\b(income|salary|gehalt|einkommen|jahresgehalt)\b/i, p => p.income],
         [/\b(quantity|qty|anzahl|menge|count)\b/i, p => String(p.quantity)],
-        [/\b(comment|message|description|notes?|feedback|information(en)?|instructions?|bemerkung|nachricht|beschreibung|kommentar|hinweise?|anmerkung(en)?)\b/i, p => p.paragraph, WEAK],
+        [/\b(comment|commnt|kommentar|message|description|notes?|feedback|information(en)?|instructions?|bemerkung|nachricht|beschreibung|kommentar|hinweise?|anmerkung(en)?)\b/i, p => p.paragraph, WEAK],
         [/\b(subject|title|betreff|titel|headline)\b/i, () => 'Automated test entry — do not action', WEAK],
         [/\b(search|suche|query|q)\b/i, p => p.company.split(' ')[0], WEAK],
         [/\b(age|alter)\b/i, p => String(new Date().getFullYear() - Number(p.birthDate.slice(0, 4)))]
     ];
 
+    /* Field names on real forms carry their numbering and lose their vowels:
+     * "02frstname", "10address1", "43cvc". Prising the digits off a word, and
+     * a camelCase hump apart, puts a word boundary where the rules expect one. */
+    const loosen = (text) => String(text)
+        .replace(/([0-9])([A-Za-z])/g, '$1 $2')
+        .replace(/([A-Za-z])([0-9])/g, '$1 $2')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/\s+/g, ' ');
+
+    /* What is left after that: a token buried inside a word, with no boundary to
+     * find it by. Only tokens that mean one thing on a form are here, and only
+     * where our own answer is the better one — a phone number from a range
+     * reserved for fiction, a card that passes Luhn, an address that agrees with
+     * the rest of the persona. A model asked the same box invented 555-123-4567,
+     * which is a number somebody may well have. */
+    /* What to call a field when the model has to read it. The rules above cope
+     * with "46cccstsvc" by pattern; a model cannot, and what came back for that
+     * box was "XYZ-789" — alphabet soup, which is what a model writes when the
+     * label tells it nothing. Expanded to "credit card customer service" it
+     * writes a phone number. Only names no rule claimed ever get here, so a
+     * wrong expansion costs a guess that was already wrong. */
+    /** @type {[RegExp, string][]} */
+    const EXPANSIONS = [
+        [/cccstsvc/g, 'credit card customer service'],
+        [/ccissuer/g, 'credit card issuer'],
+        [/ccnum(ber)?/g, 'credit card number'],
+        [/ccexp\s*(mm|month)/g, 'card expiry month'],
+        [/ccexp\s*(yy|year)/g, 'card expiry year'],
+        [/cc\s*uname/g, 'name on card'],
+        [/cc\s*type/g, 'card type'],
+        [/emailadr|mailadr/g, 'email address'],
+        [/frstname|fstname/g, 'first name'],
+        [/lstname|lastnm/g, 'last name'],
+        [/adrstate|addrstate/g, 'state'],
+        [/adrzip|addrzip/g, 'postcode'],
+        [/adr\s*city|addr\s*city/g, 'city'],
+        [/driv\s*lic\w*/g, 'driving licence number'],
+        [/\bcommnt\b/g, 'comment'],
+        [/\buname\b/g, 'username'],
+        [/\bssn\b/g, 'social security number'],
+        [/\bpers\b/g, 'personal'],
+        [/\badr\b|\baddr\b/g, 'address'],
+        [/phon\b/g, 'phone'],
+        [/\bsvc\b/g, 'service'],
+        [/\bnum\b|\bnbr\b/g, 'number']
+    ];
+
+    /* A leading number is the form's own ordering, not part of the name. */
+    function readable(name) {
+        const plain = loosen(name).replace(/^\s*\d+\s*/, '').replace(/\s+/g, ' ').trim();
+        let out = plain.toLowerCase();
+        for (const [re, word] of EXPANSIONS) out = out.replace(re, word);
+        out = out.replace(/\s+/g, ' ').trim();
+        // A name that needed nothing keeps its own capitals: most labels are already words.
+        if (out === plain.toLowerCase()) return plain || String(name);
+        return out;
+    }
+
+    /** @type {Rule[]} */
+    const ABBREVIATED = [
+        [/ccnum|cardnum|cc-?no\b/i, p => p.cardNumber],
+        [/emailad|mailadr|emailaddr/i, p => p.email],
+        [/phon|fax/i, p => p.phone],
+        [/frstname|fstname/i, p => p.firstName],
+        [/lstname|lastnm/i, p => p.lastName],
+        [/adrstate|addrstate|statecode/i, p => p.region],
+        [/adrzip|addrzip|zipcode/i, p => p.postal],
+        [/adrcity|addrcity/i, p => p.city],
+        [/\buname\b|usrname/i, p => p.username],
+        [/\bssn\b|socialsec/i, p => p.ssn],
+        [/driv\s*-?lic|driver\s*-?lic|licen[cs]e\s*-?(no|num)/i, p => p.driverLicence]
+    ];
+
     function matchRuleDetail(text, persona) {
         if (!text) return null;
+        const loose = loosen(text);
         for (const [re, fn, tag] of RULES) {
-            if (!re.test(text)) continue;
+            if (!re.test(text) && !re.test(loose)) continue;
             try {
                 return {value: fn(persona), pattern: String(re), weak: tag === WEAK};
             } catch (_) {
                 return null;
+            }
+        }
+        for (const [re, fn] of ABBREVIATED) {
+            if (!re.test(text) && !re.test(loose)) continue;
+            try {
+                const value = fn(persona);
+                if (value) return {value, pattern: String(re), weak: false};
+            } catch (_) { /* the next one, or the model */
             }
         }
         return null;
@@ -695,6 +810,28 @@
      * nouns are grammar terms and worse, and none of that belongs in a colleague's
      * test form. The number keeps sibling rows apart — four "Alternative text"
      * inputs must not all read the same. */
+    /* A picture's caption and where it came from, drawn per call rather than held
+     * on the persona. A form of four upload rows gave all four the same caption
+     * and the same source, which is one value tested four times — and a page
+     * where every alt text is identical is a page no screen-reader check would
+     * catch anything on. Drawn from the persona's own stream, like the fallback:
+     * the order of the calls is DOM order, so the seed still reproduces it. */
+    function altTextFor(persona) {
+        const r = persona._rng || Math.random;
+        const loc = persona.locale || 'en-US';
+        const colour = pick(r, vocab(loc, 'color')) || '';
+        const product = pick(r, vocab(loc, 'product')) || persona.productName;
+        return persona.prose === 'de'
+            ? `${product} in ${colour}, auf einem Schreibtisch`
+            : `${colour.charAt(0).toUpperCase()}${colour.slice(1)} ${product.toLowerCase()} on a desk`;
+    }
+
+    function sourceFor(persona) {
+        const r = persona._rng || Math.random;
+        const product = pick(r, vocab(persona.locale || 'en-US', 'product')) || persona.productName;
+        return `${persona.website}/media/${slugify(product)}-${100 + Math.floor(r() * 900)}.jpg`;
+    }
+
     function fallbackText(field, persona) {
         const max = field.maxLength && field.maxLength > 0 ? field.maxLength : 60;
         const r = persona._rng || Math.random;
@@ -718,6 +855,6 @@
     globalThis.FormForgeGen = {
         LOCALES, buildPersona, matchRule, matchRuleDetail, byType, fallbackText, constrain, numberFor,
         fitMask, looksLikeMask, formatDate, shortenTo, cleanDomain, newSeed, mulberry32, seedFromString,
-        richLayout
+        richLayout, readable
     };
 })();

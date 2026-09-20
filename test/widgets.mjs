@@ -1719,7 +1719,7 @@ const again = await page.evaluate(async () => {
     const opts = {seed: 'TWICE1', locale: 'de-DE', useAI: false, overwrite: true, emailDomain: 'example.com'};
     await window.__formforge.run(opts);
     const first = window.__snapshot();
-    window.__formforge.clearAll();
+    await window.__formforge.clearAll();
     const cleared = window.__snapshot();
     const res = await window.__formforge.run({...opts, seed: 'TWICE2'});
     const second = window.__snapshot();
@@ -1730,6 +1730,28 @@ const again = await page.evaluate(async () => {
 });
 check('clearing the organization locks the role template again',
     !again.cleared.orga && !again.cleared.rolle, JSON.stringify(again.cleared));
+
+/* An editor is emptied through the door it converts, like it is written to.
+   `textContent = ''` edits what Quill is showing, not what Quill keeps, and it
+   puts its own content straight back: six editors on a real form were reported
+   cleared and every one of them still held its text. The mark sits on the
+   wrapper the library renders, not on the surface inside it, which is the other
+   half of why Clear walked past them. */
+await load();
+const editorCleared = await page.evaluate(async () => {
+    await window.__formforge.run({seed: 'EDCLR1', locale: 'de-DE', useAI: false, overwrite: true});
+    const el = document.querySelector('.ql-editor');
+    const before = (el.innerText || '').trim();
+    const onSurface = el.hasAttribute('data-formforge-id');
+    await window.__formforge.clearAll();
+    await new Promise(r => setTimeout(r, 60));
+    return {before, onSurface, after: (el.innerText || '').trim()};
+});
+check('the editor was written to before it is asked to give it back',
+    editorCleared.before.length > 10, editorCleared.before.slice(0, 40));
+check('and clear empties it, though the mark is on the wrapper and not the surface',
+    editorCleared.after === '' && editorCleared.onSurface === false,
+    `left "${editorCleared.after.slice(0, 40)}", marked on surface: ${editorCleared.onSurface}`);
 /* A maximum that exists only in the form's validation schema reached the DOM
  * as a red line under a 32-character value; the fill left it there. */
 await load();
@@ -1780,7 +1802,7 @@ await load();
 const unfiled = await page.evaluate(async () => {
     await window.__formforge.run({seed: 'FILE2', locale: 'de-DE', useAI: false, overwrite: true});
     const before = {dropped: window.__snapshot().anhaenge.length, foto: document.getElementById('foto').files.length};
-    window.__formforge.clearAll();
+    await window.__formforge.clearAll();
     await new Promise(r => setTimeout(r, 100));
     const after = window.__snapshot();
     return {
@@ -1803,7 +1825,7 @@ const bare = await page.evaluate(async () => {
     await window.__formforge.run({seed: 'FILE3', locale: 'de-DE', useAI: false, overwrite: true});
     // The server took our rows down already; the only delete buttons left belong to other things.
     document.querySelectorAll('#anhaenge-liste li:not([data-foreign])').forEach(li => li.remove());
-    const r = window.__formforge.clearAll();
+    const r = await window.__formforge.clearAll();
     await new Promise(r => setTimeout(r, 100));
     const s = window.__snapshot();
     return {foreign: s.foreignAttachment, deleted: s.locationDeleted, cleared: r.count};
@@ -1845,6 +1867,26 @@ check('a fill waits for an upload it started, and fills what comes back',
     upload.rows.length === 2 && upload.rows.every(r => r.alt !== '' && r.src !== ''),
     `${upload.rows.length} row(s) after ${upload.ms}ms, ${upload.rows.filter(r => !r.alt).length} empty`);
 check('and counts those fields as revealed by the fill', upload.revealed >= 6, `${upload.revealed} revealed`);
+
+/* Clear has to take the attachments back out, and by then the input it was
+   given through is usually not the one on the page any more: the component
+   rebuilds it once the files are its own, which takes our mark with it. The
+   rows are still there and still name our files, so they are found by name. */
+const cleared = await page.evaluate(async () => {
+    const before = document.querySelectorAll('#bilder-liste .upload-row').length;
+    /* What the component's own re-render does, done here on purpose: the input
+       the fill was given is not the one on the page any more, so Clear has no
+       marked file control to walk up from. Everything it has left is the rows. */
+    document.querySelectorAll('[data-formforge-id]').forEach(el => {
+        if (el.type === 'file') el.removeAttribute('data-formforge-id');
+    });
+    const res = await window.__formforge.clearAll();
+    return {before, after: document.querySelectorAll('#bilder-liste .upload-row').length, count: res.count};
+});
+check('a rebuilt input does not cost the fill the rows it caused',
+    cleared.before === 2, `${cleared.before} row(s)`);
+check('and clear takes the attachments back out with no input to walk up from',
+    cleared.after === 0 && cleared.count >= 2, `${cleared.after} row(s) left of ${cleared.before}, cleared ${cleared.count}`);
 
 /* Bounded, like every other wait here: a server that never answers must not
    hold the fill open. The patience runs from the attach, so a form with plenty

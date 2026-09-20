@@ -994,7 +994,17 @@ if (worker) {
         /* The shape the prompt asks for and the grammar enforces. */
         map: parseValues('{"4":"A","7":"B"}', [{id: 4}, {id: 7}]),
         mapJunk: parseValues('{"4":"A","7":"N/A"}', [{id: 4}, {id: 7}]),
-        mapStrange: parseValues('{"4":"A","99":"B"}', [{id: 4}, {id: 7}])
+        mapStrange: parseValues('{"4":"A","99":"B"}', [{id: 4}, {id: 7}]),
+        /* Asked about a label it cannot read, the model answers with the label.
+         * Seen on roboform's test form: "46cccstsvc" for the field of that name,
+         * "60pers Male" for "60pers sex", and a bare "68" for "68 income". */
+        echoed: parseValues('{"4":"46cccstsvc","7":"60pers Male"}',
+            [{id: 4, label: '46cccstsvc'}, {id: 7, label: '60pers sex'}]),
+        headOnly: parseValues('{"4":"68","7":"Marketing"}',
+            [{id: 4, label: '68 income'}, {id: 7, label: '72 commnt'}]),
+        /* A word from its own label at the front of a real answer stays put, so
+         * long as the label's first word is a word and not a number. */
+        kept: parseValues('{"4":"Project Apollo"}', [{id: 4, label: 'Project name'}])
     })).catch(e => ({error: e.message})), 10000, 'reconcile');
 
     check('an answer with a shifted id is still used',
@@ -1015,6 +1025,15 @@ if (worker) {
     check('and an odd entry among named ones is dropped, not slid into the next slot',
         reconciled && reconciled.mixed && reconciled.mixed['4'] === 'A' && reconciled.mixed['7'] === undefined,
         JSON.stringify(reconciled && reconciled.mixed));
+    check('an answer that is only the label is not an answer',
+        reconciled && reconciled.echoed && reconciled.echoed['4'] === undefined
+        && reconciled.echoed['7'] === 'Male',
+        JSON.stringify(reconciled && reconciled.echoed));
+    check('and a numbered label at the front of one is taken off, not the answer',
+        reconciled && reconciled.headOnly && reconciled.headOnly['4'] === undefined
+        && reconciled.headOnly['7'] === 'Marketing'
+        && reconciled.kept && reconciled.kept['4'] === 'Project Apollo',
+        `${JSON.stringify(reconciled && reconciled.headOnly)} / ${JSON.stringify(reconciled && reconciled.kept)}`);
     check('a reply keyed by id is read straight off',
         reconciled && reconciled.map && reconciled.map['4'] === 'A' && reconciled.map['7'] === 'B',
         JSON.stringify(reconciled && reconciled.map));
@@ -1032,7 +1051,11 @@ if (worker) {
         const stub = (msg, sender, respond) => {
             if (msg.kind !== 'generate') return;
             const values = {};
-            for (const f of msg.payload.fields) values[f.id] = 'MODEL-' + f.id;
+            /* The editor gets what the on-device model really sent once: a whole
+             * release note wrapped in <em>, with no block markup in it at all. */
+            for (const f of msg.payload.fields) {
+                values[f.id] = f.richText ? '<em>MODEL-' + f.id + ' wrapped in italics.</em>' : 'MODEL-' + f.id;
+            }
             respond({ok: true, values, via: 'stub', debug: {batches: [], asked: msg.payload.fields.length}});
             return true;
         };
@@ -1080,8 +1103,14 @@ if (worker) {
      * release note came out bold. */
     check('a model answer reaches the editor as markup, in the shape a rule would have built',
         answered && /MODEL-/.test(answered.editor || '')
-        && /<strong>Hinweis:<\/strong>/.test(answered.editor || '')
-        && /<em>/.test(answered.editor) && /<li/.test(answered.editor),
+        && /<p>/.test(answered.editor || '')
+        && /<strong>|<em>|<li/.test(answered.editor || ''),
+        (answered && (answered.editor || '').slice(0, 130)) || '');
+    /* Inline tags around the whole answer are not a layout, and taken for one
+     * they put the note in as a single italic run. Only block markup says the
+     * model laid the answer out itself. */
+    check('and an answer wrapped in inline tags is laid out, not written as one italic run',
+        answered && /<p>/.test(answered.editor || '') && /<li/.test(answered.editor || ''),
         (answered && (answered.editor || '').slice(0, 130)) || '');
 
     /* Pressing the shortcut used to do nothing visible until six files had been
@@ -1172,8 +1201,8 @@ if (worker) {
     const skeleton = await withTimeout(worker.evaluate(async () => {
         const realGlobal = self.LanguageModel, realSession = nanoSession;
         nanoSession = null;
-        let seen = '';
-        let constrained = null;
+        const seen = [];
+        const constrained = [];
         self.LanguageModel = {
             availability: async () => 'available',
             create: async () => ({
@@ -1182,8 +1211,8 @@ if (worker) {
                 },
                 // As many answers as the example shows, in the order the fields were listed.
                 prompt: async (p, opts) => {
-                    seen = p;
-                    constrained = opts && opts.responseConstraint;
+                    seen.push(p);
+                    constrained.push(opts && opts.responseConstraint);
                     const shown = (p.split('\n').pop().match(/":""/g) || []).length;
                     const ids = [...p.matchAll(/^(\d+) /gm)].map(m => +m[1]);
                     const out = {};
@@ -1200,24 +1229,27 @@ if (worker) {
         self.LanguageModel = realGlobal;
         nanoSession = realSession;
         return {
-            answered: Object.keys(res.values || {}).length, tail: seen.split('\n').pop(),
-            required: (constrained && constrained.required) || [],
-            closed: !!constrained && constrained.additionalProperties === false
+            answered: Object.keys(res.values || {}).length,
+            tails: seen.map(p => p.split('\n').pop()),
+            required: constrained.map(c => (c && c.required) || []),
+            closed: constrained.every(c => c && c.additionalProperties === false)
         };
     }).catch(e => ({error: e.message})), 25000, 'skeleton');
 
     check('a batch of twelve comes back with twelve values',
         skeleton && !skeleton.error && skeleton.answered === 12,
         skeleton && skeleton.error ? skeleton.error : `${skeleton && skeleton.answered} answered`);
-    check('and the example the model is shown holds every id, not just one',
-        skeleton && !skeleton.error && (skeleton.tail.match(/":""/g) || []).length === 12,
-        skeleton && skeleton.tail ? skeleton.tail.slice(0, 120) : '');
+    check('and the example each batch is shown holds every id it asks about, not just one',
+        skeleton && !skeleton.error && skeleton.tails.length === 2
+        && (skeleton.tails[0].match(/":""/g) || []).length === 8
+        && (skeleton.tails[1].match(/":""/g) || []).length === 4,
+        skeleton && skeleton.tails ? skeleton.tails.join(' | ').slice(0, 140) : '');
     /* The example is what the model copies; the grammar is what stops it copying
      * only the first line of it. Both name all twelve or neither is worth having. */
-    check('and the grammar requires every id and admits nothing else',
+    check('and the grammar requires every id of that batch and admits nothing else',
         skeleton && !skeleton.error && skeleton.closed === true
-        && (skeleton.required || []).join(',') === '0,1,2,3,4,5,6,7,8,9,10,11',
-        skeleton ? `${(skeleton.required || []).length} required, closed=${skeleton.closed}` : '');
+        && (skeleton.required || []).map(r => r.join(',')).join(' | ') === '0,1,2,3,4,5,6,7 | 8,9,10,11',
+        skeleton ? `${(skeleton.required || []).map(r => r.length).join('+')} required, closed=${skeleton.closed}` : '');
 
     /* On a small on-device model the length of the request is most of the
      * latency, so the prompt has a budget and this is it. A full batch of twelve
@@ -1404,15 +1436,16 @@ if (worker) {
         self.LanguageModel = real;
         nanoSession = realSession;
         return {
-            aiUsed: res.aiUsed, timedOut: !!res.modelTimedOut, phase: res.phase,
+            aiUsed: res.aiUsed, asked: res.unresolvedCount, timedOut: !!res.modelTimedOut, phase: res.phase,
             fallbacks: (res.filled || []).filter(f => String(f.source).startsWith('fallback')).length
         };
     }, {files: INJECTED, url: fixtureUrl}).catch(e => ({error: e.message})), 60000, 'patience');
 
     check('a model that loads slowly and then answers is not called too slow',
-        patience && !patience.error && patience.timedOut === false && patience.aiUsed > 10,
+        patience && !patience.error && patience.timedOut === false
+        && patience.aiUsed > 0 && patience.aiUsed === patience.asked,
         patience && patience.error ? patience.error
-            : `${patience.aiUsed} answers, timedOut=${patience.timedOut}`);
+            : `${patience.aiUsed} of ${patience.asked} asked, timedOut=${patience.timedOut}`);
     check('and none of its fields end up on a fallback',
         patience && !patience.error && patience.fallbacks === 0,
         patience && !patience.error ? `${patience.fallbacks} fallback(s)` : '');
@@ -2350,8 +2383,9 @@ if (worker) {
     }, {files: INJECTED, url: `${origin}/manyfields.html`}).catch(e => ({error: e.message})), 40000, 'hosted');
     check('hosted batches go out together', hosted.calls === 2 && hosted.requestMs < 2700,
         hosted.error || `${hosted.calls} calls, request ${hosted.requestMs}ms`);
+    // A hosted batch is twice an on-device one: the round trip, not the decode, is the cost.
     check('and the first batch is on the page before the second has answered',
-        hosted.early === 24, `${hosted.early} of 30 from the model a second in`);
+        hosted.early === 16, `${hosted.early} of 30 from the model a second in`);
     check('and every hosted answer lands, attributed to the provider',
         hosted.late === 30 && hosted.aiUsed === 30 && hosted.via === 'anthropic',
         `${hosted.late}/30 on the page, aiUsed=${hosted.aiUsed}, via=${hosted.via}`);

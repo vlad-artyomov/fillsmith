@@ -45,25 +45,59 @@
 </form>
 <script>
     (() => {
-        const input = document.getElementById('bilder');
+        let input = document.getElementById('bilder');
         const list = document.getElementById('bilder-liste');
         const delay = Number(new URL(location.href).searchParams.get('uploadms') || 1200);
-        input.addEventListener('change', () => {
+        const onChange = () => {
             for (const f of Array.from(input.files)) {
                 setTimeout(() => {
                     const row = document.createElement('div');
                     row.className = 'upload-row';
                     row.innerHTML =
+                        /* The badge and the size sit against the name with nothing
+                           between them, exactly as the real tile renders it: the
+                           row's text reads "PDFformforge-a1.pdfGröße: 3 KB". */
+                        '<span class="upload-badge">PDF</span>' +
                         '<span class="upload-name"></span>' +
+                        '<span class="upload-size">Größe: 3 KB</span>' +
                         '<label><input type="checkbox" class="u-show"> Show in public listing</label>' +
                         '<label>Alternative text <input type="text" class="u-alt"></label>' +
-                        '<label>Source <input type="text" class="u-src"></label>';
+                        '<label>Source <input type="text" class="u-src"></label>' +
+                        // The shape the real uploader renders: one row, one delete button.
+                        '<button type="button" name="deleteFile" title="Delete">×</button>';
                     row.querySelector('.upload-name').textContent = f.name;
+                    /* Removing one re-renders the whole list, which is what makes a
+                       list of buttons taken beforehand a list of dead nodes. */
+                    row.querySelector('[name="deleteFile"]').addEventListener('click', () => {
+                        row.remove();
+                        const rest = Array.from(list.children);
+                        list.textContent = '';
+                        for (const r of rest) list.appendChild(r.cloneNode(true));
+                        for (const r of Array.from(list.children)) {
+                            r.querySelector('[name="deleteFile"]')
+                                .addEventListener('click', () => r.remove());
+                        }
+                    });
                     list.appendChild(row);
+                    /* And the part that made Clear miss them: the component rebuilds
+                       its input once the files are its own, so the node the fill
+                       marked is no longer in the page. */
+                    const fresh = input.cloneNode(true);
+                    // A freshly rendered node carries none of the filler's own attributes.
+                    for (const a of Array.from(fresh.attributes)) {
+                        if (a.name.startsWith('data-formforge')) fresh.removeAttribute(a.name);
+                    }
+                    input.replaceWith(fresh);
                 }, delay);
             }
             input.value = '';
-        });
+        };
+        document.addEventListener('change', (e) => {
+            if (e.target && e.target.id === 'bilder') {
+                input = e.target;
+                onChange();
+            }
+        }, true);
     })();
     window.__rows = () => Array.from(document.querySelectorAll('#bilder-liste .upload-row')).map(r => ({
         alt: r.querySelector('.u-alt').value,

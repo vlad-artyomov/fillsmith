@@ -1,5 +1,5 @@
 {
-  "//": "Type checking without a build step: `npm run typecheck` reads the JSDoc and the declarations in types/, and emits nothing. popup.js and content.js are left out on purpose \u2014 they are almost entirely DOM narrowing, where the checker's ninety complaints about getElementById returning HTMLElement would bury the one that mattered. What is checked here is the logic: the generator, the worker, the adapters and the fillers.",
+  "//": "Type checking without a build step: `npm run typecheck` reads the JSDoc and the declarations in types/, and emits nothing. popup.js, content.js and collect.js are left out on purpose \u2014 they are almost entirely DOM narrowing, where the checker's ninety complaints about getElementById returning HTMLElement would bury the one that mattered. What is checked here is the logic: the generator, the worker, the model client, the adapters and the fillers. model.js earns its place \u2014 carving it out of content.js put the model conversation under the checker for the first time, and the first thing it caught was two names the move had left behind.",
   "compilerOptions": {
     "target": "ES2022",
     "lib": [
@@ -23,6 +23,7 @@
   "exclude": [
     "src/popup.js",
     "src/content.js",
+    "src/collect.js",
     "src/report.js",
     "src/welcome.js"
   ]

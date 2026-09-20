@@ -19,6 +19,8 @@ already listening), and each file depends only on the ones above it:
 | `fillers.js`   | How do I drive this kind of control?           | `dom`, `adapters`, `overlays`   |
 | `uploads.js`   | What file do I put in a file input?            | nothing                         |
 | `hud.js`       | What does the person watching see?             | nothing                         |
+| `collect.js`   | What is on this page, and what is it called?   | `fillers`, `overlays`           |
+| `model.js`     | What does the model say, and has it said it?   | `collect`, `hud`                |
 | `content.js`   | In what order, and did it stick?               | all of the above                |
 
 Outside the page, `background.js` owns the model, **the list of injected files**, the record of what every fill did,
@@ -30,7 +32,9 @@ Why these seams: `generator.js` never touches the DOM, so every rule is a pure f
 (permissive: an unknown library should still work through ARIA) and *driving* it (exact: this one commits on blur, that
 one cancels on Escape) are different problems, so `adapters.js` and `fillers.js` are separate. `overlays.js` exists
 because popups are teleported to `<body>` and are therefore global, while every question about them is local — giving
-that a file makes the rule enforceable.
+that a file makes the rule enforceable. `collect.js` and `model.js` came out of `content.js` when it reached 1675
+lines: reading the page changes nothing in it, and the model conversation outlives the fill that starts it, so
+neither belongs in the file that orders a fill. What is left is the ordering, the writing and the repair.
 
 ## The pipeline
 
@@ -119,9 +123,11 @@ an editor, uploads that answer late), `test/libraries-form.html` holds one selec
 `test/demo-form.html` is the quick one the README's recording is made on.
 
 `npm run typecheck` reads the JSDoc and `types/` over the logic — the generator, the worker, the adapters, the
-overlays and the fillers — and emits nothing. `popup.js` and `content.js` are left out on purpose: they are almost
+overlays, the fillers and the model client — and emits nothing. `popup.js`, `content.js` and `collect.js` are left
+out on purpose: they are almost
 entirely DOM narrowing, and ninety complaints that `getElementById` returns an `HTMLElement` would bury the one that
-mattered. What it is for is the shapes that travel between files, where a misremembered property name is silent at
+mattered. `model.js` is checked, and the first thing the checker caught there was two names its move out of
+`content.js` had left behind — a class of mistake no suite sees until the path that uses them runs. What it is for is the shapes that travel between files, where a misremembered property name is silent at
 run time and reads as a control that would not take a value.
 
 ## Why `<all_urls>`
@@ -278,6 +284,28 @@ Each of these was a bug on a real form and has a regression check.
 - An autocomplete asks its shortest query first and its full candidate last; a panel that says "no results" has
   answered.
 
+- Clear empties an editor through the door it converts, exactly as the fill writes to it. `textContent = ''` edits
+  what the editor is showing, not the model it keeps, and it puts its own content back on the next tick: six
+  editors on a device form were reported cleared and every one of them still held its text. The other half of that
+  miss is that a library marks its wrapper, not the surface inside it, so the branch for a contenteditable never
+  saw them.
+- The name of one of our files carries no word boundary. A tile renders it against its neighbours with nothing
+  between them, `PDFformforge-a1.pdfHochgeladen`, and a `\b` on either side sits between two letters. Two PDFs
+  survived every Clear for that reason while two images went; the prefix is ours and needs no fence.
+- Take attachments off one at a time, asking the page again each time. Removing one re-renders the list, so every
+  other button in a list taken beforehand is a node that is no longer on the page: pressed, it does nothing, and
+  four attachments came off as two.
+- Clear looks for our own attachments by name across the whole page, not only under the input it used. A component
+  that takes the files rebuilds its input, and the filler's mark goes with it, so by the time Clear runs there is
+  nothing to walk up from — the rows it rendered are all that is left, and they name our files.
+- A required key in the grammar may still be answered with an empty string. It was, five times on a batch of
+  sixteen, and those fields reached the filler as "Cyan Chair 16" while the report said the model had answered.
+  `minLength: 1` makes declining impossible rather than silent.
+- Collect every option a list offers, however many that is. They were truncated at forty, and the truncation was
+  invisible: the wanted option was simply absent, the match missed, and the random pick that follows a miss came
+  out of the same forty. On a 250-country select a US persona lived in Aruba, Belize or Burkina Faso, ten fills out
+  of ten, reported as a rule that had matched. A cap belongs where a cap is needed — the model's prompt takes
+  twenty — not where the choice is made.
 - A rich-text editor keeps a model of its content, not the DOM it is handed. Quill has no `<ul>` — it renders a
   bullet list as `<ol><li data-list="bullet">` — so markup written in with `insertHTML` was a shape it could not
   name and it rebuilt the editor without it on its next tick, 7ms later, after the filler had already read the
@@ -287,6 +315,12 @@ Each of these was a bug on a real form and has a regression check.
 - Plain words go into an editor as paragraphs, never at a caret. `insertText` applies the formatting of wherever the
   selection starts: a model's answer dropped over content that opened with `<strong>Note:</strong>` came out bold,
   every line of it, and read as a worse answer than the one it replaced.
+- A page with five editors on it must not get the same text five times. The layout has four shapes and is drawn
+  from a stream seeded by the field, so between them a form exercises bold, italic, a bullet list and a numbered
+  list instead of one path five times over. The same field on the same seed still says the same thing.
+- A value a whole column shares is one value tested many times. Four upload rows all carried the same alt text and
+  the same source, because both hung off the persona; a caption and a source are drawn per call now, from the
+  persona's own stream, so the order of the calls still reproduces from the seed.
 - The model answers such a field in prose, and prose exercises nothing the control does. Its sentences are laid into
   the same skeleton the rule builds — a bold lead-in, a paragraph with the italic note, a list — so the words are
   the model's and the markup is ours. Asking the model for markup instead was a line in every prompt that the
@@ -392,6 +426,23 @@ Each of these was a bug on a real form and has a regression check.
   and two entries reading "English" would have been worse than one.
 - "Apt", "Suite" and "Unit" are the second address line only in an address. On their own they are a unit price, a
   business unit, a test suite — and every one of them was getting "Unit 4".
+- A field name is not a caption. Real forms write `02frstname`, `10address1`, `24emailadr`, `61pers ssn`: the
+  numbering is glued to the word and the vowels are gone, so a pattern anchored on word boundaries matches none of
+  them. The name is loosened first — digits prised off letters, camelCase humps split — and what is still buried in
+  a word is caught by a short second pass of abbreviations that mean one thing on a form. It is worth the trouble
+  because the alternative is the model, and the model's answer to a phone box was 555-123-4567, a number somebody
+  may well have; to an SSN, `1234567890`; to a card, `RDouglas123`. A rule answers with a reserved number, a
+  reserved SSN and a card that passes Luhn.
+- The model is shown the name a person would read, not the one the form uses. Loosening is enough for a pattern;
+  it is not enough for a model. Given `46cccstsvc` it wrote "XYZ-789", and `45ccissuer` got "ABC-123" — alphabet
+  soup is what a model produces when the label tells it nothing. Expanded to "credit card customer service" the
+  same box gets an answer. Only names no rule claimed are ever sent, so a wrong expansion costs a guess that was
+  already wrong, and a name that needed no expansion keeps its own capitals.
+- Asked about a label it cannot read, the model answers with the label. `46cccstsvc` came back as "46cccstsvc" and
+  `60pers sex` as "60pers Male". A value equal to its own label is dropped, and a leading token is taken off only
+  when the label's first word carries a digit, so "Project Apollo" under "Project name" is left alone.
+- Nothing in the system prompt may be copyable as a value. `Infer from the label: "Project code" -> "PRJ-2481"` put
+  PRJ-2481 into an unrelated title field on five fills out of five.
 - A rule word that is also an ordinary word needs its context: "pass" alone was a boarding pass, "cost" a cost
   centre, "mobile" an app version, "land" a plot. The German Steuernummer and the USt-IdNr are different numbers with
   different shapes, and a validator for one rejects the other.

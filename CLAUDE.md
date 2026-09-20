@@ -37,8 +37,10 @@ one. `test/primevue-form.html?latency=slow` makes the fixture's remote pickers s
 - `LIBS` in `src/adapters.js` recognises widget libraries. `root` and `kind` are required; the rest are hints. Only the
   outermost match survives, so `root` must be something only that library renders — an application's own wrapper class
   matching it replaces the real control rather than merely missing it.
-- `src/fillers.js` drives controls; `src/overlays.js` finds and closes their popups; `src/content.js` orders the fill
-  and repairs it.
+- `src/fillers.js` drives controls; `src/overlays.js` finds and closes their popups; `src/collect.js` reads the page
+  and names what it finds; `src/model.js` holds the conversation with the model and the state that outlives a fill;
+  `src/content.js` orders the fill and repairs it. A name that moves between these files has to move in the export
+  list too — `collect.js` is out of the typecheck, so only the suites see it go missing.
 
 ## Rules
 

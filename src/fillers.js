@@ -10,7 +10,7 @@
 
     const {
         note, takeNotes, sleep, visible, textOf, norm, press, key, typeInto, setNativeValue,
-        commit, settle, waitFor, safeQuery, PLACEHOLDER, neutralSpot, typeIntoRich
+        commit, settle, waitFor, safeQuery, PLACEHOLDER, neutralSpot, typeIntoRich, clearRich, plainText
     } = globalThis.FormForgeDom;
     const {detect, claimed, labelFor, displayedValue, radioLabel} = globalThis.FormForgeAdapters;
     const O = globalThis.FormForgeOverlays;
@@ -847,8 +847,8 @@
         takeChoiceTimings: () => choiceTimings.splice(0, choiceTimings.length),
         // content.js reaches the dom layer through this bundle; anything it needs must be listed here.
         helpers: {
-            press, key, typeInto, setNativeValue, commit, sleep, waitFor, settle,
-            visible, textOf, norm, optionsIn, note, takeNotes, PLACEHOLDER
+            press, key, typeInto, typeIntoRich, clearRich, plainText, setNativeValue, commit, sleep, waitFor, settle,
+            visible, textOf, norm, optionsIn, note, takeNotes, neutralSpot, PLACEHOLDER
         }
     };
 })();
