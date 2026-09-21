@@ -86,8 +86,11 @@
          * anything from 2.0s to 3.3s — so a third of those fills threw away an
          * answer that was on its way. The floor costs nothing: the form is
          * complete before the window opens. */
-        const work = Math.min(45000, Math.max(6000, 1500 + 600 * n));
-        return S.modelWarm ? work : Math.max(15000, work);
+        /* Only the prompt. Bringing a session up is budgeted separately and
+         * generously (SESSION_ALLOWANCE_MS), and this used to carry a cold floor
+         * of its own as well — which, added to that, was forty seconds of card
+         * for a small ask. One number, one meaning. */
+        return Math.min(45000, Math.max(6000, 1500 + 600 * n));
     }
 
     // What this screen is, in the page's own words. document.title alone is the product name on every SPA screen.
@@ -183,16 +186,24 @@
             }))
         };
         try {
-            const want = modelBudget(unresolved.length, S.modelSettings);
-            const budget = S.modelCalls === 0 ? want : Math.round(want * LATER_PASS_SHARE);
-            S.modelCalls++;
             /* Whether the session is already up decides how long to wait, and the
              * answer is wanted here rather than a round trip later: run() sends
              * this probe before it reads the form, so by now it has usually come
              * back. A probe that has not is not worth blocking on. */
             if (!S.warmProbe) S.warmProbe = sendMessage({kind: 'nano-warm'});
             const warm = await Promise.race([S.warmProbe, H.sleep(120).then(() => null)]);
-            const loading = !(warm && warm.ready) && !S.modelWarm;
+            /* The probe is now; modelWarm is a memory, and a session dies with
+             * the worker that holds it. A page that got one answer went on
+             * believing there was a model for the rest of its life, so the fill
+             * after the worker had gone added no allowance for the session being
+             * built in its place: the card said the AI was starting and the fill
+             * ended anyway. Believe the probe; fall back on memory only when it
+             * did not answer in time. */
+            if (warm) S.modelWarm = !!warm.ready;
+            const loading = !S.modelWarm;
+            const want = modelBudget(unresolved.length, S.modelSettings);
+            const budget = S.modelCalls === 0 ? want : Math.round(want * LATER_PASS_SHARE);
+            S.modelCalls++;
             if (loading) {
                 S.modelLoading = true;
                 S.loadingSince = Date.now();
@@ -203,8 +214,13 @@
                     label: 'the form is filled — the AI takes a moment the first time'
                 });
             }
+            /* A timeout the tester set is the whole of the patience they asked
+             * for; an allowance for the session on top of it would be us
+             * deciding they meant something else. */
+            const asked = Number(S.modelSettings && S.modelSettings.modelTimeout) || 0;
+            const allowance = loading && !asked ? SESSION_ALLOWANCE_MS : 0;
             payload.budgetMs = budget;
-            payload.sessionWaitMs = loading ? SESSION_ALLOWANCE_MS : 0;
+            payload.sessionWaitMs = allowance;
             const tAsk = Date.now();
             /* Pressing Fill again while the last one is only waiting for the
              * model should start the new fill, not be told the page is busy.
@@ -219,7 +235,7 @@
                 new Promise(r => setTimeout(() => r({
                     ok: false,
                     timedOut: true
-                }), budget + (loading ? SESSION_ALLOWANCE_MS : 0)))
+                }), budget + allowance))
             ]);
             S.abandon = null;
             S.modelLoading = false;

@@ -336,6 +336,14 @@ Each of these was a bug on a real form and has a regression check.
 - Weights on the disk are not a running model. `availability()` says the first; a session takes about half a minute
   to build and dies with the worker. The pill read "model ready" over a cold one, which is the extension promising
   what the next fill cannot deliver, so the two are reported apart and the popup watches the build it started.
+- Ask whether the model is up; do not remember that it was. A session dies with the worker, and the worker stops
+  half a minute after the fill that woke it, so a page that got one answer went on believing there was a model for
+  the rest of its life — and the fill after the worker had gone added no allowance for the session being built in
+  its place. The card said the AI was starting and the fill ended without it. The probe is now; the memory is only
+  a fallback for a probe that did not answer in time.
+- One number, one meaning. Bringing a session up and answering a prompt are budgeted apart, so the prompt's budget
+  carries no cold floor of its own: together they were forty seconds of card for a small ask. A timeout the tester
+  set is the whole of the patience they asked for, and nothing is added to it.
 - A fill waits out a session that is coming up, because the form is finished before the window opens. Three seconds
   against a twenty-eight-second create meant the first fill after Chrome starts never had a model — on the day
   somebody installs this for its AI — and nothing on screen said why. The window is twenty-five seconds now, the

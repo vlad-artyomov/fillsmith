@@ -1402,6 +1402,60 @@ if (worker) {
         cold && !cold.error && cold.ms > 4000 && cold.firstPass < cold.ms - 1000,
         cold && !cold.error ? `form in ${cold.firstPass}ms, fill returned at ${cold.ms}ms` : '');
 
+    /* A session dies with the worker, and the worker stops half a minute after
+     * the fill that woke it. The page that got one answer went on believing
+     * there was a model for the rest of its life: the fill after the worker had
+     * gone added no allowance for the session being built in its place, so the
+     * card said the AI was starting and the fill ended without it anyway. */
+    step('a second fill after the session it used has gone');
+    const again2 = await withTimeout(worker.evaluate(async ({files, url}) => {
+        const real = self.LanguageModel, realSession = nanoSession;
+        let slow = false;
+        self.LanguageModel = {
+            availability: async () => 'available',
+            create: async () => {
+                if (slow) await new Promise(r => setTimeout(r, 4000));
+                return {
+                    clone: async function () {
+                        return {...this};
+                    },
+                    prompt: async (p) => {
+                        const ids = [...p.matchAll(/^(\d+) /gm)].map(m => m[1]);
+                        return JSON.stringify(Object.fromEntries(ids.map(id => [id, 'AGAIN-' + id])));
+                    },
+                    destroy() {
+                    }
+                };
+            }
+        };
+        nanoSession = null;
+        nanoPending = null;
+        nanoBuilding = false;
+        const tab = await chrome.tabs.create({url, active: false});
+        await new Promise(r => setTimeout(r, 600));
+        await chrome.scripting.executeScript({target: {tabId: tab.id, allFrames: true}, files});
+        const settings = {seed: 'AGAIN1', locale: 'en-US', useAI: true, overwrite: true};
+        const first = await chrome.tabs.sendMessage(tab.id, {kind: 'fill', settings});
+        // The worker stops; the session goes with it, and building another is slow.
+        nanoSession = null;
+        nanoPending = null;
+        nanoBuilding = false;
+        slow = true;
+        const second = await chrome.tabs.sendMessage(tab.id,
+            {kind: 'fill', settings: {...settings, seed: 'AGAIN2'}});
+        await chrome.tabs.remove(tab.id);
+        self.LanguageModel = real;
+        nanoSession = realSession;
+        return {firstUsed: first.aiUsed, secondUsed: second.aiUsed, secondVia: second.modelVia};
+    }, {files: INJECTED, url: `${origin}/form.html`}).catch(e => ({error: e.message})), 60000, 'again');
+
+    check('the fill that found a session uses it',
+        again2 && !again2.error && again2.firstUsed > 0,
+        again2 && again2.error ? again2.error : `${again2.firstUsed} answered`);
+    check('and the one after it waits for the session built in its place',
+        again2 && !again2.error && again2.secondUsed > 0 && again2.secondVia === 'on-device',
+        again2 && !again2.error ? `${again2.secondUsed} answered via ${again2.secondVia}` : '');
+
     /* A window that long must not make the page unusable. A fill waiting on the
      * model has finished writing; the next press should start, not be told the
      * page is busy for half a minute. */
