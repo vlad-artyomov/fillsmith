@@ -114,6 +114,25 @@
     }
 
     // null means "pick one yourself", which only a choice or a bool can honour.
+    const readableList = (f) => CHOICE_KINDS.has(f.type) && !!(f.options && f.options.length)
+        && !REAL_WORLD_CHOICE.test(`${f.label} ${f.autocomplete || ''}`);
+    /* Worth asking the model about. Module scope, because one field and a whole
+     * form have to ask the same question of the same field: filled from the
+     * shortcut, a box whose rule is a weak one used to keep the rule, and filled
+     * with the rest of its form it got the model's answer instead. */
+    const worthAsking = (f) => {
+        /* The file is generated in the page from the seed, to match the input's
+         * own `accept`. Asked anyway, the model replied "image1.jpeg" and
+         * "Technical specifications.pdf" — two slots in a batch of twelve,
+         * spent on names nothing reads. */
+        if (f.type === 'file') return false;
+        if (f.type === 'bool' || f.type === 'checkbox') return false;
+        if (CHOICE_KINDS.has(f.type)) return !!(f.options && f.options.length) && !readableList(f);
+        return true;
+    };
+    // A weak rule is a guess the model can better; a strong one it cannot.
+    const worthImproving = (f) => f.weakRule && !readableList(f);
+
     const picksItsOwn = (f) => CHOICE_KINDS.has(f.type) || f.type === 'checkbox' || f.type === 'bool';
 
     /* A phone field beside a country picker gets plain digits with the country
@@ -346,20 +365,8 @@
          * asked costs a slot in a batch and a share of the deadline. It earns a
          * question only where the right option follows from the persona and no
          * rule has said which one: a country, a salutation, a language. */
-        const readableList = (f) => CHOICE_KINDS.has(f.type) && !!(f.options && f.options.length)
-            && !REAL_WORLD_CHOICE.test(`${f.label} ${f.autocomplete || ''}`);
-        const worthAsking = (f) => {
-            /* The file is generated in the page from the seed, to match the input's
-             * own `accept`. Asked anyway, the model replied "image1.jpeg" and
-             * "Technical specifications.pdf" — two slots in a batch of twelve,
-             * spent on names nothing reads. */
-            if (f.type === 'file') return false;
-            if (f.type === 'bool' || f.type === 'checkbox') return false;
-            if (CHOICE_KINDS.has(f.type)) return !!(f.options && f.options.length) && !readableList(f);
-            return true;
-        };
         // A weak rule on such a list is not worth a question either: the control decides between them.
-        const askAbout = unresolved.filter(worthAsking).concat(weakly.filter(f => !readableList(f)));
+        const askAbout = unresolved.filter(worthAsking).concat(weakly.filter(worthImproving));
         /* Every field asked, over every request in the fill. The first request's
          * count alone was reported as the denominator while aiUsed counted the
          * answers from all of them, so a fill that asked again about what an
@@ -930,7 +937,9 @@
         const local = resolveLocally(f, persona);
         let value = local ? local.value : null;
         let source = local ? local.source : 'fallback';
-        if (value == null && settings.useAI !== false) {
+        const ask = settings.useAI !== false
+            && ((value == null && worthAsking(f)) || worthImproving(f));
+        if (ask) {
             const answers = await askModel([f], persona);
             const v = answers[String(f.idx)] ?? answers[f.idx];
             if (v != null && String(v).trim() !== '') {

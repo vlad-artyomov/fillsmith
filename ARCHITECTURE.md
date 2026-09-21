@@ -426,6 +426,10 @@ Each of these was a bug on a real form and has a regression check.
   request comes back with its own record. They accumulate: keeping the last one alone showed the second prompt in
   the Debug tab with no trace of the first, and counting the answers of every request against the first one's total
   read "answered 14 of 10".
+- One field and a whole form ask the same question of the same field. A weak rule is a guess the model can better,
+  and a whole-form fill hands it over; the shortcut used to ask only when no rule matched at all, so a description
+  box came out of the model when its form was filled and out of the rules when it was filled on its own. Both go
+  through the same two predicates now.
 - Ask it only what it can improve. A bool has two values and the seed picks one; a list asked without its options
   can only be invented, and the invention is discarded by the filler that then picks a valid option itself. Seven
   toggles and two blind lists once filled a batch of twelve, and every one of those answers was thrown away. A

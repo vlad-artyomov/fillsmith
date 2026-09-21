@@ -144,7 +144,8 @@ if (worker) {
      * that appears part-way through a fill. */
     const pages = {
         '/form.html': readFileSync(join(root, 'test/form.html')),
-        '/primevue-form.html': readFileSync(join(root, 'test/primevue-form.html'))
+        '/primevue-form.html': readFileSync(join(root, 'test/primevue-form.html')),
+        '/limit-form.html': readFileSync(join(root, 'test/limit-form.html'))
     };
     /* A form under a policy that forbids everything the indicator needs — a
      * stylesheet, an animation, a script. Applications behind a login are
@@ -1512,6 +1513,64 @@ if (worker) {
         cutShort && !cutShort.error
             ? `the first fill returned after ${cutShort.firstMs}ms of a 45s window`
             : '');
+
+    /* The same field, whichever way it is filled. A whole-form fill asks the
+     * model about a box whose rule is a weak one — a description, a comment —
+     * and takes the better answer. The shortcut asked only when no rule matched
+     * at all, so the same box came out of the model on one path and out of the
+     * rules on the other, which is a difference nobody could have predicted
+     * from the outside. */
+    step('one field on its own, and the same field with its form');
+    const oneVsAll = await withTimeout(worker.evaluate(async ({files, url}) => {
+        const real = self.LanguageModel, realSession = nanoSession;
+        self.LanguageModel = {
+            availability: async () => 'available',
+            create: async () => ({
+                clone: async function () {
+                    return {...this};
+                },
+                prompt: async (p) => {
+                    const ids = [...p.matchAll(/^(\d+) /gm)].map(m => m[1]);
+                    return JSON.stringify(Object.fromEntries(ids.map(id => [id, 'From the model'])));
+                },
+                destroy() {
+                }
+            })
+        };
+        nanoSession = null;
+        nanoPending = null;
+        nanoBuilding = false;
+        const tab = await chrome.tabs.create({url, active: false});
+        await new Promise(r => setTimeout(r, 600));
+        await chrome.scripting.executeScript({target: {tabId: tab.id, allFrames: true}, files});
+        const settings = {seed: 'ONEALL', locale: 'en-US', useAI: true, overwrite: true};
+
+        const whole = await chrome.tabs.sendMessage(tab.id, {kind: 'fill', settings});
+        await chrome.scripting.executeScript({
+            target: {tabId: tab.id}, func: () => {
+                const el = document.getElementById('prereq');
+                el.value = '';
+                el.focus();
+            }
+        });
+        const one = await chrome.tabs.sendMessage(tab.id,
+            {kind: 'fill-one', settings: {...settings, seed: 'ONEALL2'}, focusFirst: true});
+        await chrome.tabs.remove(tab.id);
+        self.LanguageModel = real;
+        nanoSession = realSession;
+        return {
+            wholeSource: ((whole.filled || [])[0] || {}).source,
+            oneSource: ((one.filled || [])[0] || {}).source,
+            oneValue: ((one.filled || [])[0] || {}).value
+        };
+    }, {files: INJECTED, url: `${origin}/limit-form.html`}).catch(e => ({error: e.message})), 60000, 'one vs all');
+
+    check('a whole-form fill lets the model better a weak rule',
+        oneVsAll && !oneVsAll.error && oneVsAll.wholeSource === 'ai',
+        oneVsAll && oneVsAll.error ? oneVsAll.error : `source ${oneVsAll.wholeSource}`);
+    check('and the shortcut for one field asks the same question of it',
+        oneVsAll && !oneVsAll.error && oneVsAll.oneSource === 'ai' && /From the model/.test(oneVsAll.oneValue || ''),
+        oneVsAll && !oneVsAll.error ? `source ${oneVsAll.oneSource}, "${oneVsAll.oneValue}"` : '');
 
     /* Downloaded is not running, and the pill said "model ready" over a session
      * that did not exist yet. */
