@@ -638,9 +638,12 @@
         let lateModelCalls = 0;
         let settled = false;
         for (let pass = 0; pass < 5; pass++) {
-            progress('repair', revealed || repaired
-                ? `Filling what appeared (${revealed + repaired} so far)`
-                : 'Checking that the form kept it all');
+            /* Short enough for one line of a 272px card. A title that wrapped
+             * made the card a line taller for that stage alone, and the last
+             * second of a fill moved it three times. The tally goes where
+             * tallies go. */
+            progress('repair', revealed || repaired ? 'Filling what appeared' : 'Checking the form',
+                revealed || repaired ? {count: String(revealed + repaired)} : null);
             let didSomething = false;
 
             for (const w of wrote) {

@@ -1645,6 +1645,30 @@ check('and the fill says it shortened the value rather than claiming a clean wri
 
 await load();
 
+/* The card must not jump while it works. It has several stages, and each one
+   used to bring its own height: a title that wrapped for one stage alone, and
+   the line naming the current field collapsing between them, moved the card
+   three times in the last second of a fill — 72px, 68px, 50px, then 75px. The
+   shape is held open while it is busy; it changes once, when it finishes. */
+await load();
+const shape = await page.evaluate(async () => {
+    const seen = [];
+    const sample = () => {
+        const el = document.getElementById('formforge-hud');
+        if (!el || !el.classList.contains('ff-busy')) return;
+        const h = Math.round(el.getBoundingClientRect().height);
+        const title = (el.querySelector('.ff-title') || {}).textContent || '';
+        if (!seen.length || seen[seen.length - 1].h !== h) seen.push({h, title});
+    };
+    const timer = setInterval(sample, 25);
+    await window.__formforge.run({seed: 'SHAPE9', locale: 'de-DE', useAI: false, overwrite: true});
+    clearInterval(timer);
+    const hs = seen.map(x => x.h);
+    return {steps: seen.map(x => `${x.h}px at "${x.title}"`), spread: hs.length ? Math.max(...hs) - Math.min(...hs) : 0};
+});
+check('the card keeps one shape through every stage of a fill',
+    shape.spread <= 2, shape.steps.join(' → ') || '(never busy)');
+
 /* A form names the switch that gates a block after the block: a billing address
  * gets `isBillingAddressEnabled`. Prising the digits and the camelCase humps
  * apart put a word boundary around "Address", the street rule matched, and the

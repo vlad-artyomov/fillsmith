@@ -351,6 +351,12 @@ Each of these was a bug on a real form and has a regression check.
   against a twenty-eight-second create meant the first fill after Chrome starts never had a model — on the day
   somebody installs this for its AI — and nothing on screen said why. The card says what it is waiting for, and a
   fill that ends without the model still says the model is on its way.
+- The card keeps one shape while it works. It has a stage for each thing it does, and each used to bring its own
+  height: a title that wrapped for one stage alone, and the line naming the current field collapsing between them,
+  moved it three times in the last second of a fill — 72px, 68px, 50px, then 75px. The title's line and that line
+  are held open while it is busy, and the stage titles are short enough not to wrap, so the card changes size once,
+  when it has finished and has something else to say. A check samples it through a fill and holds the spread to two
+  pixels.
 - Coming up and answering are different waits and take different times, so the card names which one it is. Reported
   as "AI is still answering 0/5", a model that was only being loaded read as a model thinking very hard about five
   fields — and the popup said "model starting" while the page did not. The card carries the same clock, which means

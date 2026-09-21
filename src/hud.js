@@ -44,6 +44,7 @@
    272px card and left the reader looking at "Waiting for the model — 1...".
    Clamped at two lines so an unexpectedly long one still cannot grow the card. */
 #formforge-hud .ff-title{ font-weight:600!important; flex:1 1 auto!important; min-width:0!important;
+  line-height:1.3!important;
   white-space:normal!important; overflow-wrap:anywhere!important;
   display:-webkit-box!important; -webkit-box-orient:vertical!important; -webkit-line-clamp:2!important; }
 /* Literal colours and background-image, not currentColor and the shorthand: the text is made
@@ -91,9 +92,19 @@
    the default nowrap-with-ellipsis cut it at "16 fields still to i...". Two
    lines at most, so an unexpectedly long one cannot grow the card. */
 #formforge-hud .ff-now{ margin-top:6px!important; font-size:11px!important; color:#5d6672!important;
+  line-height:1.35!important;
   white-space:normal!important; overflow-wrap:anywhere!important;
   display:-webkit-box!important; -webkit-box-orient:vertical!important; -webkit-line-clamp:2!important; }
 #formforge-hud .ff-now.ff-off{ display:none!important; }
+/* One shape while it works. A one-line title and a two-line title took
+   different room, and the line naming the current field collapsed between
+   stages, so the last second of a fill moved the card three times under the
+   reader's eye: 72px, 68px, 50px, then 75px when it finished. Both are held
+   open while busy; the card changes size once, when it has something else to
+   say. */
+#formforge-hud.ff-busy .ff-title{ min-height:1.3em!important; }
+#formforge-hud.ff-busy .ff-now{ display:-webkit-box!important; min-height:1.35em!important; }
+#formforge-hud.ff-busy .ff-now.ff-off{ visibility:hidden!important; }
 #formforge-hud .ff-tags{ display:flex!important; flex-wrap:wrap!important; gap:4px 5px!important;
   margin-top:7px!important; font-size:11px!important; overflow:visible!important; }
 #formforge-hud .ff-tags:empty{ display:none!important; margin-top:0!important; }
