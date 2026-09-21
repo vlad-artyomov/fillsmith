@@ -1510,7 +1510,7 @@ if (worker) {
     check('and the fill it interrupted lets go at once, with the form it had written',
         cutShort && !cutShort.error && cutShort.firstOk && cutShort.firstMs < 4000,
         cutShort && !cutShort.error
-            ? `the first fill returned after ${cutShort.firstMs}ms of a 25s window`
+            ? `the first fill returned after ${cutShort.firstMs}ms of a 45s window`
             : '');
 
     /* Downloaded is not running, and the pill said "model ready" over a session

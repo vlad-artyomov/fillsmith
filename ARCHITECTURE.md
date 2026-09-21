@@ -341,13 +341,16 @@ Each of these was a bug on a real form and has a regression check.
   the rest of its life — and the fill after the worker had gone added no allowance for the session being built in
   its place. The card said the AI was starting and the fill ended without it. The probe is now; the memory is only
   a fallback for a probe that did not answer in time.
-- One number, one meaning. Bringing a session up and answering a prompt are budgeted apart, so the prompt's budget
-  carries no cold floor of its own: together they were forty seconds of card for a small ask. A timeout the tester
-  set is the whole of the patience they asked for, and nothing is added to it.
+- One window for the whole request. Bringing a session up and answering the prompt were budgeted apart and then
+  added together, which took three lines to explain and came to seventy seconds of card for a big ask on a cold
+  model — while a small ask got twenty-five plus six against a cold `create()` measured at twenty-eight, and so
+  lost by three seconds every time. Forty-five seconds now, shared between the two as it falls out, and a timeout
+  the tester set replaces it rather than adding to it. What a single prompt may take is a separate and smaller
+  number, and it exists only to stop one wedged batch holding the session for the whole window.
 - A fill waits out a session that is coming up, because the form is finished before the window opens. Three seconds
   against a twenty-eight-second create meant the first fill after Chrome starts never had a model — on the day
-  somebody installs this for its AI — and nothing on screen said why. The window is twenty-five seconds now, the
-  card says what it is waiting for, and a fill that ends without the model still says the model is on its way.
+  somebody installs this for its AI — and nothing on screen said why. The card says what it is waiting for, and a
+  fill that ends without the model still says the model is on its way.
 - Coming up and answering are different waits and take different times, so the card names which one it is. Reported
   as "AI is still answering 0/5", a model that was only being loaded read as a model thinking very hard about five
   fields — and the popup said "model starting" while the page did not. The card carries the same clock, which means
