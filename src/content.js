@@ -933,20 +933,39 @@
             return {ok: false, error: why};
         }
 
-        progress('fill', 'Filling one field', {done: 0, total: 1, label: captionOf(f)});
+        /* Announced as reading, not as filling: the stages are ordered, and a
+         * card already showing `fill` refuses anything earlier — which is why
+         * the model coming up was never mentioned on this path. Nothing has
+         * been written yet at this point either, so it is the truer word. */
+        progress('read', 'Filling one field', {done: 0, total: 1, label: captionOf(f)});
         const local = resolveLocally(f, persona);
         let value = local ? local.value : null;
         let source = local ? local.source : 'fallback';
         const ask = settings.useAI !== false
             && ((value == null && worthAsking(f)) || worthImproving(f));
         if (ask) {
-            const answers = await askModel([f], persona);
-            const v = answers[String(f.idx)] ?? answers[f.idx];
-            if (v != null && String(v).trim() !== '') {
-                value = v;
-                source = 'ai';
+            /* One field has no loop to redraw the card, so the clock is wound
+             * here: a frozen "Starting the AI" for the length of the window is
+             * worse than no clock at all. */
+            const tick = setInterval(() => {
+                if (!M.modelLoading) return;
+                progress('model', 'Starting the AI', {
+                    count: `${Math.round((Date.now() - (M.loadingSince || Date.now())) / 1000)}s`,
+                    label: M.waitLine({alone: true})
+                });
+            }, 1000);
+            try {
+                const answers = await askModel([f], persona, {alone: true});
+                const v = answers[String(f.idx)] ?? answers[f.idx];
+                if (v != null && String(v).trim() !== '') {
+                    value = v;
+                    source = 'ai';
+                }
+            } finally {
+                clearInterval(tick);
             }
         }
+        progress('fill', 'Filling one field', {done: 0, total: 1, label: captionOf(f)});
         if (value == null) value = picksItsOwn(f) ? null : G.fallbackText(f, persona);
 
         const written = await applyValue(f, value, persona);

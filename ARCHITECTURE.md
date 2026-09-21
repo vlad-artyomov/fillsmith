@@ -357,6 +357,11 @@ Each of these was a bug on a real form and has a regression check.
   are held open while it is busy, and the stage titles are short enough not to wrap, so the card changes size once,
   when it has finished and has something else to say. A check samples it through a fill and holds the spread to two
   pixels.
+- The stages are ordered and the card refuses one earlier than the one it is showing, which is how a whole fill
+  keeps its progress moving forwards. Filling a single field announced itself as `fill` before asking the model, so
+  the stage that says the model is coming up was thrown away every time: five seconds of "Filling one field 0/1"
+  and then an answer out of nowhere. It announces itself as `read` until something is written, and winds the clock
+  itself, having no loop to redraw the card.
 - Coming up and answering are different waits and take different times, so the card names which one it is. Reported
   as "AI is still answering 0/5", a model that was only being loaded read as a model thinking very hard about five
   fields — and the popup said "model starting" while the page did not. The card carries the same clock, which means

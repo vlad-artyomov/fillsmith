@@ -1568,6 +1568,70 @@ if (worker) {
     check('a whole-form fill lets the model better a weak rule',
         oneVsAll && !oneVsAll.error && oneVsAll.wholeSource === 'ai',
         oneVsAll && oneVsAll.error ? oneVsAll.error : `source ${oneVsAll.wholeSource}`);
+    /* And says so while it waits. The stages are ordered and a card already
+     * showing `fill` refuses anything earlier, so this path announced the field
+     * first and the model coming up was never mentioned: five seconds of
+     * "Filling one field 0/1" and then the answer. */
+    step('one field waiting on a model that is coming up');
+    const oneCard = await withTimeout(worker.evaluate(async ({files, url}) => {
+        const real = self.LanguageModel, realSession = nanoSession;
+        self.LanguageModel = {
+            availability: async () => 'available',
+            create: async () => {
+                await new Promise(r => setTimeout(r, 4000));
+                return {
+                    clone: async function () {
+                        return {...this};
+                    },
+                    prompt: async () => '{"0":"From the model"}',
+                    destroy() {
+                    }
+                };
+            }
+        };
+        nanoSession = null;
+        nanoPending = null;
+        nanoBuilding = false;
+        const tab = await chrome.tabs.create({url, active: false});
+        await new Promise(r => setTimeout(r, 600));
+        await chrome.scripting.executeScript({target: {tabId: tab.id, allFrames: true}, files});
+        await chrome.scripting.executeScript({
+            target: {tabId: tab.id}, func: () => document.getElementById('prereq').focus()
+        });
+        const one = chrome.tabs.sendMessage(tab.id,
+            {kind: 'fill-one', settings: {seed: 'ONECARD', locale: 'en-US', useAI: true}, focusFirst: true});
+        let card = {};
+        for (let i = 0; i < 25; i++) {
+            const c = (await chrome.scripting.executeScript({
+                target: {tabId: tab.id}, func: () => {
+                    const h = document.getElementById('formforge-hud');
+                    return h ? {
+                        title: (h.querySelector('.ff-title') || {}).textContent || '',
+                        count: (h.querySelector('.ff-count') || {}).textContent || '',
+                        now: (h.querySelector('.ff-now') || {}).textContent || ''
+                    } : {};
+                }
+            }))[0].result;
+            if (/Starting the AI/.test(c.title || '')) card = c;
+            await new Promise(r => setTimeout(r, 200));
+        }
+        const res = await one;
+        await chrome.tabs.remove(tab.id);
+        self.LanguageModel = real;
+        nanoSession = realSession;
+        return {card, source: ((res.filled || [])[0] || {}).source};
+    }, {files: INJECTED, url: `${origin}/limit-form.html`}).catch(e => ({error: e.message})), 60000, 'one card');
+
+    check('the card says the model is starting for one field too, with a clock',
+        oneCard && !oneCard.error && /Starting the AI/.test(oneCard.card.title || '')
+        && /^\d+s$/.test(oneCard.card.count || '') && oneCard.source === 'ai',
+        oneCard && oneCard.error ? oneCard.error
+            : `"${oneCard.card.title}" ${oneCard.card.count} — ${oneCard.card.now}`);
+    /* And not the line about a form that is filled, because one field is not. */
+    check('and does not tell it the form is filled when one field is not',
+        oneCard && !oneCard.error && !/form is filled/.test(oneCard.card.now || ''),
+        (oneCard && oneCard.card && oneCard.card.now) || '');
+
     check('and the shortcut for one field asks the same question of it',
         oneVsAll && !oneVsAll.error && oneVsAll.oneSource === 'ai' && /From the model/.test(oneVsAll.oneValue || ''),
         oneVsAll && !oneVsAll.error ? `source ${oneVsAll.oneSource}, "${oneVsAll.oneValue}"` : '');

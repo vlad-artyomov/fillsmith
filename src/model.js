@@ -158,7 +158,14 @@
 
     /* Ask the model about the fields nothing local could answer. Always bounded:
      * whatever has not answered by the deadline is filled by the rules. */
-    async function askModel(unresolved, persona) {
+    /* What to say while a session comes up. A whole form has been written by
+     * now and that is the reassurance that matters; one field has not, so
+     * saying so would be a lie. */
+    const waitLine = (opts) => (opts && opts.alone)
+        ? 'the AI takes a moment the first time'
+        : 'the form is filled — the AI takes a moment the first time';
+
+    async function askModel(unresolved, persona, opts) {
         if (!unresolved.length) return {};
         const payload = {
             persona: {
@@ -215,9 +222,7 @@
                 /* Said in full, because this is the moment the promise looks
                  * broken: the form is done, nothing is happening, and the reason
                  * is a one-off cost nobody was told about. */
-                progress('model', 'Starting the AI', {
-                    label: 'the form is filled — the AI takes a moment the first time'
-                });
+                progress('model', 'Starting the AI', {label: waitLine(opts)});
             }
             payload.budgetMs = Math.min(window, modelBudget(unresolved.length, S.modelSettings));
             payload.sessionWaitMs = window;
@@ -264,6 +269,6 @@
     }
 
     globalThis.FormForgeModel = Object.assign(S, {
-        wake, modelBudget, pageContext, nearbyExamples, sendMessage, mergeDebug, askModel
+        wake, modelBudget, pageContext, nearbyExamples, sendMessage, mergeDebug, askModel, waitLine
     });
 })();
