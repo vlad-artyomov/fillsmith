@@ -1575,15 +1575,20 @@ if (worker) {
     step('one field waiting on a model that is coming up');
     const oneCard = await withTimeout(worker.evaluate(async ({files, url}) => {
         const real = self.LanguageModel, realSession = nanoSession;
+        let slow = true;
         self.LanguageModel = {
             availability: async () => 'available',
             create: async () => {
-                await new Promise(r => setTimeout(r, 4000));
+                if (slow) await new Promise(r => setTimeout(r, 4000));
                 return {
                     clone: async function () {
                         return {...this};
                     },
-                    prompt: async () => '{"0":"From the model"}',
+                    // Long enough for the sampler below to see what the card says.
+                    prompt: async () => {
+                        await new Promise(r => setTimeout(r, 900));
+                        return '{"0":"From the model"}';
+                    },
                     destroy() {
                     }
                 };
@@ -1595,31 +1600,44 @@ if (worker) {
         const tab = await chrome.tabs.create({url, active: false});
         await new Promise(r => setTimeout(r, 600));
         await chrome.scripting.executeScript({target: {tabId: tab.id, allFrames: true}, files});
-        await chrome.scripting.executeScript({
-            target: {tabId: tab.id}, func: () => document.getElementById('prereq').focus()
-        });
-        const one = chrome.tabs.sendMessage(tab.id,
-            {kind: 'fill-one', settings: {seed: 'ONECARD', locale: 'en-US', useAI: true}, focusFirst: true});
-        let card = {};
-        for (let i = 0; i < 25; i++) {
-            const c = (await chrome.scripting.executeScript({
+        const once = async (seed) => {
+            await chrome.scripting.executeScript({
                 target: {tabId: tab.id}, func: () => {
-                    const h = document.getElementById('formforge-hud');
-                    return h ? {
-                        title: (h.querySelector('.ff-title') || {}).textContent || '',
-                        count: (h.querySelector('.ff-count') || {}).textContent || '',
-                        now: (h.querySelector('.ff-now') || {}).textContent || ''
-                    } : {};
+                    const el = document.getElementById('prereq');
+                    el.value = '';
+                    el.focus();
                 }
-            }))[0].result;
-            if (/Starting the AI/.test(c.title || '')) card = c;
-            await new Promise(r => setTimeout(r, 200));
-        }
-        const res = await one;
+            });
+            const one = chrome.tabs.sendMessage(tab.id,
+                {kind: 'fill-one', settings: {seed, locale: 'en-US', useAI: true}, focusFirst: true});
+            const titles = [];
+            let card = {};
+            for (let i = 0; i < 25; i++) {
+                const c = (await chrome.scripting.executeScript({
+                    target: {tabId: tab.id}, func: () => {
+                        const h = document.getElementById('formforge-hud');
+                        return h ? {
+                            title: (h.querySelector('.ff-title') || {}).textContent || '',
+                            count: (h.querySelector('.ff-count') || {}).textContent || '',
+                            now: (h.querySelector('.ff-now') || {}).textContent || ''
+                        } : {};
+                    }
+                }))[0].result;
+                if (c.title && c.title !== titles[titles.length - 1]) titles.push(c.title);
+                if (/Starting the AI/.test(c.title || '')) card = c;
+                await new Promise(r => setTimeout(r, 200));
+            }
+            const res = await one;
+            return {card, titles, source: ((res.filled || [])[0] || {}).source};
+        };
+        const cold = await once('ONECARD');
+        // The session is up now; the same press must not call it a start.
+        slow = false;
+        const warm = await once('ONECARD2');
         await chrome.tabs.remove(tab.id);
         self.LanguageModel = real;
         nanoSession = realSession;
-        return {card, source: ((res.filled || [])[0] || {}).source};
+        return {card: cold.card, source: cold.source, warmTitles: warm.titles, warmSource: warm.source};
     }, {files: INJECTED, url: `${origin}/limit-form.html`}).catch(e => ({error: e.message})), 60000, 'one card');
 
     check('the card says the model is starting for one field too, with a clock',
@@ -1631,6 +1649,15 @@ if (worker) {
     check('and does not tell it the form is filled when one field is not',
         oneCard && !oneCard.error && !/form is filled/.test(oneCard.card.now || ''),
         (oneCard && oneCard.card && oneCard.card.now) || '');
+    /* And the states are the same two the whole-form card shows, chosen the
+     * same way. Filling one field reused the answer to "is there a session"
+     * from the fill before it, so a model that had come up in the meantime was
+     * still being called starting, minutes later. */
+    check('a session that is already up is not called a start',
+        oneCard && !oneCard.error && oneCard.warmSource === 'ai'
+        && !(oneCard.warmTitles || []).some(t => /Starting the AI/.test(t))
+        && (oneCard.warmTitles || []).some(t => /still answering/.test(t)),
+        (oneCard && (oneCard.warmTitles || []).join(' → ')) || '');
 
     check('and the shortcut for one field asks the same question of it',
         oneVsAll && !oneVsAll.error && oneVsAll.oneSource === 'ai' && /From the model/.test(oneVsAll.oneValue || ''),

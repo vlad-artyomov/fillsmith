@@ -357,6 +357,10 @@ Each of these was a bug on a real form and has a regression check.
   are held open while it is busy, and the stage titles are short enough not to wrap, so the card changes size once,
   when it has finished and has something else to say. A check samples it through a fill and holds the spread to two
   pixels.
+- A request begins in one place, whether it is a whole form or one field. Filling a single field reused the answer
+  to "is there a session" from the fill before it, because only the whole-form path cleared it, so a model that had
+  come up in the meantime was still being called starting minutes later. Both paths reset the same state and ask
+  the same question again.
 - The stages are ordered and the card refuses one earlier than the one it is showing, which is how a whole fill
   keeps its progress moving forwards. Filling a single field announced itself as `fill` before asking the model, so
   the stage that says the model is coming up was thrown away every time: five seconds of "Filling one field 0/1"

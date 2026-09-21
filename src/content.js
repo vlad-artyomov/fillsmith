@@ -283,24 +283,8 @@
 
     // ------------------------------------------------------------------ run ----
     async function run(settings) {
-        M.modelSettings = settings || {};
-        // Bring the model session up while the form is being read; nothing waits on it.
-        M.warmProbe = null;
-        if (M.modelSettings.useAI !== false) {
-            M.warmProbe = sendMessage({kind: 'nano-warm'});
-            M.warmProbe.then(r => {
-                if (r && r.ready) M.modelWarm = true;
-            });
-        }
+        M.beginRequest(settings);
         globalThis.__formforgeRuns = (globalThis.__formforgeRuns || 0) + 1;   // observable double-injection
-        M.modelTimedOut = false;
-        M.modelDebug = null;
-        M.modelVia = '';
-        M.modelError = '';
-        M.modelWarming = false;
-        M.modelWarmingMs = 0;
-        M.modelCalls = 0;
-        M.modelRequestMs = 0;
         filesAttached.clear();
         uploads = [];
         Hud.reset();
@@ -912,6 +896,7 @@
             };
         }
 
+        M.beginRequest(settings);
         const persona = G.buildPersona(settings.seed || G.newSeed(), settings.locale || 'en-US', {
             emailDomain: settings.emailDomain, plusTag: settings.plusTag !== false
         });
@@ -947,13 +932,17 @@
             /* One field has no loop to redraw the card, so the clock is wound
              * here: a frozen "Starting the AI" for the length of the window is
              * worse than no clock at all. */
-            const tick = setInterval(() => {
-                if (!M.modelLoading) return;
-                progress('model', 'Starting the AI', {
+            /* The same two states the whole-form card shows, said the same way:
+             * a session coming up is a start, a session that is up is an answer
+             * being written. */
+            const say = () => (M.modelLoading
+                ? progress('model', 'Starting the AI', {
                     count: `${Math.round((Date.now() - (M.loadingSince || Date.now())) / 1000)}s`,
                     label: M.waitLine({alone: true})
-                });
-            }, 1000);
+                })
+                : progress('model', 'AI is still answering', {done: 0, total: 1, label: captionOf(f)}));
+            say();                                  // at once, not a second late
+            const tick = setInterval(say, 1000);
             try {
                 const answers = await askModel([f], persona, {alone: true});
                 const v = answers[String(f.idx)] ?? answers[f.idx];
