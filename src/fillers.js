@@ -425,6 +425,14 @@
             input.dispatchEvent(new Event('keyup', {bubbles: true}));
             const verdict = await waitFor(() => pickOverlay() || emptyOverlay(), Math.min(slice, left));
             if (verdict) sawPanel = true;
+            /* Two probes in and nothing at all: no list, no "no results",
+             * nothing loading. That is a box which takes free text, and the
+             * attempt after this one would spend the rest of the budget
+             * learning it again. Measured on a white-label domain field: 1.5s
+             * on every fill, eleven fills running, for a list that does not
+             * exist. The second probe is the broadest one, so a backend that
+             * was going to answer has answered by here. */
+            if (i >= 1 && !sawPanel && !mine().length && !busy(widget.root)) break;
             if (verdict && verdict !== 'empty' && verdict !== 'said-empty') {
                 overlay = verdict;
                 break;

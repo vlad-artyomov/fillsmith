@@ -28,6 +28,8 @@
         warmProbe: null,
         // Set while a fill is doing nothing but wait for the model; see abandon().
         abandon: null,
+        // When the wait for a session began, for the clock on the card.
+        loadingSince: 0,
         modelBatch: null,
         waiters: []
     };
@@ -36,7 +38,7 @@
     /* Budgets. The first call after a browser start also pays for bringing the
      * model into memory, so it is budgeted separately (SESSION_ALLOWANCE_MS) from
      * patience with the model's answer (modelBudget). Later passes in one fill
-     * get half the patience, and there are at most two of them. */
+     * get half the window, and there are at most two of them. */
     /* Bringing the model into memory takes as long as it takes — twenty-eight
      * seconds, measured, on a cold one. That is not a wait to put in front of
      * somebody who has just pressed Fill for the first time, so the allowance is
@@ -45,15 +47,19 @@
      * nothing, and one that does not is left to finish in the background, ready
      * for the fill after this one. A first fill without the model is a form
      * filled from the rules; a first fill that hangs is an uninstall. */
-    /* How long a fill will sit with a session that is still coming up. Three
-     * seconds against a cold create that takes twenty-eight meant the first fill
-     * after the worker starts never had a model, and the person who had just
-     * installed the extension for its AI saw a form filled entirely by rules and
-     * nothing to say why. The form is complete in eighty milliseconds either way,
-     * so the wait costs nothing but the card staying up — and the card now says
-     * what it is waiting for. A second press cuts it short. */
-    const SESSION_ALLOWANCE_MS = 25000;
+    /* One window for the whole request, inside which bringing a session up and
+     * answering the prompt share the time as it falls out. They used to be
+     * budgeted apart and then added, which took three lines to explain and came
+     * to seventy seconds of card for a big ask on a cold model — while a small
+     * ask got twenty-five plus six against a cold create measured at
+     * twenty-eight, and so lost by three seconds every time.
+     *
+     * Longer than that measurement on purpose. The form is complete in eighty
+     * milliseconds either way, so the window costs nothing but the card staying
+     * up; it says what it is waiting for, and a second press cuts it short. */
+    const REQUEST_WINDOW_MS = 45000;
     const LATER_PASS_SHARE = 0.5;
+
     /* Answers arriving mid-request: the worker sends each batch as it lands, and
      * whoever is waiting on a field is woken by it rather than by the whole
      * request finishing. */
@@ -83,8 +89,10 @@
          * anything from 2.0s to 3.3s — so a third of those fills threw away an
          * answer that was on its way. The floor costs nothing: the form is
          * complete before the window opens. */
-        const work = Math.min(45000, Math.max(6000, 1500 + 600 * n));
-        return S.modelWarm ? work : Math.max(15000, work);
+        /* What one prompt may take, not what the fill will wait: the window
+         * above is the patience, and this only stops a single wedged batch
+         * holding the one session for the whole of it. */
+        return Math.min(45000, Math.max(6000, 1500 + 600 * n));
     }
 
     // What this screen is, in the page's own words. document.title alone is the product name on every SPA screen.
@@ -180,18 +188,30 @@
             }))
         };
         try {
-            const want = modelBudget(unresolved.length, S.modelSettings);
-            const budget = S.modelCalls === 0 ? want : Math.round(want * LATER_PASS_SHARE);
-            S.modelCalls++;
             /* Whether the session is already up decides how long to wait, and the
              * answer is wanted here rather than a round trip later: run() sends
              * this probe before it reads the form, so by now it has usually come
              * back. A probe that has not is not worth blocking on. */
             if (!S.warmProbe) S.warmProbe = sendMessage({kind: 'nano-warm'});
             const warm = await Promise.race([S.warmProbe, H.sleep(120).then(() => null)]);
-            const loading = !(warm && warm.ready) && !S.modelWarm;
+            /* The probe is now; modelWarm is a memory, and a session dies with
+             * the worker that holds it. A page that got one answer went on
+             * believing there was a model for the rest of its life, so the fill
+             * after the worker had gone added no allowance for the session being
+             * built in its place: the card said the AI was starting and the fill
+             * ended anyway. Believe the probe; fall back on memory only when it
+             * did not answer in time. */
+            if (warm) S.modelWarm = !!warm.ready;
+            const loading = !S.modelWarm;
+            /* A timeout the tester set replaces the window; it is the whole of
+             * the patience they asked for. */
+            const asked = Number(S.modelSettings && S.modelSettings.modelTimeout) || 0;
+            const whole = asked ? asked * 1000 : REQUEST_WINDOW_MS;
+            const window = S.modelCalls === 0 ? whole : Math.round(whole * LATER_PASS_SHARE);
+            S.modelCalls++;
             if (loading) {
                 S.modelLoading = true;
+                S.loadingSince = Date.now();
                 /* Said in full, because this is the moment the promise looks
                  * broken: the form is done, nothing is happening, and the reason
                  * is a one-off cost nobody was told about. */
@@ -199,8 +219,8 @@
                     label: 'the form is filled — the AI takes a moment the first time'
                 });
             }
-            payload.budgetMs = budget;
-            payload.sessionWaitMs = loading ? SESSION_ALLOWANCE_MS : 0;
+            payload.budgetMs = Math.min(window, modelBudget(unresolved.length, S.modelSettings));
+            payload.sessionWaitMs = window;
             const tAsk = Date.now();
             /* Pressing Fill again while the last one is only waiting for the
              * model should start the new fill, not be told the page is busy.
@@ -215,10 +235,11 @@
                 new Promise(r => setTimeout(() => r({
                     ok: false,
                     timedOut: true
-                }), budget + (loading ? SESSION_ALLOWANCE_MS : 0)))
+                }), window))
             ]);
             S.abandon = null;
             S.modelLoading = false;
+            S.loadingSince = 0;
             S.modelRequestMs += Date.now() - tAsk;
             if (res && !res.timedOut) S.modelWarm = true;
             if (res && res.debug) S.modelDebug = mergeDebug(S.modelDebug, res.debug);
@@ -231,7 +252,7 @@
                 // The worker keeps generating; the popup collects the late answer for the Debug tab.
                 S.modelDebug = S.modelDebug || {
                     at: tAsk, asked: unresolved.length, waitedMs: Date.now() - tAsk,
-                    note: `gave up after ${Date.now() - tAsk}ms of a ${budget}ms budget`,
+                    note: `gave up after ${Date.now() - tAsk}ms of a ${window}ms window`,
                     batches: [], pending: true
                 };
             }

@@ -1046,6 +1046,28 @@
             <label id="lbl-aktiv">Location active</label>
         </div>
 
+        <!-- A switch the form names after the block it gates. Its own name carries
+             an address word, so the street rule matched it and the toggle's state
+             came out of a street name instead of out of the seed. -->
+        <div class="field inline">
+            <div class="p-toggleswitch p-component" data-pc-name="toggleswitch"
+                 id="isBillingAddressEnabled" aria-labelledby="lbl-billing">
+                <input class="p-toggleswitch-input" type="checkbox" role="switch" aria-checked="false">
+                <div class="p-toggleswitch-slider"></div>
+            </div>
+            <label id="lbl-billing">Enabled</label>
+        </div>
+
+        <!-- A box that takes free text and has no list behind it: no panel, no
+             "no results", nothing loading. Probing it cost the whole budget. -->
+        <div class="field">
+            <label for="whitelabel">White label domain</label>
+            <div class="p-autocomplete p-component" data-pc-name="autocomplete" id="whitelabel">
+                <input id="whitelabel-input" class="p-inputtext p-autocomplete-input" role="combobox"
+                       aria-expanded="false" autocomplete="off">
+            </div>
+        </div>
+
         <div class="field inline">
             <div class="p-checkbox p-component" data-pc-name="checkbox" id="agb">
                 <input class="p-checkbox-input" type="checkbox" required aria-labelledby="lbl-agb">
@@ -1482,10 +1504,16 @@
     (() => {
         const input = document.getElementById('voraussetzung');
         const err = document.getElementById('voraussetzung-fehler');
+        /* On its own schedule, like a real validation library: the message lands a
+           few ticks after the value, not in the same breath as it. Written
+           synchronously, this field hid the bug — the pass that looks for the
+           complaint ran before any form on earth had rendered one. */
         input.addEventListener('input', () => {
             const over = input.value.length > 30;
-            err.hidden = !over;
-            err.textContent = over ? 'Beschreibung darf maximal 30 Zeichen umfassen' : '';
+            setTimeout(() => {
+                err.hidden = !over;
+                err.textContent = over ? 'Beschreibung darf maximal 30 Zeichen umfassen' : '';
+            }, 90);
         });
     })();
 

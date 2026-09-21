@@ -41,6 +41,8 @@
     })();
 
     const CHOICE_KINDS = new Set(['choice', 'multichoice', 'inline-choice', 'autocomplete', 'radio', 'radio-group', 'select']);
+    /* Two states, and no options for a string to be matched against. */
+    const BOOL_KINDS = new Set(['bool', 'checkbox']);
     /* What tells a laid-out answer from prose. Inline tags do not: the model
      * wrapped a whole release note in <em> once, and taken as markup it went in
      * as one italic run, which is the same flat answer with a slant on it. */
@@ -63,11 +65,17 @@
      * for every field inside it. */
     function resolveLocally(f, persona) {
         const hit = G.matchRuleDetail(`${f.label} ${f.autocomplete}`, persona);
-        if (hit) {
+        /* A bool has two values and the seed picks one. A rule that matched its
+         * name has nothing to say about which: a toggle named
+         * `isBillingAddressEnabled` matched the street rule, and its state came
+         * out of "8913 Park Avenue" while the report said a rule had decided it.
+         * A list is different — there a string is matched against real options. */
+        const usable = hit && !(BOOL_KINDS.has(f.type) && typeof hit.value === 'string');
+        if (usable) {
             f.matchedRule = hit.pattern;
             if (hit.weak) f.weakRule = true;
         }
-        let value = hit ? hit.value : null;
+        let value = usable ? hit.value : null;
         if (value != null && value !== '') {
             // A rich-text control wants markup even when a prose rule matched it.
             if (f.type === 'richtext' && typeof value === 'string' && !/^\s*</.test(value)) {
@@ -563,11 +571,27 @@
              * for. The card's shimmer does the rest — there is no pool of phrases
              * to cycle through, because every line here has to be true. */
             const left = owed.length - done.size;
-            progress('improve', 'AI is still answering', {
-                done: done.size, total: owed.length,
-                label: `the form is filled — ${left} field${left === 1 ? '' : 's'} still to improve`
-            });
-            await new Promise(r => M.waiters.push(r));
+            /* Coming up and answering are different waits and take different
+             * times. Reported as "AI is still answering 0/5", a model that was
+             * only being loaded read as a model thinking very hard about five
+             * fields — the popup said "model starting" and the page did not. */
+            if (M.modelLoading) {
+                progress('improve', 'Starting the AI', {
+                    count: `${Math.round((Date.now() - (M.loadingSince || Date.now())) / 1000)}s`,
+                    label: 'the form is filled — the AI takes a moment the first time'
+                });
+            } else {
+                progress('improve', 'AI is still answering', {
+                    done: done.size, total: owed.length,
+                    label: `the form is filled — ${left} field${left === 1 ? '' : 's'} still to improve`
+                });
+            }
+            /* A clock has to tick, and which of the two waits this is can change
+             * between one turn of the loop and the next: a session comes up and
+             * the same wait stops being a start and becomes an answer. A batch
+             * landing still wakes it at once; the second is only so the card
+             * does not sit on one number for half a minute. */
+            await Promise.race([new Promise(r => M.waiters.push(r)), H.sleep(1000)]);
             await catchUp();
         }
         if (pending) await pending;                 // its own deadline; the form has not waited on it
@@ -614,9 +638,12 @@
         let lateModelCalls = 0;
         let settled = false;
         for (let pass = 0; pass < 5; pass++) {
-            progress('repair', revealed || repaired
-                ? `Filling what appeared (${revealed + repaired} so far)`
-                : 'Checking that the form kept it all');
+            /* Short enough for one line of a 272px card. A title that wrapped
+             * made the card a line taller for that stage alone, and the last
+             * second of a fill moved it three times. The tally goes where
+             * tallies go. */
+            progress('repair', revealed || repaired ? 'Filling what appeared' : 'Checking the form',
+                revealed || repaired ? {count: String(revealed + repaired)} : null);
             let didSomething = false;
 
             for (const w of wrote) {
@@ -631,6 +658,20 @@
                     repaired++;
                     didSomething = true;
                 }
+            }
+
+            /* A form complains on its own schedule: the line saying "at most 30
+             * characters" lands a few ticks after the value, and this pass used
+             * to look for it in the same breath as the write. On a form with
+             * other work to do a later pass caught it; on a dialog with one
+             * field there is no later pass, and a seventy-character answer sat
+             * in a thirty-character box under a red line. Only a long value is
+             * worth waiting on, so a form of short ones pays nothing. */
+            const risky = wrote.filter(w => !w.shortened && !CHOICE_KINDS.has(w.f.type)
+                && !FIXED_LENGTH.has(w.f.type) && document.contains(w.f.el)
+                && String(currentValue(w.f) || '').length > 40);
+            if (risky.length) {
+                await H.settle(() => risky.some(w => askedMaxChars(complaintFor(w.f))), 600, 60);
             }
 
             // The form's own complaints about length: shorten to what it asks and write once more.

@@ -306,6 +306,9 @@ Each of these was a bug on a real form and has a regression check.
   out of the same forty. On a 250-country select a US persona lived in Aruba, Belize or Burkina Faso, ten fills out
   of ten, reported as a rule that had matched. A cap belongs where a cap is needed — the model's prompt takes
   twenty — not where the choice is made.
+- An autocomplete that answers the broadest probe it will be given with nothing at all — no list, no "no results",
+  nothing loading — has no list to show, and the probe after that only learns it again. Measured on a white-label
+  domain field: a second and a half on every fill, eleven fills running, for suggestions that do not exist.
 - A rich-text editor keeps a model of its content, not the DOM it is handed. Quill has no `<ul>` — it renders a
   bullet list as `<ol><li data-list="bullet">` — so markup written in with `insertHTML` was a shape it could not
   name and it rebuilt the editor without it on its next tick, 7ms later, after the filler had already read the
@@ -333,10 +336,31 @@ Each of these was a bug on a real form and has a regression check.
 - Weights on the disk are not a running model. `availability()` says the first; a session takes about half a minute
   to build and dies with the worker. The pill read "model ready" over a cold one, which is the extension promising
   what the next fill cannot deliver, so the two are reported apart and the popup watches the build it started.
+- Ask whether the model is up; do not remember that it was. A session dies with the worker, and the worker stops
+  half a minute after the fill that woke it, so a page that got one answer went on believing there was a model for
+  the rest of its life — and the fill after the worker had gone added no allowance for the session being built in
+  its place. The card said the AI was starting and the fill ended without it. The probe is now; the memory is only
+  a fallback for a probe that did not answer in time.
+- One window for the whole request. Bringing a session up and answering the prompt were budgeted apart and then
+  added together, which took three lines to explain and came to seventy seconds of card for a big ask on a cold
+  model — while a small ask got twenty-five plus six against a cold `create()` measured at twenty-eight, and so
+  lost by three seconds every time. Forty-five seconds now, shared between the two as it falls out, and a timeout
+  the tester set replaces it rather than adding to it. What a single prompt may take is a separate and smaller
+  number, and it exists only to stop one wedged batch holding the session for the whole window.
 - A fill waits out a session that is coming up, because the form is finished before the window opens. Three seconds
   against a twenty-eight-second create meant the first fill after Chrome starts never had a model — on the day
-  somebody installs this for its AI — and nothing on screen said why. The window is twenty-five seconds now, the
-  card says what it is waiting for, and a fill that ends without the model still says the model is on its way.
+  somebody installs this for its AI — and nothing on screen said why. The card says what it is waiting for, and a
+  fill that ends without the model still says the model is on its way.
+- The card keeps one shape while it works. It has a stage for each thing it does, and each used to bring its own
+  height: a title that wrapped for one stage alone, and the line naming the current field collapsing between them,
+  moved it three times in the last second of a fill — 72px, 68px, 50px, then 75px. The title's line and that line
+  are held open while it is busy, and the stage titles are short enough not to wrap, so the card changes size once,
+  when it has finished and has something else to say. A check samples it through a fill and holds the spread to two
+  pixels.
+- Coming up and answering are different waits and take different times, so the card names which one it is. Reported
+  as "AI is still answering 0/5", a model that was only being loaded read as a model thinking very hard about five
+  fields — and the popup said "model starting" while the page did not. The card carries the same clock, which means
+  the loop that draws it wakes once a second as well as on a batch.
 - A window that long must not make the page unusable. A fill that is only waiting for the model has finished
   writing, so the next press cuts it short and goes ahead instead of being told the page is busy.
 - Never block on the model, and that includes bringing it up. A cold `create()` takes as long as it takes —
@@ -435,6 +459,16 @@ Each of these was a bug on a real form and has a regression check.
   and two entries reading "English" would have been worse than one.
 - "Apt", "Suite" and "Unit" are the second address line only in an address. On their own they are a unit price, a
   business unit, a test suite — and every one of them was getting "Unit 4".
+- Wait for a form to complain before believing it has not. A limit that lives only in a validation schema reaches
+  the page as a message a few ticks after the value, and the pass that shortens the value used to look for it in
+  the same breath as the write. On a form with other work to do a later pass caught it; on a dialog with one field
+  there is no later pass, and a seventy-character answer sat in a thirty-character box under a red line. The wait
+  is bounded and only taken for a value long enough to trip such a limit, so a form of short ones pays nothing.
+- A bool takes no value from a text rule. A form names the switch that gates a block after the block, so a billing
+  address gets `isBillingAddressEnabled`; loosening the name put a word boundary around "Address", the street rule
+  matched, and the toggle's state came out of "8913 Park Avenue" — reported, wrongly, as a rule having decided it.
+  Two states and no options to match a string against means the seed picks, as it always did before the name was
+  loosened. A list is the other case: there a string is matched against real options.
 - A field name is not a caption. Real forms write `02frstname`, `10address1`, `24emailadr`, `61pers ssn`: the
   numbering is glued to the word and the vowels are gone, so a pattern anchored on word boundaries matches none of
   them. The name is loosened first — digits prised off letters, camelCase humps split — and what is still buried in

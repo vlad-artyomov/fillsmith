@@ -1620,13 +1620,74 @@ check('a candidate no backend knows is kept whole, not as a prefix',
 check('and the same for a backend that answers "no results"',
     ac.saysEmpty.held === 'Zoltan Nobody GmbH', `held="${ac.saysEmpty.held}"`);
 
-/* A panel that is up and says "no results" has answered. Waiting out the rest
- * of the search budget in case it changes its mind is the dearest thing this
- * function used to do — so it must be measurably quicker than the control that
- * answers a miss with silence, on the same page, on the same machine. */
-check('an explicit "no results" ends the search early',
-    ac.saysEmpty.ms < ac.silentMiss.ms - 200,
-    `says-empty ${ac.saysEmpty.ms}ms vs silent ${ac.silentMiss.ms}ms`);
+/* Neither kind of miss may sit out the fifteen-hundred-millisecond search. A
+ * panel saying "no results" has answered and is believed; a control that says
+ * nothing at all to the broadest probe it will be given has no list to show,
+ * and the probe after that would only learn it again. Measured on a real
+ * white-label domain field, that last probe cost 1.5s on every fill. */
+/* The shape the bug was reported in: a dialog with one field, a limit the page
+   states only by complaining, and a validator that takes a moment. With nothing
+   else to repair, the loop finished its single pass and left before the form
+   had said a word, so a seventy-character answer stayed in a thirty-character
+   box under a red line. */
+await loadPage('test/limit-form.html');
+const alone = await page.evaluate(async () => {
+    const res = await window.__formforge.run({seed: 'LIMIT9', locale: 'en-US', useAI: false, overwrite: true});
+    const el = document.getElementById('prereq');
+    const entry = (res.filled || [])[0] || {};
+    return {value: el.value, why: entry.why || '', ms: res.phase && res.phase.total};
+});
+check('a limit stated only by a complaint is respected on a form with one field',
+    alone.value.length > 0 && alone.value.length <= 30,
+    `${alone.value.length} chars: "${alone.value}"`);
+check('and the fill says it shortened the value rather than claiming a clean write',
+    /shortened to 30 characters/.test(alone.why), alone.why || '(no reason)');
+
+await load();
+
+/* The card must not jump while it works. It has several stages, and each one
+   used to bring its own height: a title that wrapped for one stage alone, and
+   the line naming the current field collapsing between them, moved the card
+   three times in the last second of a fill — 72px, 68px, 50px, then 75px. The
+   shape is held open while it is busy; it changes once, when it finishes. */
+await load();
+const shape = await page.evaluate(async () => {
+    const seen = [];
+    const sample = () => {
+        const el = document.getElementById('formforge-hud');
+        if (!el || !el.classList.contains('ff-busy')) return;
+        const h = Math.round(el.getBoundingClientRect().height);
+        const title = (el.querySelector('.ff-title') || {}).textContent || '';
+        if (!seen.length || seen[seen.length - 1].h !== h) seen.push({h, title});
+    };
+    const timer = setInterval(sample, 25);
+    await window.__formforge.run({seed: 'SHAPE9', locale: 'de-DE', useAI: false, overwrite: true});
+    clearInterval(timer);
+    const hs = seen.map(x => x.h);
+    return {steps: seen.map(x => `${x.h}px at "${x.title}"`), spread: hs.length ? Math.max(...hs) - Math.min(...hs) : 0};
+});
+check('the card keeps one shape through every stage of a fill',
+    shape.spread <= 2, shape.steps.join(' → ') || '(never busy)');
+
+/* A form names the switch that gates a block after the block: a billing address
+ * gets `isBillingAddressEnabled`. Prising the digits and the camelCase humps
+ * apart put a word boundary around "Address", the street rule matched, and the
+ * toggle's state came out of "8913 Park Avenue" — reported, wrongly, as a rule
+ * having decided it. A bool has two values and the seed picks one. */
+const gate = await page.evaluate(async () => {
+    const res = await window.__formforge.run({seed: 'GATE1', locale: 'de-DE', useAI: false, overwrite: true});
+    const el = document.querySelector('#isBillingAddressEnabled input');
+    const row = (res.filled || []).find(f => /^Enabled/.test(f.label || ''));
+    return {checked: !!(el && el.checked), source: row && row.source, why: row && row.why, label: row && row.label};
+});
+check('a switch named after an address block is not answered by the street rule',
+    typeof gate.checked === 'boolean' && !/street/.test(gate.why || ''),
+    `${gate.checked} · ${gate.source || '?'} · ${gate.why || '(no row)'}`);
+
+check('an explicit "no results" does not wait out the search budget',
+    ac.saysEmpty.ms < 1400, `${ac.saysEmpty.ms}ms of a 1500ms budget`);
+check('and neither does a control that answers with silence',
+    ac.silentMiss.ms < 1300, `${ac.silentMiss.ms}ms of a 1500ms budget`);
 
 /* With no rule to aim at, the probe exists only to make the list appear. Two
  * letters off the persona's surname is an arbitrary query a real backend
