@@ -28,6 +28,8 @@
         warmProbe: null,
         // Set while a fill is doing nothing but wait for the model; see abandon().
         abandon: null,
+        // When the wait for a session began, for the clock on the card.
+        loadingSince: 0,
         modelBatch: null,
         waiters: []
     };
@@ -54,6 +56,7 @@
      * what it is waiting for. A second press cuts it short. */
     const SESSION_ALLOWANCE_MS = 25000;
     const LATER_PASS_SHARE = 0.5;
+
     /* Answers arriving mid-request: the worker sends each batch as it lands, and
      * whoever is waiting on a field is woken by it rather than by the whole
      * request finishing. */
@@ -192,6 +195,7 @@
             const loading = !(warm && warm.ready) && !S.modelWarm;
             if (loading) {
                 S.modelLoading = true;
+                S.loadingSince = Date.now();
                 /* Said in full, because this is the moment the promise looks
                  * broken: the form is done, nothing is happening, and the reason
                  * is a one-off cost nobody was told about. */
@@ -219,6 +223,7 @@
             ]);
             S.abandon = null;
             S.modelLoading = false;
+            S.loadingSince = 0;
             S.modelRequestMs += Date.now() - tAsk;
             if (res && !res.timedOut) S.modelWarm = true;
             if (res && res.debug) S.modelDebug = mergeDebug(S.modelDebug, res.debug);

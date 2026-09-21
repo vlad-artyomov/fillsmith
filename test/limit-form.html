@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>New booking prerequisite — FormForge fixture</title>
+    <style>
+        body {
+            font: 14px/1.5 system-ui, sans-serif;
+            margin: 40px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        input {
+            width: 420px;
+            padding: 8px;
+            border: 1px solid #bbb;
+            border-radius: 4px;
+        }
+
+        .p-message-error {
+            color: #b3261e;
+            font-weight: 600;
+            margin-top: 6px;
+        }
+    </style>
+</head>
+<body>
+<!-- One field and nothing else, which is the whole point. A dialog like this
+     gives the repair loop nothing to do, so it used to finish its single pass
+     and leave before the form had said a word — and the value that broke the
+     limit stayed in the box under a red line. -->
+<h1>New booking prerequisite</h1>
+<div class="field">
+    <!-- Named so a rule answers it with prose: the value that trips a
+         thirty-character limit is a sentence, not a word. -->
+    <label for="prereq">Prerequisite description</label>
+    <input id="prereq" name="prerequisite" type="text" aria-describedby="prereq-error" required>
+    <div id="prereq-error" class="p-message-error" role="alert" hidden></div>
+</div>
+<script>
+    /* A limit that lives in the form's schema, reported by a validator that runs
+       on its own schedule. No maxlength on the input: the page says it only by
+       complaining, and it takes a moment to say it. */
+    (() => {
+        const input = document.getElementById('prereq');
+        const err = document.getElementById('prereq-error');
+        const delay = Number(new URL(location.href).searchParams.get('validatems') || 300);
+        let timer = 0;
+        input.addEventListener('input', () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                const over = input.value.length > 30;
+                err.hidden = !over;
+                err.textContent = over ? 'Prerequisite must contain a maximum of 30 characters' : '';
+            }, delay);
+        });
+    })();
+</script>
+</body>
+</html>

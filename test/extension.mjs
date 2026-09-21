@@ -1109,8 +1109,11 @@ if (worker) {
     /* Inline tags around the whole answer are not a layout, and taken for one
      * they put the note in as a single italic run. Only block markup says the
      * model laid the answer out itself. */
+    /* Laid out, not passed through: more than one block, whatever shape the
+     * layout drew. Written as it arrived it would be a single italic run. */
     check('and an answer wrapped in inline tags is laid out, not written as one italic run',
-        answered && /<p>/.test(answered.editor || '') && /<li/.test(answered.editor || ''),
+        answered && ((answered.editor || '').match(/<p>|<li/g) || []).length >= 2
+        && !/^\s*<em>/.test(answered.editor || ''),
         (answered && (answered.editor || '').slice(0, 130)) || '');
 
     /* Pressing the shortcut used to do nothing visible until six files had been
@@ -1354,19 +1357,47 @@ if (worker) {
         await new Promise(r => setTimeout(r, 700));
         await chrome.scripting.executeScript({target: {tabId: tab.id, allFrames: true}, files});
         const t0 = Date.now();
-        const res = await chrome.tabs.sendMessage(tab.id, {
+        const fill = chrome.tabs.sendMessage(tab.id, {
             kind: 'fill', settings: {seed: 'COLD1', locale: 'en-US', useAI: true, overwrite: true}
         });
+        /* What the card says while the session is being built, read from the
+         * page rather than inferred: "AI is still answering 0/10" over a model
+         * that is only being loaded reads as a model thinking very hard. */
+        const readCard = async () => (await chrome.scripting.executeScript({
+            target: {tabId: tab.id}, func: () => {
+                const hud = document.getElementById('formforge-hud');
+                if (!hud) return {};
+                return {
+                    title: (hud.querySelector('.ff-title') || {}).textContent || '',
+                    count: (hud.querySelector('.ff-count') || {}).textContent || '',
+                    now: (hud.querySelector('.ff-now') || {}).textContent || ''
+                };
+            }
+        }))[0].result;
+        // The form is written first and takes seconds of its own; read once it is past that.
+        let card = {};
+        for (let i = 0; i < 30; i++) {
+            const c = await readCard();
+            if (/Starting the AI/i.test(c.title || '')) card = c;
+            await new Promise(r => setTimeout(r, 150));
+        }
+        const res = await fill;
         const ms = Date.now() - t0;
         await chrome.tabs.remove(tab.id);
         self.LanguageModel = real;
         nanoSession = realSession;
-        return {ms, aiUsed: res.aiUsed, via: res.modelVia, firstPass: res.phase && res.phase.firstPass};
-    }, {files: INJECTED, url: fixtureUrl}).catch(e => ({error: e.message})), 60000, 'cold');
+        return {ms, card, aiUsed: res.aiUsed, via: res.modelVia, firstPass: res.phase && res.phase.firstPass};
+        // A page written in milliseconds, so the wait on the card is the model's own.
+    }, {files: INJECTED, url: `${origin}/form.html`}).catch(e => ({error: e.message})), 60000, 'cold');
 
     check('a session five seconds in the building is still used by the fill that started it',
         cold && !cold.error && cold.aiUsed > 0 && cold.via === 'on-device',
         cold && cold.error ? cold.error : `${cold.aiUsed} answered via ${cold.via} in ${cold.ms}ms`);
+    check('the card says the model is starting, with the clock the popup shows',
+        cold && !cold.error && /Starting the AI/.test((cold.card || {}).title || '')
+        && /^\d+s$/.test((cold.card || {}).count || '')
+        && /the form is filled/.test((cold.card || {}).now || ''),
+        cold && cold.card ? `"${cold.card.title}" ${cold.card.count} — ${cold.card.now}` : '');
     check('and the form itself was finished before the model was even up',
         cold && !cold.error && cold.ms > 4000 && cold.firstPass < cold.ms - 1000,
         cold && !cold.error ? `form in ${cold.firstPass}ms, fill returned at ${cold.ms}ms` : '');
@@ -1398,13 +1429,23 @@ if (worker) {
             });
         await new Promise(r => setTimeout(r, 1500));
         const t0 = Date.now();
-        const second = await chrome.tabs.sendMessage(tab.id, {kind: 'fill', settings: {...settings, seed: 'CUT2'}});
+        /* The press is what is under test, not what it does with the model: left
+         * asking, it would sit out the same twenty-five seconds and put half a
+         * minute on this suite. */
+        const second = await chrome.tabs.sendMessage(tab.id,
+            {kind: 'fill', settings: {...settings, seed: 'CUT2', useAI: false}});
         const ms = Date.now() - t0;
         const firstRes = await first;
         await chrome.tabs.remove(tab.id);
         self.LanguageModel = real;
         nanoSession = realSession;
-        return {ms, firstMs, secondOk: !!(second && second.ok), secondCount: second && second.count, firstOk: !!(firstRes && firstRes.ok)};
+        return {
+            ms,
+            firstMs,
+            secondOk: !!(second && second.ok),
+            secondCount: second && second.count,
+            firstOk: !!(firstRes && firstRes.ok)
+        };
     }, {files: INJECTED, url: `${origin}/form.html`}).catch(e => ({error: e.message})), 60000, 'cut short');
 
     check('the second press fills the form instead of being told the page is busy',
@@ -1431,16 +1472,20 @@ if (worker) {
             return text.trim();
         };
         await worker.evaluate(() => {
-            self.LanguageModel = {availability: async () => 'available', create: () => new Promise(() => {
-            })};
+            self.LanguageModel = {
+                availability: async () => 'available', create: () => new Promise(() => {
+                })
+            };
             nanoSession = null;
             nanoPending = null;
             nanoBuilding = false;
         });
         const cold = await read();
         await worker.evaluate(() => {
-            nanoSession = {prompt: async () => '{}', destroy() {
-            }};
+            nanoSession = {
+                prompt: async () => '{}', destroy() {
+                }
+            };
         });
         const warm = await read();
         return {cold, warm};
@@ -2509,7 +2554,9 @@ if (worker) {
             await chrome.storage.local.set(saved);
         }
     }, {files: INJECTED, url: `${origin}/manyfields.html`}).catch(e => ({error: e.message})), 40000, 'hosted');
-    check('hosted batches go out together', hosted.calls === 2 && hosted.requestMs < 2700,
+    /* The slower of the two answers at 2.5s. Sequential, the request could not
+     * come in under five; the bound is halfway between, not a stopwatch. */
+    check('hosted batches go out together', hosted.calls === 2 && hosted.requestMs < 3800,
         hosted.error || `${hosted.calls} calls, request ${hosted.requestMs}ms`);
     // A hosted batch is twice an on-device one: the round trip, not the decode, is the cost.
     check('and the first batch is on the page before the second has answered',

@@ -285,6 +285,18 @@
                 now.classList.add('ff-rise');
             }
             now.classList.toggle('ff-off', !at.label);
+        } else if (at && (at.label || at.count)) {
+            /* A stage with something to say and nothing to count: the model
+             * coming up has no tally, but it has a clock and a reason. */
+            creep(el, BANDS[stage] || BANDS.repair);
+            el.querySelector('.ff-count').textContent = at.count || '';
+            if (now.textContent !== (at.label || '')) {
+                now.textContent = at.label || '';
+                now.classList.remove('ff-rise');
+                void now.offsetWidth;
+                now.classList.add('ff-rise');
+            }
+            now.classList.toggle('ff-off', !at.label);
         } else {
             creep(el, BANDS[stage] || BANDS.repair);
             el.querySelector('.ff-count').textContent = '';
