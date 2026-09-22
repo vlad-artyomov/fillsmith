@@ -362,6 +362,10 @@ function report(res) {
 }
 
 /* ------------------------------------------------------------ debug ---- */
+/* The pins exist so two fills can be compared, and ten of them reading "5h ago"
+ * cannot be told apart at all. The time of day can. */
+const hhmm = (t) => new Date(t).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+
 const ago = (t) => {
     const s = Math.max(0, Math.round((Date.now() - t) / 1000));
     return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : `${Math.round(s / 3600)}h ago`;
@@ -478,8 +482,8 @@ function trend(log) {
         `<div class="tm-row"><span class="tm-name">${esc(what)}</span><span class="tm-ms">${esc(value)}</span></div>` +
         (note ? `<div class="dim" style="margin:-2px 0 4px">${esc(note)}</div>` : '');
     return section(`Across the last ${n} fill${n === 1 ? '' : 's'}`,
-        row('Finished with nothing left', `${complete} of ${n}`,
-            left ? `${left} field${left === 1 ? '' : 's'} planned but never written` : '') +
+        row('Finished with nothing left', `${complete} of ${n}`) +
+        (left ? row('Planned but never written', String(left)) : '') +
         row('Typical fill', fmtMs(median(totals))) +
         (asked ? row('Answered by the model', `${used} of ${asked}`)
             : row('Model', consulted.length ? 'asked nothing' : 'switched off')));
@@ -496,7 +500,7 @@ function drawDebug(box, d, history, at, log) {
     if (kept.length > 1) {
         out.push('<div class="dbg-pick">' + kept.map((h, n) =>
             `<button type="button" class="dbg-pin${n === here ? ' on' : ''}" data-fill="${n}" ` +
-            `title="${esc(h.title || h.url || '')}">${esc(ago(h.at))}</button>`).reverse().join('') + '</div>');
+            `title="${esc(h.title || h.url || '')}">${esc(hhmm(h.at))}</button>`).reverse().join('') + '</div>');
     }
 
     /* What happened, then where and who. A zero is not news: "0 widgets · 0
@@ -547,7 +551,8 @@ function drawDebug(box, d, history, at, log) {
      * is where it shows. A panel listing the three that were not sent read as
      * three more things the model had seen. */
     for (const b of (m && m.batches) || []) {
-        modelBody += `<details class="dbg-det"><summary>Prompt — ${b.asked || '?'} field(s), ` +
+        modelBody += `<details class="dbg-det"><summary>Prompt — ${b.asked || '?'} ` +
+            `field${b.asked === 1 ? '' : 's'}, ` +
             `${b.answered != null ? b.answered + ' answered' : 'failed'}, ${b.ms}ms</summary>` +
             `<pre class="dbg-pre">${esc(b.prompt)}</pre>` +
             (b.reply ? `<div class="dim">Reply</div><pre class="dbg-pre">${esc(b.reply)}</pre>` : '') +
@@ -564,10 +569,18 @@ function drawDebug(box, d, history, at, log) {
     const decisions = d.filled || [];
     const worth = (f) => !/^(rule|type|choice)\b/.test(String(f.source || '')) || /shortened|second attempt|appeared|replaced/.test(f.why || '');
     const fold = decisions.length > 8 && decisions.some(worth) && decisions.some(f => !worth(f));
+    /* "The model answered" under a row already tagged AI is a line that says
+     * what the tag says, and on a form of forty it is forty of them. The reason
+     * is printed when it carries something the tag does not: which rule matched,
+     * why a field fell to the filler, that a value was shortened or written
+     * twice. */
+    const saysNothingNew = (f) => /^the model answered$/.test(String(f.why || '').trim());
     const row = (f) =>
         `<div class="dbg-row"${fold && !worth(f) ? ' data-quiet hidden' : ''}><div class="dbg-row-h"><span class="k">${esc(f.label)}</span>` +
         `<span class="v">${esc(f.value)}</span>${sourceTag(f.source)}</div>` +
-        `<div class="dim why"${f.rule ? ` title="${esc(f.rule)}"` : ''}>${esc(f.why || '')}</div></div>`;
+        (saysNothingNew(f) ? ''
+            : `<div class="dim why"${f.rule ? ` title="${esc(f.rule)}"` : ''}>${esc(f.why || '')}</div>`) +
+        '</div>';
     const quiet = fold ? decisions.filter(f => !worth(f)).length : 0;
     out.push(section(`Decisions (${decisions.length})`,
         (decisions.map(row).join('') || '<div class="empty">none</div>') +
