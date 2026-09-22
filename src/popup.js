@@ -540,14 +540,12 @@ function drawDebug(box, d, history, at, log) {
     }
     if (m && m.note) modelBody += `<div class="dim">${esc(m.note)}</div>`;
     modelBody += '</div>';
-    // What the model was told about the page. Read once, if ever; folded away until then.
-    if (m && m.context) {
-        modelBody += `<details class="dbg-det"><summary>What the model was told about the page</summary>` +
-            `<pre class="dbg-pre">` +
-            esc(Object.entries(m.context).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('\n') || '(none)') +
-            (m.examples && m.examples.length ? `\nexisting entries: ${esc(m.examples.join(', '))}` : '') +
-            '</pre></details>';
-    }
+    /* No panel for the page's own headings. Everything that reached the model is
+     * in the prompt below, word for word, and the rest of what was gathered is
+     * this extension's business: the prompt names the form once, in the most
+     * specific heading the page offered, and if that choice is wrong the prompt
+     * is where it shows. A panel listing the three that were not sent read as
+     * three more things the model had seen. */
     for (const b of (m && m.batches) || []) {
         modelBody += `<details class="dbg-det"><summary>Prompt — ${b.asked || '?'} field(s), ` +
             `${b.answered != null ? b.answered + ' answered' : 'failed'}, ${b.ms}ms</summary>` +
