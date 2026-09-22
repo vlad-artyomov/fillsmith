@@ -357,6 +357,15 @@ Each of these was a bug on a real form and has a regression check.
   are held open while it is busy, and the stage titles are short enough not to wrap, so the card changes size once,
   when it has finished and has something else to say. A check samples it through a fill and holds the spread to two
   pixels.
+- A request begins in one place, whether it is a whole form or one field. Filling a single field reused the answer
+  to "is there a session" from the fill before it, because only the whole-form path cleared it, so a model that had
+  come up in the meantime was still being called starting minutes later. Both paths reset the same state and ask
+  the same question again.
+- The stages are ordered and the card refuses one earlier than the one it is showing, which is how a whole fill
+  keeps its progress moving forwards. Filling a single field announced itself as `fill` before asking the model, so
+  the stage that says the model is coming up was thrown away every time: five seconds of "Filling one field 0/1"
+  and then an answer out of nowhere. It announces itself as `read` until something is written, and winds the clock
+  itself, having no loop to redraw the card.
 - Coming up and answering are different waits and take different times, so the card names which one it is. Reported
   as "AI is still answering 0/5", a model that was only being loaded read as a model thinking very hard about five
   fields — and the popup said "model starting" while the page did not. The card carries the same clock, which means
@@ -426,6 +435,10 @@ Each of these was a bug on a real form and has a regression check.
   request comes back with its own record. They accumulate: keeping the last one alone showed the second prompt in
   the Debug tab with no trace of the first, and counting the answers of every request against the first one's total
   read "answered 14 of 10".
+- One field and a whole form ask the same question of the same field. A weak rule is a guess the model can better,
+  and a whole-form fill hands it over; the shortcut used to ask only when no rule matched at all, so a description
+  box came out of the model when its form was filled and out of the rules when it was filled on its own. Both go
+  through the same two predicates now.
 - Ask it only what it can improve. A bool has two values and the seed picks one; a list asked without its options
   can only be invented, and the invention is discarded by the filler that then picks a valid option itself. Seven
   toggles and two blind lists once filled a batch of twelve, and every one of those answers was thrown away. A

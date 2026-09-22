@@ -201,9 +201,25 @@ pre.rp-pre {
     overflow: auto;
 }
 
-.rp-prompts > summary {
+/* Whatever follows the table gets the same room above it. Only the first of
+   these blocks had a margin, written inline, so a fill with nothing skipped
+   put its prompts flush against the last row. */
+table.rp ~ .fill-kv,
+table.rp ~ .rp-prompts {
+    margin-top: 14px;
+}
+
+details.rp-prompts > summary {
     cursor: pointer;
     color: var(--muted);
     font-size: 13px;
     padding: 4px 0;
+    /* The shared sheet spaces the summary of any open details, and this one
+       sits inside an open fill card, so it took that space while closed and
+       its box stood taller below the words than above them. */
+    margin-bottom: 0;
+}
+
+details.rp-prompts[open] > summary {
+    margin-bottom: 9px;
 }

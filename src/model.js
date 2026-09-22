@@ -158,7 +158,40 @@
 
     /* Ask the model about the fields nothing local could answer. Always bounded:
      * whatever has not answered by the deadline is filled by the rules. */
-    async function askModel(unresolved, persona) {
+    /* Everything a new request must forget, and the one question it must ask
+     * again. Kept here rather than in the caller because both callers need it
+     * and only one of them had it: filling a single field reused the answer to
+     * "is there a session" from the fill before it, so a model that had come up
+     * in the meantime was still called starting, minutes later. */
+    function beginRequest(settings) {
+        S.modelSettings = settings || {};
+        S.warmProbe = null;
+        S.modelTimedOut = false;
+        S.modelDebug = null;
+        S.modelVia = '';
+        S.modelError = '';
+        S.modelWarming = false;
+        S.modelWarmingMs = 0;
+        S.modelCalls = 0;
+        S.modelRequestMs = 0;
+        S.modelLoading = false;
+        S.loadingSince = 0;
+        if (S.modelSettings.useAI === false) return;
+        // Bring the session up while the form is being read; nothing waits on it.
+        S.warmProbe = sendMessage({kind: 'nano-warm'});
+        S.warmProbe.then(r => {
+            if (r && r.ready) S.modelWarm = true;
+        });
+    }
+
+    /* What to say while a session comes up. A whole form has been written by
+     * now and that is the reassurance that matters; one field has not, so
+     * saying so would be a lie. */
+    const waitLine = (opts) => (opts && opts.alone)
+        ? 'the AI takes a moment the first time'
+        : 'the form is filled — the AI takes a moment the first time';
+
+    async function askModel(unresolved, persona, opts) {
         if (!unresolved.length) return {};
         const payload = {
             persona: {
@@ -215,9 +248,7 @@
                 /* Said in full, because this is the moment the promise looks
                  * broken: the form is done, nothing is happening, and the reason
                  * is a one-off cost nobody was told about. */
-                progress('model', 'Starting the AI', {
-                    label: 'the form is filled — the AI takes a moment the first time'
-                });
+                progress('model', 'Starting the AI', {label: waitLine(opts)});
             }
             payload.budgetMs = Math.min(window, modelBudget(unresolved.length, S.modelSettings));
             payload.sessionWaitMs = window;
@@ -264,6 +295,7 @@
     }
 
     globalThis.FormForgeModel = Object.assign(S, {
-        wake, modelBudget, pageContext, nearbyExamples, sendMessage, mergeDebug, askModel
+        wake, modelBudget, pageContext, nearbyExamples, sendMessage, mergeDebug, askModel, waitLine,
+        beginRequest
     });
 })();

@@ -61,7 +61,7 @@
   </div>
   <table class="rp"><colgroup><col class="c-field"><col class="c-value"><col class="c-source"><col></colgroup>
   <thead><tr><th>Field</th><th>Value</th><th>Source</th><th>Why</th></tr></thead><tbody>${rows}</tbody></table>
-  ${skipped ? `<div class="fill-kv" style="margin-top:12px"><b>Planned but wrote nothing</b><ul>${skipped}</ul></div>` : ''}
+  ${skipped ? `<div class="fill-kv"><b>Planned but wrote nothing</b><ul>${skipped}</ul></div>` : ''}
   ${(d.leftOpen || []).length ? `<div class="fill-kv"><b>Left on screen</b>: ${esc(d.leftOpen.join(', '))}</div>` : ''}
   ${notes ? `<div class="fill-kv"><b>Notes about the page</b><ul>${notes}</ul></div>` : ''}
   ${batches.length ? `<details class="rp-prompts"><summary>Model prompts (${batches.length})</summary>${batches.map(b =>
