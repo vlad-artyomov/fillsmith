@@ -58,8 +58,9 @@ Alt+Shift+F fills the page, Alt+Shift+D the focused field, Alt+Shift+R fills aga
 clears. Right-click → Fill this page / Fill just this field.
 
 PRIVACY
-Everything runs in your browser. Nothing leaves it unless you enter an API key, and then only the labels of fields no
-rule could answer go to the provider you chose. No analytics, no telemetry, no remote code.
+Everything runs in your browser. Nothing leaves it unless you enter an API key, and then only for fields no rule could
+answer: their labels, limits and options, the form's title and a few short texts from a table on the page go to the
+provider you chose. No analytics, no telemetry, no remote code.
 https://github.com/vlad-artyomov/formforge/blob/main/PRIVACY.md
 
 Open source, MIT: https://github.com/vlad-artyomov/formforge
@@ -91,8 +92,9 @@ None. All code ships in the package. The optional hosted providers are called wi
 
 - **Authentication information**: an API key the user may enter, stored locally, sent only to the provider chosen.
 - **Website content**: field labels, names, placeholders, option lists and headings of the form being filled are
-  read to choose values; for fields no rule answers they are sent to the on-device model or, if configured, to the
-  hosted provider. Values the user already typed are never sent anywhere.
+  read to choose values. For fields no rule answers, their labels, section headings, limits and options, the form's
+  title and up to three short texts from a table on the page go to the on-device model or, if the user entered an
+  API key, to the hosted provider they chose. What is typed into the form's fields is never sent anywhere.
 - Not sold, not used for purposes unrelated to the single purpose, not used for creditworthiness or lending.
 
 ## Assets

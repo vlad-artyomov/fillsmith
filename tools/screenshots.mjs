@@ -86,6 +86,42 @@ const save = async (name, png, w = W, h = H) => {
     return out;
 };
 
+/* A headless browser has no Gemini Nano, and a listing for an AI filler whose
+ * every frame says "rules only" sells the fallback. So the worker gets a stand-in
+ * that answers the way the real model does, through the same session, schema and
+ * write path, in about the time it takes — only the words are fixed, so the
+ * frames come out the same twice. */
+await worker.evaluate(() => {
+    const ANSWERS = {
+        'Internal ticket': 'REL-2417',
+        'Release notes': 'Moves invoice export to the new queue; rollback is the export.queue flag.'
+    };
+    const session = {
+        inputUsage: 1, inputQuota: 4096,
+        async prompt(text, opts) {
+            await new Promise(r => setTimeout(r, 1400));    // about what a warm on-device batch takes
+            const ids = Object.keys(((opts || {}).responseConstraint || {}).properties || {});
+            const labels = {};
+            for (const m of String(text).matchAll(/^(\S+)(?: \w+)? "([^"]*)"/gm)) labels[m[1]] = m[2];
+            return JSON.stringify(Object.fromEntries(ids.map(id => [id, ANSWERS[labels[id]] || 'Staging rollout'])));
+        },
+        async clone() {
+            return session;
+        },
+        destroy() {
+        }
+    };
+    self.LanguageModel = {
+        async availability() {
+            return 'available';
+        },
+        async create() {
+            return session;
+        }
+    };
+    nanoSession = null;
+});
+
 // 1. The form, filled, with the card still up: the README picture and the first frame.
 const page = await ctx.newPage();
 await page.goto(`${origin}/form.html`);
@@ -98,13 +134,17 @@ await worker.evaluate(async ({url}) => {
         settings: {
             locale: 'en-US',
             seed: 'STORE1',
-            useAI: false,
+            useAI: true,
             overwrite: true,
             emailDomain: 'example.com',
             debugTab: true
         }
     });
 }, {url: `${origin}/form.html`});
+// The model's answer lands after the rules have filled the form; the frame wants both.
+await page.waitForFunction(() => document.getElementById('ticket').value === 'REL-2417' &&
+    !!document.querySelector('#formforge-hud:not(.ff-busy) .ff-tick'), null, {timeout: 20000})
+    .catch(() => console.log('the model answer did not land; the frame shows what did'));
 await page.waitForTimeout(350);
 const formShot = await save('1-filled-form.png', await page.screenshot({type: 'png'}));
 writeFileSync(join(root, 'docs', 'filled-form.png'), formShot);
