@@ -2776,7 +2776,8 @@ if (worker) {
     const history = await withTimeout((async () => {
         const older = Array.from({length: 10}, (_, i) => ({
             at: Date.now() - (20 - i) * 60000, title: `older ${i}`, url: 'about:blank',
-            count: 1, filled: [{label: 'x', value: 'y', source: 'rule'}], phase: {total: 1}, persona: {seed: 'OLD'}
+            count: 1, filled: [{label: 'x', value: 'y', source: 'rule'}], phase: {total: 1}, persona: {seed: 'OLD'},
+            widgets: i % 2 ? 1 : 4
         }));
         const pop2 = await ctx.newPage();
         await pop2.goto(`chrome-extension://${id}/src/popup.html`);
@@ -2808,8 +2809,13 @@ if (worker) {
             // The pin row itself does not change, so read the heading of the fill on show.
             const head = () => (document.querySelector('#debugBody .dbg-h') || {}).textContent || '';
             const shown = head();
+            const line = () => ((document.querySelector('#debugBody .dbg-kv div') || {}).textContent || '').trim();
+            if (pins.length > 2) pins[pins.length - 2].click();
+            await new Promise(r => setTimeout(r, 250));
+            const counted = [line()];
             if (pins.length > 1) pins[pins.length - 1].click();      // rendered newest first, so this is the oldest
             await new Promise(r => setTimeout(r, 250));
+            counted.push(line());
             return {
                 kept: got.fillHistory.length,
                 oldestGone: !got.fillHistory.some(h => h.title === 'older 0'),
@@ -2817,7 +2823,8 @@ if (worker) {
                 pins: pins.length,
                 shown,
                 trail,
-                afterClick: head()
+                afterClick: head(),
+                counted
             };
         });
         await pop2.close();
@@ -2858,6 +2865,9 @@ if (worker) {
     check('and the Debug tab can be pointed at any of them',
         history.pins === 10 && history.shown === 'Last fill' && history.afterClick === 'Fill 1 of 10',
         `${history.pins} pin(s): "${history.shown}" → "${history.afterClick}"`);
+    check('and counts its widgets in the plural when there is more than one',
+        history.counted && /· 4 widgets\b/.test(history.counted[0]) && /· 1 widget\b(?!s)/.test(history.counted[1]),
+        JSON.stringify(history.counted));
     /* One fill is an anecdote. How often a fill finishes with nothing left, what
      * one usually costs and how much of it the model answered are questions
      * about the run — counted here, on this machine, from records holding no
