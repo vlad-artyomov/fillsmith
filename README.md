@@ -158,8 +158,9 @@ as though it arrived slowly.
 | `contextMenus`           | The right-click entries.                                                                                                                                         |
 | `<all_urls>`             | A tester's form is on their own host, and forms are often split across origins — an embedded payment or booking frame is outside the tab's own.                  |
 
-Rules and the on-device model run entirely in your browser. Field labels reach a hosted provider only if you enter
-an API key, and then only the labels and limits of fields no rule could answer — never values already on the page.
+Rules and the on-device model run entirely in your browser. Anything reaches a hosted provider only if you enter an
+API key, and then only for fields no rule could answer: their labels, limits and options, the form's title and a few
+short texts from a table on the page ([PRIVACY.md](PRIVACY.md) lists it all) — never what is typed into the form.
 Uploaded files are generated in the page; nothing is fetched. Phone numbers come only from ranges reserved for
 fiction — US `555-0100` to `555-0199`, and in Germany the Bundesnetzagentur's *Drama-Nummern*: `030 23125 xxx`,
 `040 66969 xxx`, `089 99998 xxx`, `0221 4710 xxx`, `069 90009 xxx`, or one of the two reserved mobile blocks — and

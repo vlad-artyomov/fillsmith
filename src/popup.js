@@ -507,7 +507,7 @@ function drawDebug(box, d, history, at, log) {
        revealed · 0 repaired" was three quarters of this line on nearly every
        fill, and the number that is actually interesting on the odd fill where
        one of them is not zero was the hardest of the four to pick out. */
-    const counts = [[d.widgets, 'widget'], [d.revealed, 'revealed mid-fill'], [d.repaired, 'repaired']]
+    const counts = [[d.widgets, d.widgets === 1 ? 'widget' : 'widgets'], [d.revealed, 'revealed mid-fill'], [d.repaired, 'repaired']]
         .filter(([n]) => n > 0).map(([n, what]) => `${n} ${what}`);
     out.push(section(here === kept.length - 1 ? 'Last fill' : `Fill ${here + 1} of ${kept.length}`,
         `<div class="dbg-kv">

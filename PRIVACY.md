@@ -33,9 +33,17 @@ By default, **nothing**. The rules and Chrome's built-in model run on your machi
 Chrome's own, from Google, and only starts when you click the download button.
 
 If you enter an API key, then for fields no rule could answer FormForge sends the provider you chose (Anthropic,
-OpenAI or Google) the labels and limits of those fields, the page or dialog title, up to five short texts from a
-table on the page, and the invented persona. It never sends values from the page, your key to anyone but that
-provider, or anything at all when the backend is set to *On-device only*.
+OpenAI or Google):
+
+- each field's label, the heading of the section it sits in, its type and limits, and up to twelve of the options a
+  list offers;
+- one line naming the form: the dialog's title, the page heading, the breadcrumb or the page title;
+- up to three short texts from the first table on the page, so a value takes the shape of the rows already there.
+  On an admin page these can be real records — use *On-device only* where that matters;
+- the invented persona.
+
+It never sends what is typed into the form's fields, your key to anyone but that provider, or anything at all when
+the backend is set to *On-device only*.
 
 FormForge has no analytics, no telemetry, no ads and no remote code. It does not phone home.
 
