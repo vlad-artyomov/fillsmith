@@ -1,4 +1,4 @@
-/* FormForge — files for <input type="file">.
+/* Fillsmith — files for <input type="file">.
  *
  * Nothing is fetched and nothing is read from disk: the bytes are made here,
  * which is the only version of this that is safe to run on somebody else's
@@ -97,13 +97,13 @@
             g.fill();
         }
 
-        const title = String(persona.company || 'FormForge');
+        const title = String(persona.company || 'Fillsmith');
         g.fillStyle = '#ffffff';
         g.font = '600 56px ui-sans-serif, system-ui, -apple-system, sans-serif';
         g.fillText(title.length > 26 ? title.slice(0, 25) + '…' : title, 72, h - 148);
         g.globalAlpha = 0.85;
         g.font = '500 22px ui-sans-serif, system-ui, -apple-system, sans-serif';
-        g.fillText(`FormForge test image · seed ${persona.seed}${nth ? ` · file ${nth}` : ''}`, 72, h - 104);
+        g.fillText(`Fillsmith test image · seed ${persona.seed}${nth ? ` · file ${nth}` : ''}`, 72, h - 104);
         g.globalAlpha = 0.6;
         g.font = '18px ui-sans-serif, system-ui, -apple-system, sans-serif';
         g.fillText(`${w} × ${h} · ${kind.ext.toUpperCase()} · ${new Date().toISOString().slice(0, 10)}`, 72, h - 72);
@@ -122,7 +122,7 @@
             `<stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>` +
             `<rect width="480" height="320" fill="${ink}"/>` +
             `<rect width="480" height="320" fill="url(#w)"/>` +
-            `<text x="28" y="62" fill="#fff" font-family="sans-serif" font-size="24" font-weight="600">FormForge</text>` +
+            `<text x="28" y="62" fill="#fff" font-family="sans-serif" font-size="24" font-weight="600">Fillsmith</text>` +
             `<text x="28" y="94" fill="#fff" fill-opacity=".82" font-family="sans-serif" font-size="14">` +
             `seed ${persona.seed}${nth ? ` · file ${nth}` : ''}</text></svg>`;
         return new File([svg], name, {type: kind.mime});
@@ -160,7 +160,7 @@
         const textWidth = (str, size) => asciiish(str).length * size * 0.5;
 
         let y = h - margin;
-        text(persona.company || 'FormForge', margin, y - 14, 18, true);
+        text(persona.company || 'Fillsmith', margin, y - 14, 18, true);
         const date = new Date().toISOString().slice(0, 10);
         text(date, right - textWidth(date, 10), y - 12, 10, false, true);
         rule(y - 26);
@@ -230,7 +230,7 @@
     }
 
     async function makeFile(kind, name, persona, nth, key, rng) {
-        const stamp = `FormForge test file · seed ${persona.seed}` +
+        const stamp = `Fillsmith test file · seed ${persona.seed}` +
             (nth ? ` · file ${nth}` : '') + ` · ${new Date().toISOString().slice(0, 10)}`;
         const ink = pickInk(key, rng);
         switch (kind.ext) {
@@ -265,7 +265,7 @@
      * a person picks files. Returns the file names, or null. */
     async function attachFiles(el, persona, key, rng) {
         const kind = fileKindFor(el.getAttribute('accept'));
-        const base = `formforge-${String(persona.seed).toLowerCase()}`;
+        const base = `fillsmith-${String(persona.seed).toLowerCase()}`;
         const want = el.multiple ? 2 : 1;
         const dt = new DataTransfer();
         for (let i = 0; i < want; i++) {
@@ -278,5 +278,5 @@
         return names || null;
     }
 
-    globalThis.FormForgeUploads = {attachFiles, fileKindFor, IMAGE_COLOURS};
+    globalThis.FillsmithUploads = {attachFiles, fileKindFor, IMAGE_COLOURS};
 })();

@@ -1,4 +1,4 @@
-/* FormForge — finding, opening and closing a widget's overlay.
+/* Fillsmith — finding, opening and closing a widget's overlay.
  *
  * Overlays are teleported to <body>, so they are global while every question
  * about them is local: "is an overlay open" means "is *this control's* overlay
@@ -12,7 +12,7 @@
     const {
         note, sleep, visible, textOf, norm, press, key, settle, safeQuery,
         PLACEHOLDER, dialogOf, neutralSpot
-    } = globalThis.FormForgeDom;
+    } = globalThis.FillsmithDom;
 
     /* Roles and classes only: attribute-substring selectors walk every node and
      * these lists are evaluated inside 25ms polling loops. */
@@ -193,7 +193,7 @@
         // Marked so the end-of-fill sweep can close what we opened, and only that.
         if (overlay) {
             try {
-                overlay.setAttribute('data-formforge-opened', '');
+                overlay.setAttribute('data-fillsmith-opened', '');
             } catch (_) { /* a node the page has already taken back */
             }
             widget.opened = overlay;
@@ -201,14 +201,14 @@
         return overlay;
     }
 
-    /* Closed — and the mark comes off with it. `data-formforge-opened` means
+    /* Closed — and the mark comes off with it. `data-fillsmith-opened` means
      * "ours, and possibly still up"; left on a panel that has gone it lies to
      * both of its readers: the sweep at the end of a fill, and the scan that
      * treats a popup's own furniture as something other than a field. */
     function markClosed(widget) {
         if (!widget.opened) return true;
         try {
-            widget.opened.removeAttribute('data-formforge-opened');
+            widget.opened.removeAttribute('data-fillsmith-opened');
         } catch (_) { /* already gone from the page */
         }
         widget.opened = null;
@@ -478,7 +478,7 @@
         return !open().length;
     }
 
-    globalThis.FormForgeOverlays = {
+    globalThis.FillsmithOverlays = {
         overlayCandidates, optionsIn, liveOverlay, linkedOverlayId, openOverlay,
         closeOverlay, comboOf, chooseOption, matchAmong, asTexts, scrollerFor,
         huntByScrolling, typeAhead, ownPanels, dismissPanel,

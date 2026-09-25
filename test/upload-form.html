@@ -56,7 +56,7 @@
                     row.innerHTML =
                         /* The badge and the size sit against the name with nothing
                            between them, exactly as the real tile renders it: the
-                           row's text reads "PDFformforge-a1.pdfGröße: 3 KB". */
+                           row's text reads "PDFfillsmith-a1.pdfGröße: 3 KB". */
                         '<span class="upload-badge">PDF</span>' +
                         '<span class="upload-name"></span>' +
                         '<span class="upload-size">Größe: 3 KB</span>' +
@@ -85,7 +85,7 @@
                     const fresh = input.cloneNode(true);
                     // A freshly rendered node carries none of the filler's own attributes.
                     for (const a of Array.from(fresh.attributes)) {
-                        if (a.name.startsWith('data-formforge')) fresh.removeAttribute(a.name);
+                        if (a.name.startsWith('data-fillsmith')) fresh.removeAttribute(a.name);
                     }
                     input.replaceWith(fresh);
                 }, delay);

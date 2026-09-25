@@ -4,16 +4,15 @@
 (function () {
     'use strict';
     if (!chrome.commands || !chrome.commands.getAll) return;
-    const keys = {'fill-form': 'k-fill', 'refill-form': 'k-refill', 'clear-form': 'k-clear', 'fill-field': 'k-field'};
     chrome.commands.getAll((commands) => {
         for (const c of commands || []) {
-            const el = keys[c.name] && document.getElementById(keys[c.name]);
-            if (!el) continue;
-            if (c.shortcut) el.textContent = c.shortcut;
-            else {
-                el.textContent = 'not set';
-                el.title = 'Set it under chrome://extensions/shortcuts';
-                el.style.color = 'var(--warn)';
+            for (const el of document.querySelectorAll(`[data-cmd="${c.name}"]`)) {
+                if (c.shortcut) el.textContent = c.shortcut;
+                else {
+                    el.textContent = 'not set';
+                    el.title = 'Set it under chrome://extensions/shortcuts';
+                    el.style.color = 'var(--warn)';
+                }
             }
         }
     });

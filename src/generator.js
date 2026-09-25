@@ -1,4 +1,4 @@
-/* FormForge — deterministic test-data generator.
+/* Fillsmith — deterministic test-data generator.
  *
  * Everything derives from a seed, so the same seed always yields the same
  * persona and the same choices. No DOM, no network: every function here is
@@ -136,7 +136,7 @@
     /* The generated vocabulary (src/vocab.js) is folded into the curated lists,
      * not swapped in for them: the hand-written names are the common ones, and a
      * missing vocab file must mean shorter lists rather than an exception. */
-    const V = globalThis.FormForgeVocab || {};
+    const V = globalThis.FillsmithVocab || {};
     const vocab = (localeKey, key) => (V[localeKey === 'de-DE' ? 'de' : 'en'] || {})[key] || [];
     const widen = (localeKey, key, base) => {
         const more = vocab(localeKey, key);
@@ -852,7 +852,7 @@
         return `${persona.company.split(' ')[0]} ${persona.seed}`.slice(0, max).trim();
     }
 
-    globalThis.FormForgeGen = {
+    globalThis.FillsmithGen = {
         LOCALES, buildPersona, matchRule, matchRuleDetail, byType, fallbackText, constrain, numberFor,
         fitMask, looksLikeMask, formatDate, shortenTo, cleanDomain, newSeed, mulberry32, seedFromString,
         richLayout, readable

@@ -3,14 +3,14 @@ const $ = (id) => document.getElementById(id);
  * list is a second place to forget, which is how the popup went on offering a
  * UK locale the generator had stopped shipping. */
 const localeOptions = () => {
-    const G = globalThis.FormForgeGen;
+    const G = globalThis.FillsmithGen;
     const out = {};
     for (const [k, v] of Object.entries((G && G.LOCALES) || {})) out[k] = v.label || k;
     return Object.keys(out).length ? out : {'en-US': 'English'};
 };
 const KEYS = ['locale', 'seed', 'seedPinned', 'emailDomain', 'modelTimeout', 'useAI', 'overwrite', 'plusTag', 'debugTab', 'backend', 'provider', 'apiKey', 'model'];
 
-const randomSeed = () => globalThis.FormForgeGen.newSeed();
+const randomSeed = () => globalThis.FillsmithGen.newSeed();
 
 const esc = (s) => String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -294,7 +294,7 @@ function panel(title, note, bodyHtml, footHtml) {
 }
 
 function message(text) {
-    panel('FormForge', '', `<div class="empty">${esc(text)}</div>`);
+    panel('Fillsmith', '', `<div class="empty">${esc(text)}</div>`);
 }
 
 /* A value's source is the first thing worth knowing when a field looks wrong:
@@ -362,13 +362,16 @@ function report(res) {
 }
 
 /* ------------------------------------------------------------ debug ---- */
-/* The pins exist so two fills can be compared, and ten of them reading "5h ago"
- * cannot be told apart at all. The time of day can. */
-const hhmm = (t) => new Date(t).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+/* A pin says how long ago, because the kept fills span days and a time of day
+ * alone put Monday's 13:33 beside today's. The exact moment is in its tooltip. */
+const when = (t) => new Date(t).toLocaleString([], {
+    weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+});
 
 const ago = (t) => {
     const s = Math.max(0, Math.round((Date.now() - t) / 1000));
-    return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : `${Math.round(s / 3600)}h ago`;
+    return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago`
+        : s < 86400 ? `${Math.round(s / 3600)}h ago` : `${Math.round(s / 86400)}d ago`;
 };
 
 function section(title, body) {
@@ -500,7 +503,7 @@ function drawDebug(box, d, history, at, log) {
     if (kept.length > 1) {
         out.push('<div class="dbg-pick">' + kept.map((h, n) =>
             `<button type="button" class="dbg-pin${n === here ? ' on' : ''}" data-fill="${n}" ` +
-            `title="${esc(h.title || h.url || '')}">${esc(hhmm(h.at))}</button>`).reverse().join('') + '</div>');
+            `title="${esc(when(h.at) + ' · ' + (h.title || h.url || ''))}">${esc(ago(h.at))}</button>`).reverse().join('') + '</div>');
     }
 
     /* What happened, then where and who. A zero is not news: "0 widgets · 0
@@ -587,7 +590,7 @@ function drawDebug(box, d, history, at, log) {
         (quiet ? `<button type="button" class="btn small dbg-more">Show ${quiet} answered by rules</button>` : '')));
 
     /* Reported here rather than through console.warn, which lands in the
-     * extension's own error list and reads as a crash in FormForge to whoever
+     * extension's own error list and reads as a crash in Fillsmith to whoever
      * finds it there. It is a note about the page, and this is where somebody
      * looking for one will look. */
     if ((d.notes || []).length) {
@@ -600,7 +603,7 @@ function drawDebug(box, d, history, at, log) {
         out.push(section(`Still on screen afterwards (${d.leftOpen.length})`,
             '<div class="dbg-kv">' + d.leftOpen.map(c =>
                 `<div class="dim">${esc(c)}</div>`).join('') +
-            '<div class="dim">A panel FormForge opened and could not close. Anything the ' +
+            '<div class="dim">A panel Fillsmith opened and could not close. Anything the ' +
             'page already had up before the fill is not counted.</div></div>'));
     }
 
@@ -853,7 +856,7 @@ for (const id of ['backend', 'provider', 'apiKey']) $(id).addEventListener('inpu
 for (const id of ['backend', 'provider']) $(id).addEventListener('change', syncBackendUi);
 // The domain as it will be used, shown the moment the box is left: "@acme.test" becomes acme.test.
 $('emailDomain').addEventListener('blur', () => {
-    const G = globalThis.FormForgeGen;
+    const G = globalThis.FillsmithGen;
     if (G && G.cleanDomain) $('emailDomain').value = G.cleanDomain($('emailDomain').value);
     save();
 });

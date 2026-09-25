@@ -1,4 +1,4 @@
-/* FormForge — the report as plain text.
+/* Fillsmith — the report as plain text.
  *
  * One report, for both readers. A tester attaches it to a ticket; whoever picks
  * the ticket up needs the same thing plus the timings of the fills around it,
@@ -71,7 +71,7 @@
     function text(history, log, env) {
         const out = [];
         const line = (t) => out.push(t == null ? '' : String(t));
-        line(`FormForge ${env.version} — report`);
+        line(`Fillsmith ${env.version} — report`);
         line(`${env.ua} · popup locale ${env.locale} · on-device model: ${env.model}`);
         line(`saved ${new Date().toISOString()}`);
         line('');
@@ -114,5 +114,5 @@
         return out.join('\n');
     }
 
-    globalThis.FormForgeReport = {text, fillDetail, ms};
+    globalThis.FillsmithReport = {text, fillDetail, ms};
 })();

@@ -1,0 +1,855 @@
+/* The extension's own palette, so the site and the popup read as one product. */
+:root {
+    --bg: #ffffff;
+    --band: #f6f8fa;
+    --fg: #101418;
+    --muted: #5b6573;
+    --line: #e4e7ec;
+    --accent: #1f6f4f;
+    --accent-soft: #e7f3ed;
+    --accent-fg: #ffffff;
+    --no: #b4bcc6;
+    --card: #ffffff;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 12px 32px rgba(16, 24, 40, .08);
+    --shadow-lg: 0 2px 6px rgba(16, 24, 40, .06), 0 30px 70px rgba(16, 24, 40, .16);
+    color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --bg: #0f1215;
+        --band: #14181c;
+        --fg: #ebedf0;
+        --muted: #9aa3ad;
+        --line: #262b33;
+        --accent: #3bb07f;
+        --accent-soft: #15271f;
+        --accent-fg: #07130d;
+        --no: #4a525c;
+        --card: #181c21;
+        --shadow: 0 12px 32px rgba(0, 0, 0, .4);
+        --shadow-lg: 0 30px 70px rgba(0, 0, 0, .55);
+        color-scheme: dark;
+    }
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 72px;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 17px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+a {
+    color: var(--accent);
+    text-underline-offset: 3px;
+}
+
+img {
+    max-width: 100%;
+}
+
+.wrap {
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: 0 24px;
+}
+
+.narrow {
+    max-width: 820px;
+}
+
+section {
+    padding: 104px 0;
+}
+
+.band {
+    background: var(--band);
+}
+
+/* ------------------------------------------------------------ type ---- */
+h1, h2, h3 {
+    letter-spacing: -.028em;
+    text-wrap: balance;
+}
+
+h1 {
+    font-size: clamp(38px, 6vw, 68px);
+    line-height: 1.02;
+    margin: 0 auto 22px;
+    max-width: 900px;
+}
+
+h2 {
+    font-size: clamp(30px, 3.8vw, 44px);
+    line-height: 1.1;
+    margin: 0 0 16px;
+}
+
+h3 {
+    font-size: 19px;
+    line-height: 1.3;
+    letter-spacing: -.012em;
+    margin: 0 0 8px;
+}
+
+.accent {
+    color: var(--accent);
+}
+
+.kicker {
+    color: var(--accent);
+    font-weight: 650;
+    font-size: 13px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    margin: 0 0 12px;
+}
+
+#features .kicker, #features h2, #demo .kicker, #demo h2, .compare .kicker, .compare h2, #faq .kicker, #faq h2 {
+    text-align: center;
+}
+
+.lead {
+    color: var(--muted);
+    font-size: 19px;
+    max-width: 700px;
+    margin: 0 auto 56px;
+    text-align: center;
+    text-wrap: pretty;
+}
+
+kbd {
+    font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace;
+    padding: 2px 7px;
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--fg);
+}
+
+/* --------------------------------------------------------- buttons ---- */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 11px 20px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--fg);
+    font-weight: 600;
+    font-size: 15px;
+    text-decoration: none;
+    transition: transform .15s ease, background .15s ease, box-shadow .15s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow);
+}
+
+.btn.big {
+    padding: 15px 28px;
+    font-size: 17px;
+    border-radius: 12px;
+}
+
+.btn.small {
+    padding: 7px 14px;
+    font-size: 14px;
+}
+
+.btn.primary {
+    background: var(--accent);
+    border-color: transparent;
+    color: var(--accent-fg);
+}
+
+.btn.primary:hover {
+    background: color-mix(in srgb, var(--accent) 86%, #000);
+}
+
+.btn.light {
+    background: #ffffff;
+    color: #0f3a29;
+    border-color: transparent;
+}
+
+/* ------------------------------------------------------------- nav ---- */
+.nav {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: color-mix(in srgb, var(--bg) 84%, transparent);
+    backdrop-filter: saturate(1.5) blur(12px);
+    border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+.nav-in {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+}
+
+.brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: -.01em;
+    color: var(--fg);
+    text-decoration: none;
+}
+
+.brand img {
+    border-radius: 7px;
+}
+
+.brand.small {
+    font-size: 15px;
+    gap: 8px;
+}
+
+.nav nav {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+}
+
+.nav nav a:not(.btn) {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 15px;
+}
+
+.nav nav a:not(.btn):hover {
+    color: var(--fg);
+}
+
+/* ------------------------------------------------------------ hero ---- */
+.hero {
+    position: relative;
+    padding: 88px 0 96px;
+    text-align: center;
+    overflow: hidden;
+}
+
+/* A soft light behind the headline, in the product's own green. */
+.hero::before {
+    content: "";
+    position: absolute;
+    inset: -30% -10% auto;
+    height: 900px;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%);
+    pointer-events: none;
+    z-index: -1;
+}
+
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 26px;
+}
+
+.pill .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.sub {
+    font-size: clamp(18px, 2.1vw, 21px);
+    color: var(--muted);
+    max-width: 740px;
+    margin: 0 auto 36px;
+    text-wrap: pretty;
+}
+
+.sub b {
+    color: var(--fg);
+    font-weight: 650;
+}
+
+.cta {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.note {
+    font-size: 14px;
+    color: var(--muted);
+    margin: 16px 0 64px;
+}
+
+.hero-shot {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 10px;
+    border-radius: 20px;
+    background: color-mix(in srgb, var(--card) 70%, transparent);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow-lg);
+}
+
+.hero-shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 12px;
+}
+
+/* ------------------------------------------------------------ libs ---- */
+.libs {
+    padding: 0 0 96px;
+    text-align: center;
+}
+
+.libs p {
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    margin: 0 0 18px;
+}
+
+.libs ul {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    padding: 0;
+    margin: 0;
+}
+
+.libs li {
+    padding: 6px 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--fg);
+    background: var(--card);
+}
+
+.libs .libs-more {
+    margin: 16px 0 0;
+    font-size: 15px;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+/* -------------------------------------------------------- features ---- */
+#features {
+    padding-top: 0;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+}
+
+.grid article {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 28px;
+    transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+.grid article:hover {
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+    box-shadow: var(--shadow);
+}
+
+.ico {
+    width: 40px;
+    height: 40px;
+    padding: 9px;
+    border-radius: 11px;
+    background: var(--accent-soft);
+    stroke: var(--accent);
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    margin-bottom: 18px;
+}
+
+.grid p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 16px;
+    text-wrap: pretty;
+}
+
+/* ------------------------------------------------------------ rows ---- */
+.row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 72px;
+}
+
+.row + .row {
+    margin-top: 120px;
+}
+
+.row.flip .row-text {
+    order: 2;
+}
+
+.row-text h2 {
+    font-size: clamp(28px, 3.2vw, 38px);
+}
+
+.row-text > p:not(.kicker) {
+    color: var(--muted);
+    font-size: 18px;
+    margin: 0 0 22px;
+    text-wrap: pretty;
+}
+
+.ticks {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 10px;
+}
+
+.ticks li {
+    position: relative;
+    padding-left: 30px;
+    font-size: 16px;
+}
+
+.ticks li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: .3em;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent-soft) no-repeat center / 12px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.3 2.3 4.7-5' fill='none' stroke='%231f6f4f' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+/* The popup at its own size, on a panel that says "this is the product". */
+.row-shot {
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    padding: 44px 24px;
+    border-radius: 24px;
+    background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--accent) 14%, var(--card)), var(--card));
+    border: 1px solid var(--line);
+}
+
+.row-shot img {
+    width: 360px;
+    height: auto;
+    border-radius: 14px;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--line);
+}
+
+/* A pane taller than the panel ends in a fade rather than a cut. */
+.row-shot.fade img {
+    -webkit-mask-image: linear-gradient(to bottom, #000 82%, transparent);
+    mask-image: linear-gradient(to bottom, #000 82%, transparent);
+}
+
+/* --------------------------------------------------------- compare ---- */
+.table-wrap {
+    margin-top: 40px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--card);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 16px;
+}
+
+th, td {
+    padding: 16px 20px;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+}
+
+tbody tr:last-child th, tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+thead th {
+    font-size: 14px;
+    font-weight: 650;
+    color: var(--muted);
+    background: var(--band);
+}
+
+thead th.us {
+    color: var(--accent);
+}
+
+tbody th {
+    font-weight: 600;
+    width: 32%;
+}
+
+td {
+    color: var(--muted);
+}
+
+td.us {
+    color: var(--fg);
+    font-weight: 550;
+    background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+}
+
+.yes, .no {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    margin-right: 10px;
+    vertical-align: -3px;
+    background: no-repeat center / 12px;
+}
+
+.yes {
+    background-color: var(--accent);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.3 2.3 4.7-5' fill='none' stroke='white' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.no {
+    background-color: var(--no);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3.5 3.5l5 5M8.5 3.5l-5 5' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+/* ------------------------------------------------------------ demo ---- */
+.steps {
+    list-style: none;
+    counter-reset: step;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    padding: 0;
+    margin: 36px auto 40px;
+    max-width: 980px;
+}
+
+.steps li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 14px;
+    align-items: center;
+    padding: 18px 20px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+}
+
+.steps li::before {
+    content: counter(step);
+    grid-row: 1 / 3;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--accent);
+    color: var(--accent-fg);
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.steps b {
+    font-size: 16px;
+}
+
+.steps span {
+    color: var(--muted);
+    font-size: 14px;
+}
+
+/* A browser window around the demo: it is a real page, and it is filled like one. */
+.browser {
+    max-width: 1040px;
+    margin: 0 auto;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+    background: #f4f6f9;
+}
+
+.browser-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 11px 16px;
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+}
+
+.lights {
+    display: flex;
+    gap: 7px;
+}
+
+.lights i {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: #ff5f57;
+}
+
+.lights i:nth-child(2) {
+    background: #febc2e;
+}
+
+.lights i:nth-child(3) {
+    background: #28c840;
+}
+
+.url {
+    flex: 1;
+    text-align: center;
+    color: var(--muted);
+    padding: 5px 12px;
+    border-radius: 8px;
+    background: var(--band);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.browser-bar a {
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.browser iframe {
+    display: block;
+    width: 100%;
+    height: 780px;
+    border: 0;
+}
+
+.demo-phone {
+    display: none;
+    text-align: center;
+    color: var(--muted);
+    max-width: 420px;
+    margin: 0 auto;
+}
+
+/* ------------------------------------------------------------- faq ---- */
+#faq h2 {
+    margin-bottom: 36px;
+}
+
+details {
+    border-bottom: 1px solid var(--line);
+    padding: 20px 0;
+}
+
+details:first-of-type {
+    border-top: 1px solid var(--line);
+}
+
+summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 18px;
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+summary::-webkit-details-marker {
+    display: none;
+}
+
+summary::after {
+    content: "+";
+    color: var(--accent);
+    font-size: 22px;
+    line-height: 1;
+    font-weight: 400;
+    transition: transform .2s ease;
+}
+
+details[open] summary::after {
+    transform: rotate(45deg);
+}
+
+details p {
+    color: var(--muted);
+    margin: 12px 0 0;
+    max-width: 720px;
+}
+
+/* ----------------------------------------------------------- final ---- */
+.final {
+    text-align: center;
+    color: #ffffff;
+    background: radial-gradient(120% 140% at 50% 0%, #2a8a62, #16553b 60%, #0f3a29);
+}
+
+.final h2 {
+    color: #ffffff;
+    margin-bottom: 10px;
+}
+
+.final p {
+    color: rgba(255, 255, 255, .8);
+    font-size: 19px;
+    margin: 0 0 32px;
+}
+
+/* ---------------------------------------------------------- footer ---- */
+.foot {
+    padding: 32px 0;
+    font-size: 14px;
+    color: var(--muted);
+}
+
+.foot-in {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.foot-in > span {
+    display: flex;
+    gap: 22px;
+    flex-wrap: wrap;
+}
+
+.foot a:not(.brand) {
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.foot a:not(.brand):hover {
+    color: var(--fg);
+}
+
+.dim {
+    opacity: .7;
+}
+
+/* ---------------------------------------------------------- narrow ---- */
+@media (max-width: 960px) {
+    .row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 40px;
+    }
+
+    .row.flip .row-text {
+        order: 0;
+    }
+
+    .row + .row {
+        margin-top: 88px;
+    }
+}
+
+@media (max-width: 860px) {
+    section {
+        padding: 72px 0;
+    }
+
+    .grid, .steps {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .nav nav a:not(.btn) {
+        display: none;
+    }
+
+    .browser iframe {
+        height: 1080px;
+    }
+
+    th, td {
+        padding: 12px 14px;
+        font-size: 15px;
+    }
+}
+
+/* A phone has no extensions to try it with, and no room for three columns. */
+@media (max-width: 640px) {
+    .browser {
+        display: none;
+    }
+
+    .demo-phone {
+        display: block;
+    }
+
+    thead th:first-child {
+        display: none;
+    }
+
+    thead tr, tbody tr {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    tbody th {
+        grid-column: 1 / -1;
+        width: auto;
+        padding-bottom: 4px;
+        border-bottom: 0;
+    }
+
+    td {
+        padding-top: 6px;
+        font-size: 14px;
+    }
+}

@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "FormForge — AI QA Form Filler",
-  "version": "1.2.3",
-  "description": "Fills any form with coherent QA test data in one click — custom dropdowns, date pickers and editors included. On-device AI.",
+  "name": "Fillsmith — Free AI Form Filler & Test Data Generator",
+  "version": "1.3.0",
+  "description": "One click fills any form with realistic test data, even custom dropdowns and date pickers. Free built-in AI: no API key, no account.",
   "minimum_chrome_version": "128",
-  "homepage_url": "https://github.com/vlad-artyomov/formforge",
+  "homepage_url": "https://vlad-artyomov.github.io/fillsmith/",
   "permissions": [
     "storage",
     "activeTab",
@@ -24,7 +24,7 @@
       "32": "icons/icon32.png"
     },
     "default_popup": "src/popup.html",
-    "default_title": "FormForge (Alt+Shift+F fills the form, Alt+Shift+D the focused field)"
+    "default_title": "Fillsmith (Alt+Shift+F fills the form, Alt+Shift+D the focused field)"
   },
   "commands": {
     "fill-form": {

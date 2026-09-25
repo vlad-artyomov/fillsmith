@@ -82,7 +82,10 @@ check('the setup check covers both halves of the configured backend',
 check('the popup never hands the API key to the page', /apiKey, \.\.\.forPage/.test(popupSrc));
 // The report is a page with a plain download link; nothing needs the downloads permission any more.
 check('no permission is asked for that the report page made unnecessary', !(mf.permissions || []).includes('downloads'));
-check('the manifest names a homepage', /^https:\/\/github\.com\//.test(mf.homepage_url || ''));
+// The homepage is the site this repository publishes, so its page has to be here.
+check('the manifest names a homepage, and the site it names is in the tree',
+    mf.homepage_url === 'https://vlad-artyomov.github.io/fillsmith/' && existsSync(join(root, 'site/index.html')),
+    mf.homepage_url);
 check('the focused-field shortcut is declared and handled',
     !!(mf.commands['fill-field'] && mf.commands['fill-field'].suggested_key) && /command === 'fill-field'/.test(bgSrc)
     && mf.version === JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version,
@@ -150,7 +153,7 @@ if (worker) {
     /* A form under a policy that forbids everything the indicator needs — a
      * stylesheet, an animation, a script. Applications behind a login are
      * exactly where such a header is set. Its own markup carries nothing inline,
-     * so any violation reported on this page is one FormForge caused. */
+     * so any violation reported on this page is one Fillsmith caused. */
     const STRICT_CSP = "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'";
     pages['/csp.html'] = Buffer.from(
         '<!doctype html><meta charset="utf-8"><title>Strict policy</title><form>' +
@@ -204,6 +207,17 @@ if (worker) {
     pages['/twoforms.html'] = Buffer.from(
         '<!doctype html><meta charset="utf-8"><title>Two forms</title><form>' + codes(['Alpha', 'Beta', 'Gamma']) +
         '</form><iframe src="/innerform.html" width="400" height="200"></iframe>');
+    /* A lazy frame out of sight never loads, and an injection that waits for
+     * every frame to be ready waits for it forever: the fill never started. */
+    pages['/lazyframe.html'] = Buffer.from(
+        '<!doctype html><meta charset="utf-8"><title>Form beside a lazy frame</title><form>' +
+        '<label for="ln">Full name</label><input id="ln" name="fullName" required>' +
+        '<label for="le">Email</label><input id="le" name="email" type="email" required></form>' +
+        '<div style="display:none"><iframe src="/innerform.html" loading="lazy"></iframe></div>');
+    // The page's only form is in a frame: an embedded booking or payment form.
+    pages['/onlyframed.html'] = Buffer.from(
+        '<!doctype html><meta charset="utf-8"><title>Only a framed form</title><h1>Book a slot</h1>' +
+        '<iframe src="/innerform.html" width="400" height="200"></iframe>');
     pages['/innerform.html'] = Buffer.from(
         '<!doctype html><meta charset="utf-8"><title>Inner form</title><form>' + codes(['Delta', 'Epsilon', 'Zeta']) + '</form>');
     const server = createServer((req, res) => {
@@ -232,7 +246,11 @@ if (worker) {
     if (welcome.length) {
         const keys = await welcome[0].evaluate(() => [...document.querySelectorAll('kbd')].map(k => k.textContent));
         check('and it shows the shortcuts as Chrome bound them',
-            keys.length === 4 && keys.every(k => /Shift|not set|⇧/.test(k)), keys.join(' · '));
+            keys.length >= 4 && keys.every(k => /Shift|not set|⇧/.test(k)), keys.join(' · '));
+        // The extension cannot script its own pages, so the place to try it is a real one.
+        const demo = await welcome[0].evaluate(() => (document.getElementById('try-demo') || {}).href || '');
+        check('and it opens the demo form on the site to try it on',
+            demo === 'https://vlad-artyomov.github.io/fillsmith/demo/', demo);
         for (const w of welcome) await w.close();
     }
 
@@ -279,12 +297,12 @@ if (worker) {
     /* The toast is a confirmation, not a panel to dismiss: it appears, and then
      * it goes away on its own. Both halves matter — the old one sat over the
      * form for nine seconds, which is what made it annoying. */
-    const toast = await page.locator('#formforge-hud').count();
+    const toast = await page.locator('#fillsmith-hud').count();
     check('on-page toast rendered', toast === 1);
-    const toastText = toast ? await page.locator('#formforge-hud').innerText() : '';
+    const toastText = toast ? await page.locator('#fillsmith-hud').innerText() : '';
     check('toast says what happened', /\d+\s+fields?/i.test(toastText), toastText.split('\n')[0] || '');
     await page.waitForTimeout(4200);
-    check('toast leaves by itself', (await page.locator('#formforge-hud').count()) === 0);
+    check('toast leaves by itself', (await page.locator('#fillsmith-hud').count()) === 0);
 
     /* The model is an enhancement, never a dependency. Creating an on-device
      * session takes seconds the first time even when the model is downloaded, and
@@ -369,7 +387,7 @@ if (worker) {
         };
     });
     check('the popup has a language, a title and a live region for the result',
-        access.lang === 'en' && access.title === 'FormForge' && access.live === 'polite',
+        access.lang === 'en' && access.title === 'Fillsmith' && access.live === 'polite',
         JSON.stringify({lang: access.lang, title: access.title, live: access.live}));
     check('the tablist is one tab stop and the arrow keys move within it',
         access.stops.filter(t => t === 0).length === 1 && access.afterArrow === 'tabSettings' && access.selectedPane,
@@ -758,7 +776,7 @@ if (worker) {
         // Zero it after injecting, so the count is this fill and nothing before it.
         await chrome.scripting.executeScript({
             target: {tabId: tab.id}, func: () => {
-                globalThis.__formforgeRuns = 0;
+                globalThis.__fillsmithRuns = 0;
             }
         });
         await chrome.tabs.sendMessage(tab.id, {
@@ -768,7 +786,7 @@ if (worker) {
         // executeScript runs in the same isolated world the filler lives in.
         const [{result}] = await chrome.scripting.executeScript({
             target: {tabId: tab.id},
-            func: () => globalThis.__formforgeRuns || 0
+            func: () => globalThis.__fillsmithRuns || 0
         });
         return result;
     }, INJECTED).catch(e => ({error: e.message})), 25000, 'double');
@@ -910,7 +928,7 @@ if (worker) {
     step('letting a build the fill gave up on finish anyway');
     const survived = await withTimeout(worker.evaluate(async () => {
         const ask = (sessionWaitMs) => generate({
-            persona: PROBE_PERSONA, pageTitle: 'FormForge self-check', fields: PROBE_FIELD,
+            persona: PROBE_PERSONA, pageTitle: 'Fillsmith self-check', fields: PROBE_FIELD,
             context: {}, examples: [], sessionWaitMs, budgetMs: 4000
         }, null);
         const real = self.LanguageModel;
@@ -1131,11 +1149,11 @@ if (worker) {
         const ms = Date.now() - t0;
         const read = async () => (await chrome.scripting.executeScript({
             target: {tabId: tab.id}, func: () => {
-                const b = document.getElementById('formforge-hud');
+                const b = document.getElementById('fillsmith-hud');
                 return {
-                    boxes: document.querySelectorAll('#formforge-hud').length,
+                    boxes: document.querySelectorAll('#fillsmith-hud').length,
                     text: b ? b.innerText.replace(/\s+/g, ' ').trim() : null,
-                    isStub: !!(b && b.hasAttribute('data-formforge-boot'))
+                    isStub: !!(b && b.hasAttribute('data-fillsmith-boot'))
                 };
             }
         }))[0].result;
@@ -1366,7 +1384,7 @@ if (worker) {
          * that is only being loaded reads as a model thinking very hard. */
         const readCard = async () => (await chrome.scripting.executeScript({
             target: {tabId: tab.id}, func: () => {
-                const hud = document.getElementById('formforge-hud');
+                const hud = document.getElementById('fillsmith-hud');
                 if (!hud) return {};
                 return {
                     title: (hud.querySelector('.ff-title') || {}).textContent || '',
@@ -1615,7 +1633,7 @@ if (worker) {
             for (let i = 0; i < 25; i++) {
                 const c = (await chrome.scripting.executeScript({
                     target: {tabId: tab.id}, func: () => {
-                        const h = document.getElementById('formforge-hud');
+                        const h = document.getElementById('fillsmith-hud');
                         return h ? {
                             title: (h.querySelector('.ff-title') || {}).textContent || '',
                             count: (h.querySelector('.ff-count') || {}).textContent || '',
@@ -2013,7 +2031,7 @@ if (worker) {
         spin && spin.error ? spin.error : `${spin.distinct} distinct of ${spin.frames}`);
     /* The motion has to survive being sixteen pixels wide. A spinner replacing
      * the icon was tried first: the arc was invisible for most of its cycle, so
-     * the icon appeared to blink out, and nothing on the toolbar said FormForge
+     * the icon appeared to blink out, and nothing on the toolbar said Fillsmith
      * while it ran. The silhouette stays; the light moves. */
     check('and light that visibly crosses the mark',
         spin && !spin.error && spin.maxInk - spin.minInk > 40,
@@ -2101,7 +2119,7 @@ if (worker) {
         };
     }).catch(e => ({error: e.message})), 15000, 'restore');
 
-    check('the icon FormForge restores to is one Chrome accepts',
+    check('the icon Fillsmith restores to is one Chrome accepts',
         restore && restore.real === 'ok', (restore && (restore.real || restore.error)) || '');
     /* Kept as checks rather than comments: if a future Chrome starts accepting
      * either of these, the workaround above can go — and this will say so. */
@@ -2132,11 +2150,11 @@ if (worker) {
         anyEntry && !anyEntry.error && anyEntry.before === false,
         (anyEntry && anyEntry.error) || 'listener present');
 
-    /* Nothing FormForge writes should land in Chrome's own error list for the
+    /* Nothing Fillsmith writes should land in Chrome's own error list for the
      * extension. A `console.warn` from a content script puts a red Errors button
      * on the card in chrome://extensions, where a tester finds it and reasonably
      * concludes the extension is broken — and most of what was written there was
-     * not a fault in FormForge at all: a panel an application will not close, a
+     * not a fault in Fillsmith at all: a panel an application will not close, a
      * model this machine does not have. Those are notes about the page and they
      * go in the Debug tab. */
     step('keeping the extension\'s own error list clean');
@@ -2190,7 +2208,7 @@ if (worker) {
             });
         }, {files: INJECTED, url: cspUrl});
         const hud = await tab.evaluate(() => {
-            const el = document.getElementById('formforge-hud');
+            const el = document.getElementById('fillsmith-hud');
             const cs = el && getComputedStyle(el);
             return {up: !!el, position: cs && cs.position, z: cs && cs.zIndex};
         });
@@ -2381,21 +2399,63 @@ if (worker) {
             const [t] = await chrome.tabs.query({title});
             working(t.id, true);                       // as any fill leaves it while it runs
             await chrome.scripting.executeScript({target: {tabId: t.id, allFrames: true}, files});
-            const r = await chrome.tabs.sendMessage(t.id, {
-                kind: 'fill', settings: {locale: 'en-US', useAI: false, overwrite: true}
-            });
+            // The popup's path: through askPage, without send()'s finally to stop the icon.
+            const r = await self.askPage(t.id, {kind: 'fill', settings: {locale: 'en-US', useAI: false, overwrite: true}});
             // The done signal reaches the worker as a message; give it a moment to land.
             for (let i = 0; i < 40 && spinTimer; i++) await new Promise(x => setTimeout(x, 50));
             return {count: r.count, spinning: !!spinTimer, tab: spinTab};
         }, {files: INJECTED, title: 'Nothing to fill'});
+        await tab.waitForFunction(() => /No fillable/.test((document.getElementById('fillsmith-hud') || {}).textContent || ''),
+            null, {timeout: 3000}).catch(() => {});
+        res.card = await tab.evaluate(() => ((document.getElementById('fillsmith-hud') || {}).textContent || '').trim());
         await tab.close();
         return res;
     })().catch(e => ({error: e.message})), 30000, 'nothing-to-fill');
 
+    /* Whether a page had anything to fill is a question about every frame, and
+     * only the worker hears them all: the top page of an embedded booking form
+     * has no fields of its own, and it said "No fillable fields found" over the
+     * frame's "Filled 3 fields". */
+    const onlyFramed = await withTimeout((async () => {
+        const tab = await ctx.newPage();
+        await tab.goto(`${origin}/onlyframed.html`);
+        await tab.waitForTimeout(300);
+        const r = await worker.evaluate(async () => {
+            const t = (await chrome.tabs.query({})).find(x => x.url && x.url.includes('onlyframed.html'));
+            return self.askPage(t.id, {kind: 'fill', settings: {seed: 'FRAMED1', locale: 'en-US', useAI: false, overwrite: true}});
+        });
+        await tab.waitForTimeout(600);
+        const card = await tab.evaluate(() => ((document.getElementById('fillsmith-hud') || {}).textContent || '').trim());
+        await tab.close();
+        return {count: r && r.count, card};
+    })().catch(e => ({error: e.message})), 30000, 'only-framed');
+    const lazy = await withTimeout((async () => {
+        const tab = await ctx.newPage();
+        await tab.goto(`${origin}/lazyframe.html`);
+        await tab.waitForTimeout(300);
+        const r = await worker.evaluate(async () => {
+            const t = (await chrome.tabs.query({})).find(x => x.url && x.url.includes('lazyframe.html'));
+            const t0 = Date.now();
+            const res = await Promise.race([
+                self.askPage(t.id, {kind: 'fill', settings: {seed: 'LAZY1', locale: 'en-US', useAI: false, overwrite: true}}),
+                new Promise(done => setTimeout(() => done({ok: false, error: 'still waiting after 10s'}), 10000))
+            ]);
+            return {ok: res.ok, count: res.count, error: res.error, ms: Date.now() - t0};
+        });
+        r.name = await tab.inputValue('#ln');
+        await tab.close();
+        return r;
+    })().catch(e => ({error: e.message})), 30000, 'lazy-frame');
+    check('a lazy frame that never loads does not hold the fill up',
+        lazy && lazy.ok && lazy.count >= 2 && !!lazy.name, JSON.stringify(lazy));
+    check('a page whose only form is in a frame does not say it has nothing to fill',
+        onlyFramed && !onlyFramed.error && onlyFramed.count >= 3 && !/No fillable/.test(onlyFramed.card),
+        onlyFramed.error || JSON.stringify(onlyFramed));
+
 
     check('a page with nothing to fill still reports a finished fill',
-        nothing && !nothing.error && nothing.count === 0,
-        nothing && nothing.error ? nothing.error : `count=${nothing && nothing.count}`);
+        nothing && !nothing.error && nothing.count === 0 && /No fillable fields/.test(nothing.card || ''),
+        nothing && nothing.error ? nothing.error : `count=${nothing && nothing.count}, card="${nothing && nothing.card}"`);
     check('and the toolbar icon stops animating',
         nothing && !nothing.error && nothing.spinning === false && nothing.tab == null,
         nothing && !nothing.error ? `spinning=${nothing.spinning}, tab=${nothing.tab}` : '');
@@ -2668,7 +2728,7 @@ if (worker) {
             target: {tabId: tab.id},
             func: () => {
                 const all = [...document.querySelectorAll('input')];
-                const hud = document.getElementById('formforge-hud');
+                const hud = document.getElementById('fillsmith-hud');
                 return {
                     empty: all.filter(i => !i.value).length, total: all.length,
                     fromModel: all.filter(i => /^Vom Modell/.test(i.value)).length,
@@ -2779,6 +2839,7 @@ if (worker) {
             count: 1, filled: [{label: 'x', value: 'y', source: 'rule'}], phase: {total: 1}, persona: {seed: 'OLD'},
             widgets: i % 2 ? 1 : 4
         }));
+        older[1].at = Date.now() - 3 * 86400000;        // the oldest one kept is from another day
         const pop2 = await ctx.newPage();
         await pop2.goto(`chrome-extension://${id}/src/popup.html`);
         await pop2.waitForTimeout(500);
@@ -2809,6 +2870,7 @@ if (worker) {
             // The pin row itself does not change, so read the heading of the fill on show.
             const head = () => (document.querySelector('#debugBody .dbg-h') || {}).textContent || '';
             const shown = head();
+            const pinLabels = Array.from(pins).map(p => p.textContent.trim());
             const line = () => ((document.querySelector('#debugBody .dbg-kv div') || {}).textContent || '').trim();
             if (pins.length > 2) pins[pins.length - 2].click();
             await new Promise(r => setTimeout(r, 250));
@@ -2824,7 +2886,8 @@ if (worker) {
                 shown,
                 trail,
                 afterClick: head(),
-                counted
+                counted,
+                pinLabels
             };
         });
         await pop2.close();
@@ -2836,7 +2899,7 @@ if (worker) {
         await rep.waitForTimeout(600);
         const report = await rep.evaluate(async () => {
             const got = await new Promise(r => chrome.storage.local.get({fillHistory: [], fillLog: []}, r));
-            const text = globalThis.FormForgeReport.text(got.fillHistory, got.fillLog, {
+            const text = globalThis.FillsmithReport.text(got.fillHistory, got.fillLog, {
                 version: 't',
                 ua: 't',
                 locale: 't',
@@ -2865,6 +2928,10 @@ if (worker) {
     check('and the Debug tab can be pointed at any of them',
         history.pins === 10 && history.shown === 'Last fill' && history.afterClick === 'Fill 1 of 10',
         `${history.pins} pin(s): "${history.shown}" → "${history.afterClick}"`);
+    check('and each pin says how long ago its fill was, in days once it is days',
+        history.pinLabels && history.pinLabels.every(l => /^\d+(s|m|h|d) ago$/.test(l)) &&
+        history.pinLabels[history.pinLabels.length - 1] === '3d ago',
+        JSON.stringify(history.pinLabels));
     check('and counts its widgets in the plural when there is more than one',
         history.counted && /· 4 widgets\b/.test(history.counted[0]) && /· 1 widget\b(?!s)/.test(history.counted[1]),
         JSON.stringify(history.counted));

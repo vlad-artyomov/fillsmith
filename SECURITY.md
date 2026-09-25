@@ -1,6 +1,6 @@
 # Security
 
-FormForge runs inside pages you point it at and, if you configure one, talks to a hosted model provider with your
+Fillsmith runs inside pages you point it at and, if you configure one, talks to a hosted model provider with your
 key. Both are worth getting right, so please report anything that looks wrong.
 
 ## Reporting
@@ -13,10 +13,10 @@ You should hear back within a week. A fix ships as a patch release; the release 
 
 ## In scope
 
-- Anything that lets a page FormForge fills run code in the extension, read its storage, or reach your API key.
+- Anything that lets a page Fillsmith fills run code in the extension, read its storage, or reach your API key.
 - Anything that sends page data anywhere other than the provider you configured, or sends it when the backend is
   *On-device only*.
-- Anything FormForge writes to a page that it should not: a submit, a navigation, a click on a control that is not
+- Anything Fillsmith writes to a page that it should not: a submit, a navigation, a click on a control that is not
   the one it is filling.
 
 ## Out of scope

@@ -1,4 +1,4 @@
-/* FormForge — which control is which, and what it is called.
+/* Fillsmith — which control is which, and what it is called.
  *
  * LIBS holds selector *hints* per component library; detection falls back to
  * generic ARIA structure, so a library absent from the table still works if it
@@ -8,7 +8,7 @@
 (function () {
     'use strict';
 
-    const {visible, textOf, safeQuery, PLACEHOLDER} = globalThis.FormForgeDom;
+    const {visible, textOf, safeQuery, PLACEHOLDER} = globalThis.FillsmithDom;
 
     // ------------------------------------------------------------ libraries ----
     const LIBS = [
@@ -169,7 +169,7 @@
                 if (!visible(el) || !writable(el)) continue;
                 // An inline calendar is a view of a value another control owns, not a field.
                 if (lib.kind === 'date' && !el.querySelector('input')) continue;
-                if (el.closest('[data-formforge-overlay]')) continue;
+                if (el.closest('[data-fillsmith-overlay]')) continue;
                 if (!byRoot.has(el)) byRoot.set(el, lib);
             }
         }
@@ -387,7 +387,7 @@
         return showsPlaceholder(widget.root, widget.root) ? '' : textOf(widget.root);
     }
 
-    globalThis.FormForgeAdapters = {
+    globalThis.FillsmithAdapters = {
         LIBS, detect, claimed, labelFor, displayedValue, showsPlaceholder, radioLabel, writable
     };
 })();

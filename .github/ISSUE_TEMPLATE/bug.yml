@@ -1,5 +1,5 @@
 name: A field filled wrongly, or not at all
-description: Something FormForge wrote, skipped or left open on a form.
+description: Something Fillsmith wrote, skipped or left open on a form.
 labels: [ bug ]
 body:
   - type: markdown
@@ -27,7 +27,7 @@ body:
     id: report
     attributes:
       label: Report file
-      description: Drag the formforge-report-….txt file here. It contains the values FormForge wrote and the page URL, nothing else from the page.
+      description: Drag the fillsmith-report-….txt file here. It contains the values Fillsmith wrote and the page URL, nothing else from the page.
   - type: textarea
     id: dom
     attributes:
@@ -37,5 +37,5 @@ body:
   - type: input
     id: version
     attributes:
-      label: FormForge and Chrome versions
-      placeholder: FormForge 1.0.1 · Chrome 140 · macOS
+      label: Fillsmith and Chrome versions
+      placeholder: Fillsmith 1.0.1 · Chrome 140 · macOS

@@ -45,7 +45,7 @@ await load();
 
 // What did the scanner see?
 const scan = await page.evaluate(() => {
-    const fields = window.__formforge.collectFields({overwrite: true});
+    const fields = window.__fillsmith.collectFields({overwrite: true});
     return fields.map(f => ({kind: f.kind, type: f.type, lib: f.lib || null, label: (f.label || '').slice(0, 44)}));
 });
 console.log('\nDetected fields:');
@@ -75,8 +75,8 @@ const impostor = await page.evaluate(() => {
         'aria-haspopup="listbox" aria-expanded="false" readonly></div></div>';
     document.body.appendChild(host);
     try {
-        const W = globalThis.FormForgeWidgets;
-        const A = globalThis.FormForgeAdapters;
+        const W = globalThis.FillsmithWidgets;
+        const A = globalThis.FillsmithAdapters;
         const mine = W.detect(document).filter(w => host.contains(w.root));
         return {
             count: mine.length,
@@ -108,7 +108,7 @@ const fading = await page.evaluate(() => {
         '<li role="option">Alpha</li><li role="option">Beta</li></ul></div>';
     document.body.appendChild(host);
     try {
-        const O = globalThis.FormForgeOverlays;
+        const O = globalThis.FillsmithOverlays;
         const list = document.getElementById('ff-fading-list');
         return {
             options: O.optionsIn(list, null).length,
@@ -131,7 +131,7 @@ check('a list inside a panel on its way out is not an open list',
  * a real location form, where one press of the focused-field shortcut on a
  * disabled courier-service editor left two copies of the raw HTML on screen. */
 const switchedOff = await page.evaluate(() => {
-    const D = globalThis.FormForgeDom, W = globalThis.FormForgeWidgets;
+    const D = globalThis.FillsmithDom, W = globalThis.FillsmithWidgets;
     const markup = '<p><strong>Note:</strong> one</p><ul><li>two</li></ul>';
     const host = document.createElement('div');
     host.innerHTML =
@@ -170,7 +170,7 @@ check('so once the form enables it the markup goes in as markup',
  * around it: over content opening with <strong>Note:</strong>, a whole release
  * note came out bold, which read as a worse answer than the one it replaced. */
 const overwritten = await page.evaluate(async () => {
-    const D = globalThis.FormForgeDom;
+    const D = globalThis.FillsmithDom;
     const host = document.createElement('div');
     host.innerHTML = '<div class="ql-editor" contenteditable="true"></div>';
     document.body.appendChild(host);
@@ -220,8 +220,8 @@ check('skips the app language switcher',
 const ctx = await page.evaluate(() => {
     const dlg = document.getElementById('dlg');
     dlg.hidden = false;
-    const inside = window.__formforge.pageContext(document.getElementById('dlg-input'));
-    const outside = window.__formforge.pageContext(document.getElementById('name'));
+    const inside = window.__fillsmith.pageContext(document.getElementById('dlg-input'));
+    const outside = window.__fillsmith.pageContext(document.getElementById('name'));
     dlg.hidden = true;
     return {inside, outside};
 });
@@ -253,7 +253,7 @@ check('still sees the plain inputs', scan.filter(f => f.kind === 'native').lengt
 check('does not double-count widget-owned inputs',
     !scan.some(f => f.kind === 'native' && /Capacity|Regions|Contact person/.test(f.label)));
 
-const res = await page.evaluate(() => window.__formforge.run({
+const res = await page.evaluate(() => window.__fillsmith.run({
     seed: 'WID001', locale: 'de-DE', useAI: false, overwrite: true, emailDomain: 'example.com'
 }));
 
@@ -330,7 +330,7 @@ check('run reports the widgets it drove', (res.widgets || 0) >= 7, `widgets=${re
 
 // Determinism across the widget layer too.
 await load();
-await page.evaluate(() => window.__formforge.run({
+await page.evaluate(() => window.__fillsmith.run({
     seed: 'WID001', locale: 'de-DE', useAI: false, overwrite: true, emailDomain: 'example.com'
 }));
 const snap2 = await page.evaluate(() => window.__snapshot());
@@ -341,7 +341,7 @@ check('same seed reproduces the same widget choices',
     `${snap2.typ}/${snap.typ}, ${snap2.prio}/${snap.prio}, ${snap2.team}/${snap.team}`);
 
 await load();
-await page.evaluate(() => window.__formforge.run({
+await page.evaluate(() => window.__fillsmith.run({
     seed: 'OTHER9', locale: 'de-DE', useAI: false, overwrite: true, emailDomain: 'example.com'
 }));
 const snap3 = await page.evaluate(() => window.__snapshot());
@@ -465,8 +465,8 @@ check('radio group choice is reproducible from the seed',
 // A nonsense guess must still land on a real option, groups included.
 await load();
 const radioForced = await page.evaluate(async () => {
-    const g = globalThis.FormForgeGen;
-    const W = globalThis.FormForgeWidgets;
+    const g = globalThis.FillsmithGen;
+    const W = globalThis.FillsmithWidgets;
     const persona = g.buildPersona('XX1', 'de-DE', {});
     const widget = W.detect(document).find(w => w.kind === 'radio-group');
     const written = await W.fill(widget, 'Not A Real Option', {rng: persona._rng, persona});
@@ -483,8 +483,8 @@ check('a nonsense guess still commits one real radio option',
 // Asking for an option by name must select that one, not a seeded guess.
 await load();
 const radioNamed = await page.evaluate(async () => {
-    const g = globalThis.FormForgeGen;
-    const W = globalThis.FormForgeWidgets;
+    const g = globalThis.FillsmithGen;
+    const W = globalThis.FillsmithWidgets;
     const persona = g.buildPersona('XX1', 'de-DE', {});
     const widget = W.detect(document).find(w => w.kind === 'radio-group');
     await W.fill(widget, 'Manual', {rng: persona._rng, persona});
@@ -495,8 +495,8 @@ check('a named option is honoured over a seeded pick', radioNamed === 'MANUAL', 
 // A model guess that matches no option must still land on a real one.
 await load();
 const forced = await page.evaluate(async () => {
-    const g = globalThis.FormForgeGen;
-    const W = globalThis.FormForgeWidgets;
+    const g = globalThis.FillsmithGen;
+    const W = globalThis.FillsmithWidgets;
     const persona = g.buildPersona('XX1', 'de-DE', {});
     const widget = W.detect(document).find(w => w.root.id === 'typ');
     const written = await W.fill(widget, 'Totally Nonexistent Option', {rng: persona._rng, persona});
@@ -515,8 +515,8 @@ check('a nonsense model guess still commits a valid option',
  * have. */
 await load();
 const refused = await page.evaluate(async () => {
-    const W = globalThis.FormForgeWidgets;
-    const D = globalThis.FormForgeDom;
+    const W = globalThis.FillsmithWidgets;
+    const D = globalThis.FillsmithDom;
     const root = document.getElementById('land');
     const widget = W.detect(document).find(w => w.root === root);
 
@@ -530,7 +530,7 @@ const refused = await page.evaluate(async () => {
     // Marked required by its asterisk alone — no required, no aria-required.
     const attrs = root.matches('[required], [aria-required="true"]')
         || !!root.querySelector('[required], [aria-required="true"]');
-    const seen = window.__formforge.collectFields({overwrite: true})
+    const seen = window.__fillsmith.collectFields({overwrite: true})
         .find(f => f.el === root);
     return {wrote, notes, attrs, detectedRequired: !!(seen && seen.required)};
 });
@@ -564,7 +564,7 @@ check('an asterisk in the caption counts as required',
  * popup does. The end-of-fill sweep found it every time, pressed the body
  * three times trying to close something that is not a popup, and then logged a
  * warning into the tester's extension error list that read like a crash in
- * FormForge. About 400ms and one false alarm per fill of that page. */
+ * Fillsmith. About 400ms and one false alarm per fill of that page. */
 await load();
 const permanent = await page.evaluate(async () => {
     const warned = [];
@@ -574,7 +574,7 @@ const permanent = await page.evaluate(async () => {
         realWarn(...a);
     };
     const before = document.querySelectorAll('#kalenderansicht .p-datepicker-panel').length;
-    const res = await window.__formforge.run({locale: 'de-DE', useAI: false, overwrite: true});
+    const res = await window.__fillsmith.run({locale: 'de-DE', useAI: false, overwrite: true});
     console.warn = realWarn;
     return {
         before,
@@ -607,8 +607,8 @@ check('the date field beside it still fills',
  * arrived from typing at the end. Measured at 2.4 seconds a field on a real
  * device-management form, against 0.2 once the question was asked properly. */
 const yearPicker = await page.evaluate(async () => {
-    const W = globalThis.FormForgeWidgets;
-    const G = globalThis.FormForgeGen;
+    const W = globalThis.FillsmithWidgets;
+    const G = globalThis.FillsmithGen;
     const persona = G.buildPersona('YEAR01', 'de-DE', {});
     const widget = W.detect(document).find(w => w.root.id === 'baujahr');
     const input = document.querySelector('#baujahr input');
@@ -628,7 +628,7 @@ check('and does not spend a day-cell budget looking for days',
  * — so a pool holding both filled roughly half the date fields and left the rest
  * empty, differently on every seed. Eight of them, because one proves nothing. */
 const everySeed = await page.evaluate(async () => {
-    const W = globalThis.FormForgeWidgets, G = globalThis.FormForgeGen;
+    const W = globalThis.FillsmithWidgets, G = globalThis.FillsmithGen;
     const widget = W.detect(document).find(w => w.root.id === 'datum');
     const input = document.querySelector('#datum input');
     const missed = [];
@@ -649,7 +649,7 @@ check('a date picker commits on every seed, not on half of them',
  * fixture has one row and closes on the first press either way, so the check
  * guards the invariant rather than reproducing that form. */
 const timePanel = await page.evaluate(async () => {
-    const W = globalThis.FormForgeWidgets, G = globalThis.FormForgeGen, D = globalThis.FormForgeDom;
+    const W = globalThis.FillsmithWidgets, G = globalThis.FillsmithGen, D = globalThis.FillsmithDom;
     const persona = G.buildPersona('T1', 'de-DE', {});
     const widget = W.detect(document).find(w => w.root.id === 'oeffnet');
     const written = await W.fill(widget, '14:20', {rng: persona._rng, persona});
@@ -666,7 +666,7 @@ check('a time picker closes its own panel rather than leaving it to the sweep',
  * booking form's rental date 11/24/2026 — a shape it discards without a word,
  * leaving a required field empty and the report saying only "wrote nothing". */
 const declaredFmt = await page.evaluate(async () => {
-    const W = globalThis.FormForgeWidgets, G = globalThis.FormForgeGen;
+    const W = globalThis.FillsmithWidgets, G = globalThis.FillsmithGen;
     const persona = G.buildPersona('FMT1', 'en-US', {});
     const widget = W.detect(document).find(w => w.root.id === 'vertrag');
     const written = await W.fill(widget, persona.futureDateLocal, {rng: persona._rng, persona});
@@ -684,8 +684,8 @@ check('a date goes in the shape the control asks for, not the persona\'s',
  * found nothing, and was left empty, with seven real entries one click away. */
 await load('latency=slow');
 const remote = await page.evaluate(async () => {
-    const W = globalThis.FormForgeWidgets;
-    const D = globalThis.FormForgeDom;
+    const W = globalThis.FillsmithWidgets;
+    const D = globalThis.FillsmithDom;
     const root = document.getElementById('orga');
     const widget = W.detect(document).find(w => w.root === root);
     const typed = [];
@@ -738,7 +738,7 @@ check('and the search box is not left holding it',
  * the first is skipped, the rule is a list of libraries rather than a rule. */
 await load();
 const furniture = await page.evaluate(async () => {
-    const count = () => window.__formforge.collectFields({overwrite: false});
+    const count = () => window.__fillsmith.collectFields({overwrite: false});
     const closed = count().length;
     // The picker ignores clicks while its list is loading, as PrimeVue does; a person waits for the spinner.
     while (document.querySelector('#orga .p-select-loading-icon')) await new Promise(r => setTimeout(r, 50));
@@ -770,7 +770,7 @@ check('an open popup does not change what the form is',
 const modal = await page.evaluate(() => {
     const dlg = document.getElementById('dlg');
     dlg.hidden = false;
-    const seen = window.__formforge.collectFields({overwrite: true})
+    const seen = window.__fillsmith.collectFields({overwrite: true})
         .filter(f => f.el && f.el.closest('#dlg')).map(f => f.label);
     dlg.hidden = true;
     return seen;
@@ -783,7 +783,7 @@ check('but a modal dialog is still a form', modal.length > 0, modal.join(' | ') 
  * it — sometimes, which is the part that made it hard to see. */
 await load();
 const closing = await page.evaluate(async () => {
-    const W = globalThis.FormForgeWidgets;
+    const W = globalThis.FillsmithWidgets;
     const vis = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
 
     /* The defect itself, reached directly. The close check returned "closed" the
@@ -792,19 +792,19 @@ const closing = await page.evaluate(async () => {
      * overlay on another was believed over a list still on screen. */
     const root = document.getElementById('telland');
     const widget = W.detect(document).find(w => w.root === root);
-    const O = globalThis.FormForgeOverlays;
+    const O = globalThis.FillsmithOverlays;
     const overlay = await O.openOverlay(widget);
     const opened = !!overlay && O.optionsIn(overlay, widget.lib).length > 0;
     // Marked as ours the moment it opens; the end-of-fill sweep looks for this
     // and nothing else, which is what makes it safe on a page full of the
     // application's own panels.
-    const markedWhileOpen = !!overlay && overlay.hasAttribute('data-formforge-opened');
+    const markedWhileOpen = !!overlay && overlay.hasAttribute('data-fillsmith-opened');
     root.querySelector('[role="combobox"]').setAttribute('aria-expanded', 'false');
     const believedClosed = await O.closeOverlay(widget);
     const reallyClosed = !document.querySelector('.p-select-overlay[data-owner="telland"]:not([data-leaving])');
 
     await new Promise(r => setTimeout(r, 500));
-    const res = await window.__formforge.run({locale: 'de-DE', useAI: false, overwrite: true});
+    const res = await window.__fillsmith.run({locale: 'de-DE', useAI: false, overwrite: true});
     const left = [...document.querySelectorAll(
         '.p-select-overlay,.p-multiselect-overlay,.p-autocomplete-overlay,.p-datepicker-panel')]
         // The inline calendar is page furniture, not a popup anybody left open.
@@ -816,7 +816,7 @@ const closing = await page.evaluate(async () => {
         country: window.__snapshot().telland,
         phone: document.getElementById('tel').value,
         // An overlay mid-leave is closed already; PrimeVue keeps it in the DOM for the transition.
-        marked: [...document.querySelectorAll('[data-formforge-opened]')].filter(o => !o.dataset.leaving).length
+        marked: [...document.querySelectorAll('[data-fillsmith-opened]')].filter(o => !o.dataset.leaving).length
     };
 });
 
@@ -830,11 +830,11 @@ check('and the fill leaves nothing open behind it',
 check('the fill lets go of the field it finished on', closing.focus === 'BODY', closing.focus);
 /* The sweep can only touch what we opened, which is what makes it safe to run
  * over a page whose own dialogs we know nothing about. */
-check('the sweep is scoped to overlays FormForge opened',
+check('the sweep is scoped to overlays Fillsmith opened',
     closing.markedWhileOpen === true && closing.marked === 0,
     `marked when open: ${closing.markedWhileOpen}, still marked after: ${closing.marked}`);
 /* Only closeOverlay was taking the mark off. A panel that outlived it and was
-   shut by the end-of-fill sweep instead kept "data-formforge-opened" for the
+   shut by the end-of-fill sweep instead kept "data-fillsmith-opened" for the
    life of the page — which made this check fail about one run in ten, and, far
    worse than a flaky test, made the next scan read whatever sits under that
    mark as a popup's own furniture and skip the fields in it. Both ends are
@@ -845,12 +845,12 @@ const marks = await page.evaluate(async () => {
     ghost.style.display = 'none';
     document.body.appendChild(ghost);
     const before = document.getElementById('name').closest('.field');
-    before.setAttribute('data-formforge-opened', '');          // left by an earlier fill
+    before.setAttribute('data-fillsmith-opened', '');          // left by an earlier fill
     // And one that appears mid-fill, the way a panel the sweep has to close does.
-    setTimeout(() => ghost.setAttribute('data-formforge-opened', ''), 50);
-    await window.__formforge.run({seed: 'MARK1', locale: 'de-DE', useAI: false, overwrite: true});
+    setTimeout(() => ghost.setAttribute('data-fillsmith-opened', ''), 50);
+    await window.__fillsmith.run({seed: 'MARK1', locale: 'de-DE', useAI: false, overwrite: true});
     return {
-        left: [...document.querySelectorAll('[data-formforge-opened]')]
+        left: [...document.querySelectorAll('[data-fillsmith-opened]')]
             .map(e => e.id || e.className || e.tagName),
         underIt: window.__snapshot().name
     };
@@ -877,10 +877,10 @@ await load();
 const perFile = await page.evaluate(async () => {
     const rows = () => window.__snapshot().bilder;
     const opts = {locale: 'de-DE', useAI: false, overwrite: true, emailDomain: 'example.com'};
-    await window.__formforge.run({...opts, seed: 'UPL1'});
+    await window.__fillsmith.run({...opts, seed: 'UPL1'});
     await new Promise(r => setTimeout(r, 1200));           // the rows of the first upload
     const first = rows().map(r => `${r.alt}|${r.src}`);
-    await window.__formforge.run({...opts, seed: 'UPL2'});
+    await window.__fillsmith.run({...opts, seed: 'UPL2'});
     await new Promise(r => setTimeout(r, 1200));
     const all = rows();
     return {first, all, texts: all.map(r => `${r.alt}|${r.src}`)};
@@ -902,14 +902,14 @@ check('and every row gets its own value, not the first row\'s',
  * note landed on the last one, beside a value nothing had touched. */
 await load();
 const seated = await page.evaluate(async () => {
-    const res = await window.__formforge.run({seed: 'SEAT1', locale: 'de-DE', useAI: false, overwrite: true});
+    const res = await window.__fillsmith.run({seed: 'SEAT1', locale: 'de-DE', useAI: false, overwrite: true});
     await new Promise(r => setTimeout(r, 300));
     const rows = window.__snapshot().bilder;
     const alts = (res.filled || []).filter(f => f.label === 'Alternative text');
     const noted = alts.filter(f => /shortened to 12/.test(f.why || ''));
     return {
         rows: rows.map(r => r.alt), alts: alts.map(f => f.value),
-        noted: noted.map(f => f.value), pending: window.__formforge.pendingUploads()
+        noted: noted.map(f => f.value), pending: window.__fillsmith.pendingUploads()
     };
 });
 check('a complaint shortens the row it belongs to',
@@ -929,8 +929,8 @@ check('and the report marks that row\'s entry, not the last one with the same ca
 const grown = await page.evaluate(async () => {
     const after = [];
     for (const seed of ['UPL3', 'UPL4', 'UPL5']) {
-        await window.__formforge.run({seed, locale: 'de-DE', useAI: false, overwrite: true});
-        after.push(window.__formforge.pendingUploads());
+        await window.__fillsmith.run({seed, locale: 'de-DE', useAI: false, overwrite: true});
+        after.push(window.__fillsmith.pendingUploads());
     }
     return after;
 });
@@ -944,7 +944,7 @@ check('the uploads a fill waits for do not pile up across fills',
  * version of this that is safe to run on somebody else's site. */
 await load();
 const files = await page.evaluate(async () => {
-    await window.__formforge.run({seed: 'FILE1', locale: 'de-DE', useAI: false, overwrite: true});
+    await window.__fillsmith.run({seed: 'FILE1', locale: 'de-DE', useAI: false, overwrite: true});
     const list = (id) => Array.from((document.getElementById(id).files || []))
         .map(f => ({name: f.name, type: f.type, size: f.size}));
     const bytes = async (id, n) => {
@@ -990,7 +990,7 @@ const palette = await page.evaluate(async () => {
     const seen = [];
     const sizes = [];
     // Straight to the upload layer: what varies is the file, not the fill around it.
-    const G = globalThis.FormForgeGen, U = globalThis.FormForgeUploads;
+    const G = globalThis.FillsmithGen, U = globalThis.FillsmithUploads;
     for (let i = 0; i < 14; i++) {
         const persona = G.buildPersona('PAL' + i, 'de-DE', {});
         await U.attachFiles(document.getElementById('foto'), persona, 'n:foto', persona._rng);
@@ -1043,7 +1043,7 @@ const twoFiles = await page.evaluate(async () => {
     el.addEventListener('change', () => {
         for (const f of el.files) caught.push(f);
     }, true);
-    await window.__formforge.run({seed: 'TWO1', locale: 'de-DE', useAI: false, overwrite: true});
+    await window.__fillsmith.run({seed: 'TWO1', locale: 'de-DE', useAI: false, overwrite: true});
     const digest = async (f) => {
         const b = new Uint8Array(await f.arrayBuffer());
         let h = 0;
@@ -1057,7 +1057,7 @@ const twoFiles = await page.evaluate(async () => {
  * colour look like the same file, which is what the palette exists to avoid. */
 const consecutive = await page.evaluate(async () => {
     const seen = [];
-    const G = globalThis.FormForgeGen, U = globalThis.FormForgeUploads;
+    const G = globalThis.FillsmithGen, U = globalThis.FillsmithUploads;
     for (let i = 0; i < 10; i++) {
         const persona = G.buildPersona('SEQ' + i, 'de-DE', {});
         await U.attachFiles(document.getElementById('foto'), persona, 'n:foto', persona._rng);
@@ -1081,7 +1081,7 @@ check('no two files in a row get the same background',
  * field were near-identical and a reader had no way to tell them apart. */
 const pdfs = await page.evaluate(async () => {
     const got = [];
-    const G = globalThis.FormForgeGen, U = globalThis.FormForgeUploads;
+    const G = globalThis.FillsmithGen, U = globalThis.FillsmithUploads;
     for (let i = 0; i < 3; i++) {
         const persona = G.buildPersona('PDF' + i, 'de-DE', {});
         await U.attachFiles(document.getElementById('vertrag'), persona, 'n:vertrag', persona._rng);
@@ -1107,7 +1107,7 @@ check('and carry no character a PDF viewer would mangle',
  * sized PDF looked like stubs. The picture is a real size with a composition,
  * the PDF a full A4 page set in two faces with a body of text. */
 const looks = await page.evaluate(async () => {
-    const G = globalThis.FormForgeGen, U = globalThis.FormForgeUploads;
+    const G = globalThis.FillsmithGen, U = globalThis.FillsmithUploads;
     const persona = G.buildPersona('LOOK1', 'de-DE', {});
     await U.attachFiles(document.getElementById('foto'), persona, 'n:foto', persona._rng);
     const bmp = await createImageBitmap(document.getElementById('foto').files[0]);
@@ -1138,7 +1138,7 @@ check('the bytes are the format they claim to be',
  * control this is about — a country select with 245 entries behind a virtual
  * scroller and no filter input — is the one that kept leaving Country empty. */
 const hunt = await page.evaluate(async () => {
-    const O = globalThis.FormForgeOverlays;
+    const O = globalThis.FillsmithOverlays;
     const lib = {option: '.p-select-option, li[role="option"]', label: '.p-select-option-label'};
     const build = (shuffle) => {
         document.getElementById('hunt-rig')?.remove();
@@ -1215,7 +1215,7 @@ for (const locale of ['de-DE', 'en-US']) {
     await load();
     const dep = await page.evaluate(async (locale) => {
         const t0 = Date.now();
-        const res = await window.__formforge.run({locale, useAI: false, overwrite: true});
+        const res = await window.__fillsmith.run({locale, useAI: false, overwrite: true});
         const s = window.__snapshot();
         return {
             ms: Date.now() - t0, land: s.land, stadt: s.stadt, staat: s.staat, sastaat: s.sastaat,
@@ -1252,7 +1252,7 @@ for (const locale of ['de-DE', 'en-US']) {
      * frame. Reading it is the difference between half a second and the 2.8s of
      * running out both the press budget and the keyboard retry after it. */
     /* The note has to survive the trip out of the fill, which means going
-     * through `FormForgeWidgets.helpers` — the seam content.js reaches the dom
+     * through `FillsmithWidgets.helpers` — the seam content.js reaches the dom
      * layer by. `note` was added to dom.js and not to that bundle, so every
      * H.note() threw into a catch and the result carried nothing. Asserted on
      * the *run result*, not on the dom module, or the seam is not covered. */
@@ -1279,19 +1279,19 @@ const one = await page.evaluate(async () => {
     // A plain input, reached through the focus fallback alone.
     const strasse = document.getElementById('strasse');
     strasse.focus();
-    out.native = await window.__formforge.fillOne({seed: 'ONE1', locale: 'de-DE', useAI: false});
+    out.native = await window.__fillsmith.fillOne({seed: 'ONE1', locale: 'de-DE', useAI: false});
     out.nativeHeld = strasse.value;
 
     /* A component-library Select: a div with a hidden input behind it, which
      * Chrome never focuses — so only the recorded right-click can find it, and
      * the widget's root is what gets driven, not the span that was clicked. */
     fire(document.querySelector('#land .p-select-label'));
-    out.widget = await window.__formforge.fillOne({seed: 'ONE2', locale: 'de-DE', useAI: false});
+    out.widget = await window.__fillsmith.fillOne({seed: 'ONE2', locale: 'de-DE', useAI: false});
 
     // Right-clicking the page rather than a field: an instruction, not silence.
     document.activeElement.blur();
     fire(document.body);
-    out.onThePage = await window.__formforge.fillOne({seed: 'ONE3', locale: 'de-DE', useAI: false});
+    out.onThePage = await window.__fillsmith.fillOne({seed: 'ONE3', locale: 'de-DE', useAI: false});
     return out;
 });
 
@@ -1301,9 +1301,9 @@ const keyed = await page.evaluate(async () => {
     const farbe = document.getElementById('farbe');
     document.querySelector('#land .p-select-label').dispatchEvent(new MouseEvent('contextmenu', {bubbles: true}));
     farbe.focus();
-    const a = await window.__formforge.fillOne({seed: 'KEY1', locale: 'de-DE', useAI: false}, {focusFirst: true});
+    const a = await window.__fillsmith.fillOne({seed: 'KEY1', locale: 'de-DE', useAI: false}, {focusFirst: true});
     const stillFocused = document.activeElement === farbe;
-    const b = await window.__formforge.fillOne({seed: 'KEY2', locale: 'de-DE', useAI: false}, {focusFirst: true});
+    const b = await window.__fillsmith.fillOne({seed: 'KEY2', locale: 'de-DE', useAI: false}, {focusFirst: true});
     return {
         first: a.filled && a.filled[0] && a.filled[0].label, v1: a.filled && a.filled[0] && a.filled[0].value,
         v2: b.filled && b.filled[0] && b.filled[0].value, stillFocused, held: farbe.value
@@ -1351,10 +1351,10 @@ const LIB_FIELDS = [
     ['vue-multiselect', 'Warehouse', 'vue-multiselect']
 ];
 const libs = await page.evaluate(async (want) => {
-    const seen = window.__formforge.collectFields({overwrite: true})
+    const seen = window.__fillsmith.collectFields({overwrite: true})
         .filter(f => f.kind === 'widget')
         .map(f => ({lib: f.lib, caption: (f.label || '').split('|')[0].trim()}));
-    const res = await window.__formforge.run({seed: 'LIB001', locale: 'en-US', useAI: false, overwrite: true});
+    const res = await window.__fillsmith.run({seed: 'LIB001', locale: 'en-US', useAI: false, overwrite: true});
     await new Promise(r => setTimeout(r, 200));
     return {
         seen,
@@ -1385,7 +1385,7 @@ check('and each is called what its own label says',
 check('a fill writes every one of them', libs.skipped.length === 0 && Object.keys(libs.model).length === 10,
     libs.skipped.join(', ') || `${Object.keys(libs.model).length} controls hold a value`);
 /* Judged by the page: the value is what the library's own model took, through
- * the events the page itself received, not what FormForge believes it wrote. */
+ * the events the page itself received, not what Fillsmith believes it wrote. */
 const wrongValue = LIB_FIELDS.filter(([lib, caption, key]) =>
     !libs.model[key] || libs.reported[caption] !== libs.model[key]);
 check('and what it reports is what the library ended up holding',
@@ -1419,8 +1419,8 @@ const hostile = await page.evaluate(async () => {
          color:#0f0!important; border:4px dashed red!important; }
     span,b,button,i{ display:block!important; font-size:22px!important; }`;
     document.head.appendChild(st);
-    await window.__formforge.run({seed: 'CSS1', locale: 'de-DE', useAI: false, overwrite: true});
-    const hud = document.getElementById('formforge-hud');
+    await window.__fillsmith.run({seed: 'CSS1', locale: 'de-DE', useAI: false, overwrite: true});
+    const hud = document.getElementById('fillsmith-hud');
     if (!hud) return {missing: true};
     const cs = getComputedStyle(hud);
     const tag = hud.querySelector('.ff-tag');
@@ -1478,13 +1478,13 @@ const live = await page.evaluate(async () => {
      * the whole run rather than any moment in it. */
     const widths = [];
     const watch = setInterval(() => {
-        const f = document.querySelector('#formforge-hud .ff-bar i');
-        const b = document.querySelector('#formforge-hud .ff-bar');
+        const f = document.querySelector('#fillsmith-hud .ff-bar i');
+        const b = document.querySelector('#fillsmith-hud .ff-bar');
         if (f && b) widths.push(+(f.getBoundingClientRect().width / b.getBoundingClientRect().width).toFixed(3));
     }, 60);
-    const running = window.__formforge.run({seed: 'HUD1', locale: 'de-DE', useAI: false, overwrite: true});
+    const running = window.__fillsmith.run({seed: 'HUD1', locale: 'de-DE', useAI: false, overwrite: true});
     await new Promise(r => setTimeout(r, 1100));
-    const box = document.getElementById('formforge-hud');
+    const box = document.getElementById('fillsmith-hud');
     const fill = box.querySelector('.ff-bar i');
     const mid = {
         busy: box.classList.contains('ff-busy'),
@@ -1515,7 +1515,7 @@ const live = await page.evaluate(async () => {
     // The card leaves on its own, but not while you are reading it.
     box.querySelector('.ff-x').dispatchEvent(new MouseEvent('click', {bubbles: true}));
     await new Promise(r => setTimeout(r, 320));
-    return {mid, done, widths, closed: !document.getElementById('formforge-hud')};
+    return {mid, done, widths, closed: !document.getElementById('fillsmith-hud')};
 });
 
 /* One bar for the whole job. It used to belong to whichever stage was current,
@@ -1540,7 +1540,7 @@ check('the bar is ahead of nothing and behind the end while filling',
 /* A bar that only grows moves once per field and is frozen in between, which
  * is exactly when the fill is inside one slow control and being doubted. */
 check('the indicator is actually moving while it works',
-    live.mid.busy && ['formforge-shimmer', 'formforge-spin']
+    live.mid.busy && ['fillsmith-shimmer', 'fillsmith-spin']
         .every(n => live.mid.animations.includes(n)),
     live.mid.animations.join(', ') || 'nothing is animating');
 check('and stops the moment the result lands', live.done.busy === false);
@@ -1556,7 +1556,7 @@ check('its close button is a target a pointer can hit',
  * registered custom property being animated — and that only works because
  * `all: initial` leaves custom properties alone. */
 check('the spinner arc grows and shrinks, not just turns',
-    live.mid.animations.includes('formforge-breathe')
+    live.mid.animations.includes('fillsmith-breathe')
     && live.mid.arc[0] !== live.mid.arc[1]
     && live.mid.arc.every(a => /deg$/.test(a)),
     live.mid.arc.join(' -> ') || '(--ff-arc never resolved)');
@@ -1565,7 +1565,7 @@ check('the spinner arc grows and shrinks, not just turns',
  * which it was, because the gradient was written in currentColor. */
 check('the shimmering title is still legible',
     /rgba\(0, 0, 0, 0\)|transparent/.test(live.mid.titleVisible)
-    && live.mid.animations.includes('formforge-shimmer'),
+    && live.mid.animations.includes('fillsmith-shimmer'),
     live.mid.titleVisible);
 
 check('the close button dismisses the card', live.closed === true);
@@ -1575,13 +1575,13 @@ check('the close button dismisses the card', live.closed === true);
  * to being closed, since it would then keep coming back. */
 await load();
 const dismissed = await page.evaluate(async () => {
-    const running = window.__formforge.run({seed: 'HUD2', locale: 'de-DE', useAI: false, overwrite: true});
+    const running = window.__fillsmith.run({seed: 'HUD2', locale: 'de-DE', useAI: false, overwrite: true});
     await new Promise(r => setTimeout(r, 500));
-    document.querySelector('#formforge-hud .ff-x')
+    document.querySelector('#fillsmith-hud .ff-x')
         .dispatchEvent(new MouseEvent('click', {bubbles: true}));
     await running;
     await new Promise(r => setTimeout(r, 400));
-    return document.querySelectorAll('#formforge-hud').length;
+    return document.querySelectorAll('#fillsmith-hud').length;
 });
 check('and the rest of the fill does not bring it back', dismissed === 0, `${dismissed} box(es)`);
 
@@ -1591,7 +1591,7 @@ check('and the rest of the fill does not bring it back', dismissed === 0, `${dis
  * fill above cannot isolate. */
 await load();
 const ac = await page.evaluate(async () => {
-    const W = globalThis.FormForgeWidgets;
+    const W = globalThis.FillsmithWidgets;
     const run = async (id, candidate) => {
         const root = document.getElementById(id);
         const w = W.detect(document).find(x => x.root === root);
@@ -1632,7 +1632,7 @@ check('and the same for a backend that answers "no results"',
    box under a red line. */
 await loadPage('test/limit-form.html');
 const alone = await page.evaluate(async () => {
-    const res = await window.__formforge.run({seed: 'LIMIT9', locale: 'en-US', useAI: false, overwrite: true});
+    const res = await window.__fillsmith.run({seed: 'LIMIT9', locale: 'en-US', useAI: false, overwrite: true});
     const el = document.getElementById('prereq');
     const entry = (res.filled || [])[0] || {};
     return {value: el.value, why: entry.why || '', ms: res.phase && res.phase.total};
@@ -1654,14 +1654,14 @@ await load();
 const shape = await page.evaluate(async () => {
     const seen = [];
     const sample = () => {
-        const el = document.getElementById('formforge-hud');
+        const el = document.getElementById('fillsmith-hud');
         if (!el || !el.classList.contains('ff-busy')) return;
         const h = Math.round(el.getBoundingClientRect().height);
         const title = (el.querySelector('.ff-title') || {}).textContent || '';
         if (!seen.length || seen[seen.length - 1].h !== h) seen.push({h, title});
     };
     const timer = setInterval(sample, 25);
-    await window.__formforge.run({seed: 'SHAPE9', locale: 'de-DE', useAI: false, overwrite: true});
+    await window.__fillsmith.run({seed: 'SHAPE9', locale: 'de-DE', useAI: false, overwrite: true});
     clearInterval(timer);
     const hs = seen.map(x => x.h);
     return {steps: seen.map(x => `${x.h}px at "${x.title}"`), spread: hs.length ? Math.max(...hs) - Math.min(...hs) : 0};
@@ -1675,7 +1675,7 @@ check('the card keeps one shape through every stage of a fill',
  * toggle's state came out of "8913 Park Avenue" — reported, wrongly, as a rule
  * having decided it. A bool has two values and the seed picks one. */
 const gate = await page.evaluate(async () => {
-    const res = await window.__formforge.run({seed: 'GATE1', locale: 'de-DE', useAI: false, overwrite: true});
+    const res = await window.__fillsmith.run({seed: 'GATE1', locale: 'de-DE', useAI: false, overwrite: true});
     const el = document.querySelector('#isBillingAddressEnabled input');
     const row = (res.filled || []).find(f => /^Enabled/.test(f.label || ''));
     return {checked: !!(el && el.checked), source: row && row.source, why: row && row.why, label: row && row.label};
@@ -1706,13 +1706,13 @@ await load();
 const announced = await page.evaluate(async () => {
     const seen = [];
     const note = () => {
-        const el = document.getElementById('formforge-hud');
+        const el = document.getElementById('fillsmith-hud');
         const t = el ? el.innerText.replace(/\s+/g, ' ').trim() : null;
         if (t && seen[seen.length - 1] !== t) seen.push(t);
     };
     const obs = new MutationObserver(note);
     obs.observe(document.documentElement, {childList: true, subtree: true, characterData: true});
-    await window.__formforge.run({
+    await window.__fillsmith.run({
         seed: 'PRG1',
         locale: 'de-DE',
         useAI: false,
@@ -1720,7 +1720,7 @@ const announced = await page.evaluate(async () => {
         emailDomain: 'example.com'
     });
     obs.disconnect();
-    const spinner = !!document.querySelector('#formforge-spin-style');
+    const spinner = !!document.querySelector('#fillsmith-spin-style');
     return {seen, spinner};
 });
 check('the page names the stage it is in',
@@ -1745,22 +1745,22 @@ check('the progress indicator animates', announced.spinner);
    with the reason hidden. The stage takes the first line and what it is waiting
    on takes the second, the way every other stage already reads. */
 const waiting = await page.evaluate(() => {
-    FormForgeHud.reset();
-    FormForgeHud.progress('fill', 'Waiting for the model',
+    FillsmithHud.reset();
+    FillsmithHud.progress('fill', 'Waiting for the model',
         {done: 21, total: 36, label: '15 fields left'});
     const cut = (el) => el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1;
-    const title = document.querySelector('#formforge-hud .ff-title');
-    const sub = document.querySelector('#formforge-hud .ff-now');
+    const title = document.querySelector('#fillsmith-hud .ff-title');
+    const sub = document.querySelector('#fillsmith-hud .ff-now');
     // Read before the next stage overwrites the same nodes; reset() reuses the card.
     const out = {
         stage: title.textContent, stageCut: cut(title),
         sub: sub.textContent, subCut: cut(sub),
-        counter: document.querySelector('#formforge-hud .ff-count').textContent
+        counter: document.querySelector('#fillsmith-hud .ff-count').textContent
     };
     // A title long enough to need the clamp: it may wrap, it may not be cut to a fragment.
-    FormForgeHud.reset();
-    FormForgeHud.progress('fill', 'FormForge does not know how to fill that control', {done: 1, total: 2});
-    const long = document.querySelector('#formforge-hud .ff-title');
+    FillsmithHud.reset();
+    FillsmithHud.progress('fill', 'Fillsmith does not know how to fill that control', {done: 1, total: 2});
+    const long = document.querySelector('#fillsmith-hud .ff-title');
     out.longLines = Math.round(long.getBoundingClientRect().height / parseFloat(getComputedStyle(long).lineHeight));
     return out;
 });
@@ -1778,11 +1778,11 @@ check('a sentence too long for one line wraps instead of losing its end',
 await load();
 const again = await page.evaluate(async () => {
     const opts = {seed: 'TWICE1', locale: 'de-DE', useAI: false, overwrite: true, emailDomain: 'example.com'};
-    await window.__formforge.run(opts);
+    await window.__fillsmith.run(opts);
     const first = window.__snapshot();
-    await window.__formforge.clearAll();
+    await window.__fillsmith.clearAll();
     const cleared = window.__snapshot();
-    const res = await window.__formforge.run({...opts, seed: 'TWICE2'});
+    const res = await window.__fillsmith.run({...opts, seed: 'TWICE2'});
     const second = window.__snapshot();
     return {
         first: first.rolle, cleared: {orga: cleared.orga, rolle: cleared.rolle}, second: second.rolle,
@@ -1800,11 +1800,11 @@ check('clearing the organization locks the role template again',
    half of why Clear walked past them. */
 await load();
 const editorCleared = await page.evaluate(async () => {
-    await window.__formforge.run({seed: 'EDCLR1', locale: 'de-DE', useAI: false, overwrite: true});
+    await window.__fillsmith.run({seed: 'EDCLR1', locale: 'de-DE', useAI: false, overwrite: true});
     const el = document.querySelector('.ql-editor');
     const before = (el.innerText || '').trim();
-    const onSurface = el.hasAttribute('data-formforge-id');
-    await window.__formforge.clearAll();
+    const onSurface = el.hasAttribute('data-fillsmith-id');
+    await window.__fillsmith.clearAll();
     await new Promise(r => setTimeout(r, 60));
     return {before, onSurface, after: (el.innerText || '').trim()};
 });
@@ -1817,7 +1817,7 @@ check('and clear empties it, though the mark is on the wrapper and not the surfa
  * as a red line under a 32-character value; the fill left it there. */
 await load();
 const limited = await page.evaluate(async () => {
-    const res = await window.__formforge.run({seed: 'LIMIT1', locale: 'de-DE', useAI: false, overwrite: true});
+    const res = await window.__fillsmith.run({seed: 'LIMIT1', locale: 'de-DE', useAI: false, overwrite: true});
     const entry = (res.filled || []).find(x => /Prerequisite description/.test(x.label)) || {};
     return {
         value: window.__snapshot().voraussetzung, why: entry.why || '',
@@ -1841,7 +1841,7 @@ const modalFill = await page.evaluate(async () => {
     search.id = 'page-search';
     document.body.prepend(search);
     document.getElementById('dlg-open').click();
-    const res = await window.__formforge.run({seed: 'MODAL1', locale: 'de-DE', useAI: false, overwrite: true});
+    const res = await window.__fillsmith.run({seed: 'MODAL1', locale: 'de-DE', useAI: false, overwrite: true});
     const snap = window.__snapshot();
     const out = {
         open: snap.dialogOpen, input: snap.dlgInput, status: snap.dlgStatus, search: search.value,
@@ -1861,9 +1861,9 @@ check('and touches nothing under the mask', modalFill.search === '' && modalFill
  * the input, so emptying the input changed nothing the tester could see. */
 await load();
 const unfiled = await page.evaluate(async () => {
-    await window.__formforge.run({seed: 'FILE2', locale: 'de-DE', useAI: false, overwrite: true});
+    await window.__fillsmith.run({seed: 'FILE2', locale: 'de-DE', useAI: false, overwrite: true});
     const before = {dropped: window.__snapshot().anhaenge.length, foto: document.getElementById('foto').files.length};
-    await window.__formforge.clearAll();
+    await window.__fillsmith.clearAll();
     await new Promise(r => setTimeout(r, 100));
     const after = window.__snapshot();
     return {
@@ -1883,10 +1883,10 @@ check('and leaves an attachment it did not upload alone', unfiled.foreign === tr
 check('and never presses the record\'s own delete button', unfiled.deleted === false);
 await load();
 const bare = await page.evaluate(async () => {
-    await window.__formforge.run({seed: 'FILE3', locale: 'de-DE', useAI: false, overwrite: true});
+    await window.__fillsmith.run({seed: 'FILE3', locale: 'de-DE', useAI: false, overwrite: true});
     // The server took our rows down already; the only delete buttons left belong to other things.
     document.querySelectorAll('#anhaenge-liste li:not([data-foreign])').forEach(li => li.remove());
-    const r = await window.__formforge.clearAll();
+    const r = await window.__fillsmith.clearAll();
     await new Promise(r => setTimeout(r, 100));
     const s = window.__snapshot();
     return {foreign: s.foreignAttachment, deleted: s.locationDeleted, cleared: r.count};
@@ -1900,7 +1900,7 @@ check('a second fill after Clear fills the control the first fill had revealed',
 
 // Loose matching needs substance on both sides: "United States" contains "es", which is not Spain.
 const loose = await page.evaluate(() => {
-    const O = globalThis.FormForgeOverlays;
+    const O = globalThis.FillsmithOverlays;
     const texts = ['Estonia', 'Spain', 'ES', 'Deutschland'].map(text => ({text, value: ''}));
     const hit = (c) => {
         const h = O.matchAmong(texts, c);
@@ -1921,7 +1921,7 @@ check('an exact option and a country code still match', loose.de === 'Deutschlan
 await loadPage('test/upload-form.html', 'uploadms=1200');
 const upload = await page.evaluate(async () => {
     const t = Date.now();
-    const r = await window.__formforge.run({seed: 'UPW1', locale: 'en-US', useAI: false, overwrite: true});
+    const r = await window.__fillsmith.run({seed: 'UPW1', locale: 'en-US', useAI: false, overwrite: true});
     return {ms: Date.now() - t, rows: window.__rows(), revealed: r.revealed};
 });
 check('a fill waits for an upload it started, and fills what comes back',
@@ -1938,10 +1938,10 @@ const cleared = await page.evaluate(async () => {
     /* What the component's own re-render does, done here on purpose: the input
        the fill was given is not the one on the page any more, so Clear has no
        marked file control to walk up from. Everything it has left is the rows. */
-    document.querySelectorAll('[data-formforge-id]').forEach(el => {
-        if (el.type === 'file') el.removeAttribute('data-formforge-id');
+    document.querySelectorAll('[data-fillsmith-id]').forEach(el => {
+        if (el.type === 'file') el.removeAttribute('data-fillsmith-id');
     });
-    const res = await window.__formforge.clearAll();
+    const res = await window.__fillsmith.clearAll();
     return {before, after: document.querySelectorAll('#bilder-liste .upload-row').length, count: res.count};
 });
 check('a rebuilt input does not cost the fill the rows it caused',
@@ -1955,7 +1955,7 @@ check('and clear takes the attachments back out with no input to walk up from',
 await loadPage('test/upload-form.html', 'uploadms=30000');
 const never = await page.evaluate(async () => {
     const t = Date.now();
-    const r = await window.__formforge.run({seed: 'UPW2', locale: 'en-US', useAI: false, overwrite: true});
+    const r = await window.__fillsmith.run({seed: 'UPW2', locale: 'en-US', useAI: false, overwrite: true});
     return {ms: Date.now() - t, notes: r.notes || []};
 });
 check('an upload that never comes back does not hold the fill open',
@@ -1970,9 +1970,9 @@ check('and it says so rather than reporting a clean fill',
 console.log('\nThe demo page:');
 await loadPage('test/demo-form.html');
 const demo = await page.evaluate(async () => {
-    const res = await window.__formforge.run({seed: 'DEMO01', locale: 'en-US', useAI: false, overwrite: true});
+    const res = await window.__fillsmith.run({seed: 'DEMO01', locale: 'en-US', useAI: false, overwrite: true});
     // The card this fill put up, read before anything else replaces it.
-    const hud = document.getElementById('formforge-hud');
+    const hud = document.getElementById('fillsmith-hud');
     const card = hud && {
         title: (hud.querySelector('.ff-title') || {}).textContent || '',
         sources: [...hud.querySelectorAll('.ff-tag')]
@@ -1980,7 +1980,7 @@ const demo = await page.evaluate(async () => {
             .map(t => t.textContent),
         aside: [...hud.querySelectorAll('.ff-tag.ff-side')].map(t => t.textContent)
     };
-    const plan = await window.__formforge.run({
+    const plan = await window.__fillsmith.run({
         seed: 'DEMO01',
         locale: 'en-US',
         useAI: true,

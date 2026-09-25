@@ -1,4 +1,4 @@
-/* FormForge — one fill, on a clean page, and nothing left empty.
+/* Fillsmith — one fill, on a clean page, and nothing left empty.
  *
  * The other suites ask whether each part behaves; this one asks the only
  * question a tester has: press Fill once on a page nobody has touched, and is
@@ -85,7 +85,7 @@ for (let i = 0; i < rounds; i++) {
      * and anything that reads that prompt as a value skips the field for good. */
     const overwrite = i % 2 === 0;
     const res = await page.evaluate(async ({seed, overwrite}) => {
-        const r = await window.__formforge.run({
+        const r = await window.__fillsmith.run({
             seed, locale: 'de-DE', useAI: false, overwrite, emailDomain: 'example.com'
         });
         return {count: r.count, skipped: (r.skipped || []).length, notes: r.notes || []};

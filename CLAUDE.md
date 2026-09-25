@@ -1,4 +1,4 @@
-# FormForge — notes for Claude Code
+# Fillsmith — notes for Claude Code
 
 Chrome MV3 extension that fills forms with coherent, valid test data for QA. Plain ES2020, no build step, no runtime
 dependencies. `README.md` says what it does; `ARCHITECTURE.md` says how it is built and lists the rules learned from

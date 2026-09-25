@@ -1,4 +1,4 @@
-/* FormForge — how to drive each kind of control.
+/* Fillsmith — how to drive each kind of control.
  *
  * One strategy per control shape, and every one ends the same way: read the
  * control back and report what it actually holds — never what was typed or
@@ -11,9 +11,9 @@
     const {
         note, takeNotes, sleep, visible, textOf, norm, press, key, typeInto, setNativeValue,
         commit, settle, waitFor, safeQuery, PLACEHOLDER, neutralSpot, typeIntoRich, clearRich, plainText
-    } = globalThis.FormForgeDom;
-    const {detect, claimed, labelFor, displayedValue, radioLabel} = globalThis.FormForgeAdapters;
-    const O = globalThis.FormForgeOverlays;
+    } = globalThis.FillsmithDom;
+    const {detect, claimed, labelFor, displayedValue, radioLabel} = globalThis.FillsmithAdapters;
+    const O = globalThis.FillsmithOverlays;
     const {
         overlayCandidates, optionsIn, liveOverlay, linkedOverlayId, openOverlay, closeOverlay,
         comboOf, chooseOption, matchAmong, asTexts, scrollerFor, huntByScrolling, typeAhead,
@@ -96,7 +96,7 @@
             note(`${ctx.label || widget.id}: would not open`);
             return null;
         }
-        overlay.setAttribute('data-formforge-overlay', '1');
+        overlay.setAttribute('data-fillsmith-overlay', '1');
         /* The list is rebuilt when the server answers a filter: same id, new node.
          * Every later look goes through here, or it reads a detached list as empty. */
         const live = () => {
@@ -104,7 +104,7 @@
                 const again = document.getElementById(overlay.id);
                 if (again) {
                     overlay = again;
-                    overlay.setAttribute('data-formforge-overlay', '1');
+                    overlay.setAttribute('data-fillsmith-overlay', '1');
                 }
             }
             return overlay;
@@ -188,18 +188,18 @@
         }
         if (!options.length) {
             // A list that stayed empty after its filter was cleared is stale; one fresh opening before giving up.
-            live().removeAttribute('data-formforge-overlay');
+            live().removeAttribute('data-fillsmith-overlay');
             await closeOverlay(widget);
             const again = await openOverlay(widget);
             if (again) {
                 overlay = again;
-                overlay.setAttribute('data-formforge-overlay', '1');
+                overlay.setAttribute('data-fillsmith-overlay', '1');
                 options = await awaitOptions(overlay, widget, tt);
             }
         }
         if (!options.length) {
             note(`${ctx.label || widget.id}: its list opened with nothing in it`);
-            overlay.removeAttribute('data-formforge-overlay');
+            overlay.removeAttribute('data-fillsmith-overlay');
             await closeOverlay(widget);
             return null;
         }
@@ -225,7 +225,7 @@
         if (!multi) {
             const already = matchAmong(asTexts(optionsIn(live(), widget.lib)), candidates);
             if (already && isSelected(already.el)) {
-                overlay.removeAttribute('data-formforge-overlay');
+                overlay.removeAttribute('data-fillsmith-overlay');
                 await closeOverlay(widget);
                 return already.text || displayedValue(widget) || null;
             }
@@ -270,7 +270,7 @@
 
         tt.pick = Date.now() - tPick;
         const tClose = Date.now();
-        overlay.removeAttribute('data-formforge-overlay');
+        overlay.removeAttribute('data-fillsmith-overlay');
         const pickedText = picked.length ? textOf(picked[picked.length - 1]) : '';
         await closeOverlay(widget);
         /* The label is rendered a tick after the choice: wait for it, or for any
@@ -850,7 +850,7 @@
         return out;
     }
 
-    globalThis.FormForgeWidgets = {
+    globalThis.FillsmithWidgets = {
         detect, claimed, labelFor, displayedValue, fill, probe,
         takeChoiceTimings: () => choiceTimings.splice(0, choiceTimings.length),
         // content.js reaches the dom layer through this bundle; anything it needs must be listed here.

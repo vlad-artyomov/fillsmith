@@ -52,7 +52,7 @@ if (listed) {
     }
 }
 
-const out = join(root, `formforge-${manifest.version}.zip`);
+const out = join(root, `fillsmith-${manifest.version}.zip`);
 rmSync(out, {force: true});
 execFileSync('zip', ['-r', '-X', '-q', out, ...SHIPS], {cwd: root});
 

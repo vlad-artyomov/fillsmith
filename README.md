@@ -1,13 +1,15 @@
 <div align="center">
 
-# ⚡ FormForge
+# ⚡ Fillsmith
 
-### One press fills the whole form — including the custom dropdowns, date pickers, rich-text editors and file uploads that ordinary form fillers can't touch.
+### One click fills the whole form with realistic test data — even the custom dropdowns, date pickers, rich-text editors and file uploads other form fillers can't touch. Free, with AI built into Chrome: no API key, no account.
 
 For QA engineers who fill the same create-form forty times a day.
 
-[![tests](https://github.com/vlad-artyomov/formforge/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/vlad-artyomov/formforge/actions/workflows/test.yml)
-[![latest release](https://img.shields.io/github/v/release/vlad-artyomov/formforge?color=1f6f4f&label=release)](https://github.com/vlad-artyomov/formforge/releases/latest)
+**[Website and live demo →](https://vlad-artyomov.github.io/fillsmith/)**
+
+[![tests](https://github.com/vlad-artyomov/fillsmith/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/vlad-artyomov/fillsmith/actions/workflows/test.yml)
+[![latest release](https://img.shields.io/github/v/release/vlad-artyomov/fillsmith?color=1f6f4f&label=release)](https://github.com/vlad-artyomov/fillsmith/releases/latest)
 [![Chrome Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-1f6f4f)](manifest.json)
 [![Runtime dependencies: 0](https://img.shields.io/badge/runtime%20dependencies-0-1f6f4f)](package.json)
 [![No build step](https://img.shields.io/badge/build%20step-none-1f6f4f)](#-development)
@@ -25,9 +27,9 @@ controls modern admin panels are built from: a component-library `Select` is a `
 overlay, a date picker refuses typed text, a Quill editor ignores anything that isn't a real `beforeinput`. So you
 fill the six text boxes by machine and the fourteen interesting fields by hand.
 
-FormForge drives each control the way a person does — then reads it back to see whether the page kept it.
+Fillsmith drives each control the way a person does — then reads it back to see whether the page kept it.
 
-|                               | A `.value =` filler                 | ⚡ FormForge                                                           |
+|                               | A `.value =` filler                 | ⚡ Fillsmith                                                           |
 |-------------------------------|-------------------------------------|------------------------------------------------------------------------|
 | `<input>`, `<select>`, radios | ✅                                  | ✅                                                                     |
 | Component-library dropdowns   | ❌ the component reverts the write  | ✅ opens the popup, picks a real option, waits if the list is remote   |
@@ -65,8 +67,8 @@ FormForge drives each control the way a person does — then reads it back to se
 
 ## 📦 Install
 
-Either take the packaged build from [**Releases**](https://github.com/vlad-artyomov/formforge/releases/latest) —
-`formforge-<version>.zip`, unzipped — or clone this repository. Then:
+Either take the packaged build from [**Releases**](https://github.com/vlad-artyomov/fillsmith/releases/latest) —
+`fillsmith-<version>.zip`, unzipped — or clone this repository. Then:
 
 Open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked**, pick the folder.
 
@@ -80,7 +82,7 @@ Nothing to build, nothing to sign up for. The ZIP is built by CI from the tag, h
 |-------------------------------------------------------------|-------------------------------------------------------------------------|
 | Popup → **Fill this page**                                  | Fills the form, then shows what went where and why                      |
 | Popup → **Dry run**                                         | Lists what it *would* fill and which adapter claimed it; writes nothing |
-| Popup → **Clear**                                           | Empties what FormForge filled                                           |
+| Popup → **Clear**                                           | Empties what Fillsmith filled                                           |
 | `Alt+Shift+F` / `R` / `C`                                   | Fill · fill again as a new person · clear                               |
 | `Alt+Shift+D`                                               | Fill just the focused field; press again for a different value          |
 | Right-click → **Fill this page** / **Fill just this field** | The whole form, or the one control under the pointer                    |
@@ -224,6 +226,7 @@ src/
   popup.*        the toolbar popup
   report.*       every kept fill, on a page you can read, copy or save
   welcome.html   the one screen a fresh install opens
+site/            the landing page; the pages workflow adds test/demo-form.html as its demo
 ```
 
 ```bash
@@ -231,7 +234,8 @@ npm install                 # Playwright and faker, dev only
 npm test                    # all four suites, in parallel
 npm run test:widgets        # just the widget layer (fast)
 npm run fixture             # serve test/ at :8099: demo-form.html by hand, primevue-form.html for the hard cases, libraries-form.html for one select per library
-npm run screenshots         # the store pictures and the README's, at the size the store wants
+npm run screenshots         # the store pictures and the site's popup pictures
+npm run site                # build the landing page and its demo, and serve it at :8100
 npm run typecheck           # the JSDoc and types/, read over the logic files — emits nothing
 npm run audit               # fill the fixture with the real extension and judge the page
 npm run audit -- --url URL  # the same against any page you can reach
@@ -247,17 +251,17 @@ last one. So a release is: move the version, land it with the change it belongs 
 
 ```bash
 npm run release -- patch          # or minor, major, or an exact 1.2.3
-git commit -am "FormForge 1.0.1: what landed"
+git commit -am "Fillsmith 1.0.1: what landed"
 git push origin main
 git tag v1.0.1 && git push origin v1.0.1
 ```
 
 `release` only touches the files that carry the version — `manifest.json`, `package.json` and the lockfile's own
 copy — and refuses to go backwards or over a tag that already exists. The commit subject is this project's
-changelog, so it stays yours to write; the [Releases](https://github.com/vlad-artyomov/formforge/releases) page
+changelog, so it stays yours to write; the [Releases](https://github.com/vlad-artyomov/fillsmith/releases) page
 collects them per version.
 
-The suites judge the **page**, not FormForge's own report: `test/complete.mjs` presses Fill once on a clean form and
+The suites judge the **page**, not Fillsmith's own report: `test/complete.mjs` presses Fill once on a clean form and
 asks the page whether every required control now holds a value, and `tools/audit.mjs` watches the indicator, the
 overlays, the console and the toolbar icon *while* a fill runs — a still screenshot can't tell a working progress bar
 from a frozen one. CI runs all four on every push, plus a check that regenerating `src/vocab.js` leaves it

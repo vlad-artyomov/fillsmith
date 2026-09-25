@@ -9,14 +9,14 @@
 (function () {
     'use strict';
 
-    const W = globalThis.FormForgeWidgets;
-    const O = globalThis.FormForgeOverlays;
+    const W = globalThis.FillsmithWidgets;
+    const O = globalThis.FillsmithOverlays;
     const H = W.helpers;
 
     /* A library's editor and a bare contenteditable are the same field to a
      * tester: both take markup, and both are worth a length the prompt states. */
     const RICH_KINDS = new Set(['richtext', 'contenteditable']);
-    const MARK = 'data-formforge-id';
+    const MARK = 'data-fillsmith-id';
     const SKIP_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image']);
     const INLINE_OPTIONS = new Set(['inline-choice', 'radio-group']);
     const CAPTCHA = /\b(captcha|recaptcha|hcaptcha|turnstile|otp|one-?time|2fa|mfa|verification\s*code|sicherheitscode)\b/i;
@@ -146,7 +146,7 @@
             return out;
         };
 
-        for (const el of document.querySelectorAll('[data-formforge-overlay], [data-formforge-opened]')) add(el);
+        for (const el of document.querySelectorAll('[data-fillsmith-overlay], [data-fillsmith-opened]')) add(el);
         for (const el of document.querySelectorAll(O.GENERIC_OVERLAYS)) {
             if (!el.matches('[role="dialog"]')) add(el);
         }
@@ -433,7 +433,7 @@
         }
     }
 
-    globalThis.FormForgeCollect = {
+    globalThis.FillsmithCollect = {
         MARK, SKIP_TYPES, INLINE_OPTIONS, CAPTCHA, APP_CHROME, FIXED_LENGTH, RICH_KINDS,
         isVisible, textOf, describe, looksRequired, limitsOf, sectionOf, inDomOrder,
         popupSurfaces, modalScope, collectFields,

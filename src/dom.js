@@ -1,4 +1,4 @@
-/* FormForge — DOM primitives.
+/* Fillsmith — DOM primitives.
  *
  * How to make a change the page believes in: a click a framework handler sees,
  * text a controlled input keeps, a wait that ends when the page is ready.
@@ -335,7 +335,7 @@
         return dlg ? (dlg.querySelector('[class*="header"], [class*="title"], h1, h2, h3') || dlg) : document.body;
     };
 
-    globalThis.FormForgeDom = {
+    globalThis.FillsmithDom = {
         note, takeNotes, dialogOf, neutralSpot,
         sleep, visible, textOf, norm, press, key, setNativeValue, typeInto, typeIntoRich, clearRich, plainText,
         commit, settle, waitFor, safeQuery, PLACEHOLDER

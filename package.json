@@ -1,6 +1,6 @@
 {
-  "name": "formforge",
-  "version": "1.2.3",
+  "name": "fillsmith",
+  "version": "1.3.0",
   "private": true,
   "description": "Chrome MV3 extension that fills forms with coherent, reproducible QA test data, including component-library widgets. On-device AI, no SaaS.",
   "scripts": {
@@ -16,7 +16,8 @@
     "package": "node tools/package.mjs",
     "release": "node tools/release.mjs",
     "icons": "node tools/icons.mjs",
-    "screenshots": "node tools/screenshots.mjs"
+    "screenshots": "node tools/screenshots.mjs",
+    "site": "node tools/site.mjs"
   },
   "devDependencies": {
     "@faker-js/faker": "^10.6.0",

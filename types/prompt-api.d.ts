@@ -1,4 +1,4 @@
-/* Chrome's built-in Prompt API, as much of it as FormForge uses.
+/* Chrome's built-in Prompt API, as much of it as Fillsmith uses.
  *
  * It is not in `@types/chrome`, and it is the one interface here that belongs
  * to a spec still moving: `LanguageModel` was `self.ai.languageModel`, and
