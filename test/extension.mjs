@@ -204,6 +204,13 @@ if (worker) {
     pages['/twoforms.html'] = Buffer.from(
         '<!doctype html><meta charset="utf-8"><title>Two forms</title><form>' + codes(['Alpha', 'Beta', 'Gamma']) +
         '</form><iframe src="/innerform.html" width="400" height="200"></iframe>');
+    /* A lazy frame out of sight never loads, and an injection that waits for
+     * every frame to be ready waits for it forever: the fill never started. */
+    pages['/lazyframe.html'] = Buffer.from(
+        '<!doctype html><meta charset="utf-8"><title>Form beside a lazy frame</title><form>' +
+        '<label for="ln">Full name</label><input id="ln" name="fullName" required>' +
+        '<label for="le">Email</label><input id="le" name="email" type="email" required></form>' +
+        '<div style="display:none"><iframe src="/innerform.html" loading="lazy"></iframe></div>');
     // The page's only form is in a frame: an embedded booking or payment form.
     pages['/onlyframed.html'] = Buffer.from(
         '<!doctype html><meta charset="utf-8"><title>Only a framed form</title><h1>Book a slot</h1>' +
@@ -2415,6 +2422,25 @@ if (worker) {
         await tab.close();
         return {count: r && r.count, card};
     })().catch(e => ({error: e.message})), 30000, 'only-framed');
+    const lazy = await withTimeout((async () => {
+        const tab = await ctx.newPage();
+        await tab.goto(`${origin}/lazyframe.html`);
+        await tab.waitForTimeout(300);
+        const r = await worker.evaluate(async () => {
+            const t = (await chrome.tabs.query({})).find(x => x.url && x.url.includes('lazyframe.html'));
+            const t0 = Date.now();
+            const res = await Promise.race([
+                self.askPage(t.id, {kind: 'fill', settings: {seed: 'LAZY1', locale: 'en-US', useAI: false, overwrite: true}}),
+                new Promise(done => setTimeout(() => done({ok: false, error: 'still waiting after 10s'}), 10000))
+            ]);
+            return {ok: res.ok, count: res.count, error: res.error, ms: Date.now() - t0};
+        });
+        r.name = await tab.inputValue('#ln');
+        await tab.close();
+        return r;
+    })().catch(e => ({error: e.message})), 30000, 'lazy-frame');
+    check('a lazy frame that never loads does not hold the fill up',
+        lazy && lazy.ok && lazy.count >= 2 && !!lazy.name, JSON.stringify(lazy));
     check('a page whose only form is in a frame does not say it has nothing to fill',
         onlyFramed && !onlyFramed.error && onlyFramed.count >= 3 && !/No fillable/.test(onlyFramed.card),
         onlyFramed.error || JSON.stringify(onlyFramed));
