@@ -416,5 +416,15 @@
         el.onclick = dismiss;
     }
 
-    globalThis.FillsmithHud = {reset, progress, toast, ping};
+    /* A frame with nothing to fill takes its card down without a verdict:
+     * whether the page had anything is the worker's call, since it alone hears
+     * every frame, and it says so through toast() when the answer is nothing. */
+    function withdraw() {
+        clearTimeout(hudTimer);
+        clearInterval(trickle);
+        const el = document.getElementById('fillsmith-hud');
+        if (el) el.remove();
+    }
+
+    globalThis.FillsmithHud = {reset, progress, toast, ping, withdraw};
 })();

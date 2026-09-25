@@ -808,6 +808,10 @@ async function askPage(tabId, msg) {
     const answers = await Promise.all(ids.map(frameId =>
         chrome.tabs.sendMessage(tabId, msg, {frameId}).catch(() => null)));   // a frame can go away mid-flight
     const merged = mergeFrames(answers);
+    // Only here are all the frames heard, so only here can a page be called empty.
+    if (msg && msg.kind === 'fill' && merged && merged.ok && !merged.count) {
+        await chrome.tabs.sendMessage(tabId, {kind: 'nothing-here'}, {frameId: 0}).catch(() => null);
+    }
     if (msg && msg.kind === 'fill' && merged && merged.persona) await remember(merged);
     return merged;
 }

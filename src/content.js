@@ -322,7 +322,7 @@
         const fields = collectFields({overwrite: settings.overwrite !== false});
         phase.collect = Date.now() - tCollect;
         if (!fields.length) {
-            if (!SUBFRAME) toast('No fillable fields found on this page.', null);
+            Hud.withdraw();
             return {count: 0, persona: stripRng(persona), aiUsed: 0, widgets: 0};
         }
 
@@ -1143,6 +1143,11 @@
         if (msg.kind === 'fill') return exclusive(async () => ({ok: true, ...(await run(msg.settings || {}))}), respond);
         if (msg.kind === 'fill-one') return exclusive(() => fillOne(msg.settings || {}, {focusFirst: !!msg.focusFirst}), respond);
         if (msg.kind === 'clear') return exclusive(async () => ({ok: true, ...(await clearAll())}), respond);
+        if (msg.kind === 'nothing-here') {
+            toast('No fillable fields found on this page.', null);
+            respond({ok: true});
+            return false;
+        }
         // The worker says when the model has finished loading, so the card can stop saying "warming up".
         // A batch of answers, ahead of the request it belongs to finishing.
         if (msg.kind === 'model-batch') {

@@ -204,6 +204,10 @@ if (worker) {
     pages['/twoforms.html'] = Buffer.from(
         '<!doctype html><meta charset="utf-8"><title>Two forms</title><form>' + codes(['Alpha', 'Beta', 'Gamma']) +
         '</form><iframe src="/innerform.html" width="400" height="200"></iframe>');
+    // The page's only form is in a frame: an embedded booking or payment form.
+    pages['/onlyframed.html'] = Buffer.from(
+        '<!doctype html><meta charset="utf-8"><title>Only a framed form</title><h1>Book a slot</h1>' +
+        '<iframe src="/innerform.html" width="400" height="200"></iframe>');
     pages['/innerform.html'] = Buffer.from(
         '<!doctype html><meta charset="utf-8"><title>Inner form</title><form>' + codes(['Delta', 'Epsilon', 'Zeta']) + '</form>');
     const server = createServer((req, res) => {
@@ -2381,21 +2385,44 @@ if (worker) {
             const [t] = await chrome.tabs.query({title});
             working(t.id, true);                       // as any fill leaves it while it runs
             await chrome.scripting.executeScript({target: {tabId: t.id, allFrames: true}, files});
-            const r = await chrome.tabs.sendMessage(t.id, {
-                kind: 'fill', settings: {locale: 'en-US', useAI: false, overwrite: true}
-            });
+            // The popup's path: through askPage, without send()'s finally to stop the icon.
+            const r = await self.askPage(t.id, {kind: 'fill', settings: {locale: 'en-US', useAI: false, overwrite: true}});
             // The done signal reaches the worker as a message; give it a moment to land.
             for (let i = 0; i < 40 && spinTimer; i++) await new Promise(x => setTimeout(x, 50));
             return {count: r.count, spinning: !!spinTimer, tab: spinTab};
         }, {files: INJECTED, title: 'Nothing to fill'});
+        await tab.waitForFunction(() => /No fillable/.test((document.getElementById('fillsmith-hud') || {}).textContent || ''),
+            null, {timeout: 3000}).catch(() => {});
+        res.card = await tab.evaluate(() => ((document.getElementById('fillsmith-hud') || {}).textContent || '').trim());
         await tab.close();
         return res;
     })().catch(e => ({error: e.message})), 30000, 'nothing-to-fill');
 
+    /* Whether a page had anything to fill is a question about every frame, and
+     * only the worker hears them all: the top page of an embedded booking form
+     * has no fields of its own, and it said "No fillable fields found" over the
+     * frame's "Filled 3 fields". */
+    const onlyFramed = await withTimeout((async () => {
+        const tab = await ctx.newPage();
+        await tab.goto(`${origin}/onlyframed.html`);
+        await tab.waitForTimeout(300);
+        const r = await worker.evaluate(async () => {
+            const t = (await chrome.tabs.query({})).find(x => x.url && x.url.includes('onlyframed.html'));
+            return self.askPage(t.id, {kind: 'fill', settings: {seed: 'FRAMED1', locale: 'en-US', useAI: false, overwrite: true}});
+        });
+        await tab.waitForTimeout(600);
+        const card = await tab.evaluate(() => ((document.getElementById('fillsmith-hud') || {}).textContent || '').trim());
+        await tab.close();
+        return {count: r && r.count, card};
+    })().catch(e => ({error: e.message})), 30000, 'only-framed');
+    check('a page whose only form is in a frame does not say it has nothing to fill',
+        onlyFramed && !onlyFramed.error && onlyFramed.count >= 3 && !/No fillable/.test(onlyFramed.card),
+        onlyFramed.error || JSON.stringify(onlyFramed));
+
 
     check('a page with nothing to fill still reports a finished fill',
-        nothing && !nothing.error && nothing.count === 0,
-        nothing && nothing.error ? nothing.error : `count=${nothing && nothing.count}`);
+        nothing && !nothing.error && nothing.count === 0 && /No fillable fields/.test(nothing.card || ''),
+        nothing && nothing.error ? nothing.error : `count=${nothing && nothing.count}, card="${nothing && nothing.card}"`);
     check('and the toolbar icon stops animating',
         nothing && !nothing.error && nothing.spinning === false && nothing.tab == null,
         nothing && !nothing.error ? `spinning=${nothing.spinning}, tab=${nothing.tab}` : '');
