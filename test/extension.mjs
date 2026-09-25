@@ -2779,6 +2779,7 @@ if (worker) {
             count: 1, filled: [{label: 'x', value: 'y', source: 'rule'}], phase: {total: 1}, persona: {seed: 'OLD'},
             widgets: i % 2 ? 1 : 4
         }));
+        older[1].at = Date.now() - 3 * 86400000;        // the oldest one kept is from another day
         const pop2 = await ctx.newPage();
         await pop2.goto(`chrome-extension://${id}/src/popup.html`);
         await pop2.waitForTimeout(500);
@@ -2809,6 +2810,7 @@ if (worker) {
             // The pin row itself does not change, so read the heading of the fill on show.
             const head = () => (document.querySelector('#debugBody .dbg-h') || {}).textContent || '';
             const shown = head();
+            const pinLabels = Array.from(pins).map(p => p.textContent.trim());
             const line = () => ((document.querySelector('#debugBody .dbg-kv div') || {}).textContent || '').trim();
             if (pins.length > 2) pins[pins.length - 2].click();
             await new Promise(r => setTimeout(r, 250));
@@ -2824,7 +2826,8 @@ if (worker) {
                 shown,
                 trail,
                 afterClick: head(),
-                counted
+                counted,
+                pinLabels
             };
         });
         await pop2.close();
@@ -2865,6 +2868,10 @@ if (worker) {
     check('and the Debug tab can be pointed at any of them',
         history.pins === 10 && history.shown === 'Last fill' && history.afterClick === 'Fill 1 of 10',
         `${history.pins} pin(s): "${history.shown}" → "${history.afterClick}"`);
+    check('and each pin says how long ago its fill was, in days once it is days',
+        history.pinLabels && history.pinLabels.every(l => /^\d+(s|m|h|d) ago$/.test(l)) &&
+        history.pinLabels[history.pinLabels.length - 1] === '3d ago',
+        JSON.stringify(history.pinLabels));
     check('and counts its widgets in the plural when there is more than one',
         history.counted && /· 4 widgets\b/.test(history.counted[0]) && /· 1 widget\b(?!s)/.test(history.counted[1]),
         JSON.stringify(history.counted));

@@ -362,13 +362,16 @@ function report(res) {
 }
 
 /* ------------------------------------------------------------ debug ---- */
-/* The pins exist so two fills can be compared, and ten of them reading "5h ago"
- * cannot be told apart at all. The time of day can. */
-const hhmm = (t) => new Date(t).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+/* A pin says how long ago, because the kept fills span days and a time of day
+ * alone put Monday's 13:33 beside today's. The exact moment is in its tooltip. */
+const when = (t) => new Date(t).toLocaleString([], {
+    weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+});
 
 const ago = (t) => {
     const s = Math.max(0, Math.round((Date.now() - t) / 1000));
-    return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : `${Math.round(s / 3600)}h ago`;
+    return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago`
+        : s < 86400 ? `${Math.round(s / 3600)}h ago` : `${Math.round(s / 86400)}d ago`;
 };
 
 function section(title, body) {
@@ -500,7 +503,7 @@ function drawDebug(box, d, history, at, log) {
     if (kept.length > 1) {
         out.push('<div class="dbg-pick">' + kept.map((h, n) =>
             `<button type="button" class="dbg-pin${n === here ? ' on' : ''}" data-fill="${n}" ` +
-            `title="${esc(h.title || h.url || '')}">${esc(hhmm(h.at))}</button>`).reverse().join('') + '</div>');
+            `title="${esc(when(h.at) + ' · ' + (h.title || h.url || ''))}">${esc(ago(h.at))}</button>`).reverse().join('') + '</div>');
     }
 
     /* What happened, then where and who. A zero is not news: "0 widgets · 0
