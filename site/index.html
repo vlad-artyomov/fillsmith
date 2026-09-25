@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Fillsmith — Free AI Form Filler &amp; Test Data Generator for Chrome</title>
+    <meta name="description"
+          content="One click fills any form with realistic test data, even custom dropdowns, date pickers and editors. AI built into Chrome: no API key, no account, no subscription.">
+    <meta property="og:title" content="Fillsmith — Free AI Form Filler & Test Data Generator">
+    <meta property="og:description"
+          content="One click fills any form with realistic test data, even custom dropdowns and date pickers. Free built-in AI: no API key, no account.">
+    <meta property="og:image" content="https://vlad-artyomov.github.io/fillsmith/img/1-filled-form.png">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="icon" href="img/icon32.png">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="nav">
+    <div class="wrap nav-in">
+        <a class="brand" href="#top"><img src="img/icon128.png" alt="" width="28" height="28">Fillsmith</a>
+        <nav>
+            <a href="#features">Features</a>
+            <a href="#demo">Live demo</a>
+            <a href="#faq">FAQ</a>
+            <a href="https://github.com/vlad-artyomov/fillsmith">GitHub</a>
+            <a class="btn primary small" href="https://github.com/vlad-artyomov/fillsmith/releases/latest">Get it
+                free</a>
+        </nav>
+    </div>
+</header>
+
+<main id="top">
+    <section class="hero">
+        <div class="wrap">
+            <p class="pill"><span class="dot"></span>Free · AI built into Chrome · No account</p>
+            <h1>Fill any form with realistic test data. <span class="accent">In one click.</span></h1>
+            <p class="sub">Even the custom dropdowns, date pickers and rich-text editors other form fillers can't touch
+                — with AI that runs on your own machine. <b>No API key, no account, no subscription.</b></p>
+            <div class="cta">
+                <a class="btn primary big" href="https://github.com/vlad-artyomov/fillsmith/releases/latest">Get
+                    Fillsmith free</a>
+                <a class="btn big" href="#demo">Try the live demo</a>
+            </div>
+            <p class="note">For Chrome 128+ · Chrome Web Store listing coming soon</p>
+            <div class="hero-shot">
+                <img src="img/demo.gif" width="1200" height="785"
+                     alt="Pressing Alt+Shift+F fills a release form: a name and a matching email, a country from the dropdown, a date from the calendar, a generated screenshot and rich-text notes">
+            </div>
+        </div>
+    </section>
+
+    <section class="libs">
+        <div class="wrap">
+            <p>Drives the components your app is built on</p>
+            <ul>
+                <li>PrimeVue</li>
+                <li>MUI</li>
+                <li>Ant Design</li>
+                <li>react-select</li>
+                <li>Radix</li>
+                <li>Headless UI</li>
+                <li>Choices.js</li>
+                <li>Select2</li>
+                <li>Tom Select</li>
+                <li>vue-multiselect</li>
+            </ul>
+            <p class="libs-more">…and any control that speaks ARIA, on localhost, staging or anywhere else.</p>
+        </div>
+    </section>
+
+    <section id="features">
+        <div class="wrap">
+            <p class="kicker">Why testers switch</p>
+            <h2>A filler that works the form like a person</h2>
+            <p class="lead">Most form fillers set a value and hope. Fillsmith opens, picks, clicks and types — then
+                reads every field back to check the page kept it.</p>
+            <div class="grid">
+                <article>
+                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 4l7.5 16 2.2-6.3L20 11.5z"/>
+                    </svg>
+                    <h3>Works where others stop</h3>
+                    <p>Opens the dropdown and picks a real option, waits for lists that load from the server, clicks the
+                        day in the calendar, pastes into rich-text editors.</p>
+                </article>
+                <article>
+                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="8" r="4"/>
+                        <path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>
+                    </svg>
+                    <h3>One believable person</h3>
+                    <p>The email matches the name, the postcode the city, the phone the country. Dates make sense
+                        together. IBANs, VAT numbers and test cards pass their checksums.</p>
+                </article>
+                <article>
+                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/>
+                        <path d="M8.5 12l2.5 2.5 4.5-5"/>
+                    </svg>
+                    <h3>Valid on the first submit</h3>
+                    <p>Respects min, max, maxlength and pattern. Dropdowns only get their own options. Required fields
+                        are never empty, and uploads get real generated files.</p>
+                </article>
+                <article>
+                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>
+                        <path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/>
+                    </svg>
+                    <h3>AI without the bill</h3>
+                    <p>Fields no rule knows go to Gemini Nano, the model built into Chrome. On your machine, no key, no
+                        per-token cost. The form fills at once; the AI improves it as it answers.</p>
+                </article>
+                <article>
+                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/>
+                        <path d="M18 3v4h-4M6 21v-4h4"/>
+                    </svg>
+                    <h3>Reproduce any bug</h3>
+                    <p>Pin a seed to get the same person again. See which rule answered each field and what the AI was
+                        asked, and save one report for the ticket.</p>
+                </article>
+                <article>
+                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="5" y="11" width="14" height="10" rx="2"/>
+                        <path d="M8 11V8a4 4 0 0 1 8 0v3"/>
+                    </svg>
+                    <h3>Private by design</h3>
+                    <p>No analytics, no tracking, no sign-up. Nothing leaves your browser unless you add your own
+                        Anthropic, OpenAI or Gemini key.</p>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <section class="rows band">
+        <div class="wrap">
+            <div class="row">
+                <div class="row-text">
+                    <p class="kicker">One click</p>
+                    <h2>Every field, and where its value came from</h2>
+                    <p>One press fills the whole page. The popup lists what each field got and why — a rule, the
+                        control's own type, one of its options, or the AI.</p>
+                    <ul class="ticks">
+                        <li>A card on the page says how many fields were filled and what was left</li>
+                        <li>Fields that appear mid-fill are filled too</li>
+                        <li>What a framework reverts is written again</li>
+                    </ul>
+                </div>
+                <figure class="row-shot"><img src="img/popup-fill.png" width="360" height="475" loading="lazy"
+                                              alt="The popup after a fill: eight fields, each with its value and a tag saying where it came from">
+                </figure>
+            </div>
+
+            <div class="row flip">
+                <div class="row-text">
+                    <p class="kicker">Reproducible</p>
+                    <h2>Reproduce any bug with the same data</h2>
+                    <p>Every fill comes from a seed. Pin one and the next fill is the same person, down to the
+                        date — what you want when you are chasing a bug rather than finding one.</p>
+                    <ul class="ticks">
+                        <li>The decision trail: which rule answered, what the AI was asked</li>
+                        <li>Where the time went, phase by phase</li>
+                        <li>The last ten fills in one report to attach to a ticket</li>
+                    </ul>
+                </div>
+                <figure class="row-shot fade"><img src="img/popup-debug.png" width="360" height="597" loading="lazy"
+                                                   alt="The Debug tab: the last fill, where the time went, what the model answered, and each field's decision">
+                </figure>
+            </div>
+
+            <div class="row">
+                <div class="row-text">
+                    <p class="kicker">On-device AI</p>
+                    <h2>AI built into Chrome. No key. No bill.</h2>
+                    <p>Fields no rule recognises go to Gemini Nano, which Chrome runs on your machine. The form never
+                        waits for it: rules fill everything at once, and the AI's answers replace what they improve.</p>
+                    <ul class="ticks">
+                        <li>No account, no API key, no per-token cost</li>
+                        <li>Your own Anthropic, OpenAI or Gemini key, only if you want one</li>
+                        <li>Or switch the AI off entirely</li>
+                    </ul>
+                </div>
+                <figure class="row-shot"><img src="img/popup-settings.png" width="360" height="573" loading="lazy"
+                                              alt="Settings: the model on by default, the email domain, and an optional API key">
+                </figure>
+            </div>
+        </div>
+    </section>
+
+    <section class="compare">
+        <div class="wrap narrow">
+            <p class="kicker">The difference</p>
+            <h2>What one click gets you</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th></th>
+                        <th class="us">Fillsmith</th>
+                        <th>Many form fillers</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <th>Custom dropdowns, date pickers, editors</th>
+                        <td class="us"><span class="yes"></span>Opened and picked like a person</td>
+                        <td><span class="no"></span>A value the widget ignores</td>
+                    </tr>
+                    <tr>
+                        <th>The data</th>
+                        <td class="us"><span class="yes"></span>One coherent person</td>
+                        <td><span class="no"></span>Random words per field</td>
+                    </tr>
+                    <tr>
+                        <th>Validation</th>
+                        <td class="us"><span class="yes"></span>Limits respected, checksums valid</td>
+                        <td><span class="no"></span>Rejected on submit</td>
+                    </tr>
+                    <tr>
+                        <th>Checking its work</th>
+                        <td class="us"><span class="yes"></span>Reads every field back</td>
+                        <td><span class="no"></span>Fire and forget</td>
+                    </tr>
+                    <tr>
+                        <th>AI</th>
+                        <td class="us"><span class="yes"></span>Built into Chrome, free</td>
+                        <td><span class="no"></span>None, or paid credits</td>
+                    </tr>
+                    <tr>
+                        <th>Price</th>
+                        <td class="us"><span class="yes"></span>Free, no account</td>
+                        <td><span class="no"></span>Often a subscription</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section id="demo" class="band">
+        <div class="wrap">
+            <p class="kicker">Live demo</p>
+            <h2>Try it right here</h2>
+            <ol class="steps">
+                <li><b>Install Fillsmith</b><span>Free, from the latest release</span></li>
+                <li><b>Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></b><span>Or click its icon, then <i>Fill this
+                    page</i></span></li>
+                <li><b>Watch the form fill</b><span>A dropdown, a calendar, an upload and an editor</span></li>
+            </ol>
+            <div class="browser">
+                <div class="browser-bar">
+                    <span class="lights"><i></i><i></i><i></i></span>
+                    <span class="url">New release request — Fillsmith demo</span>
+                    <a href="demo/" target="_blank" rel="noopener" title="Open the demo form in its own tab">Open ↗</a>
+                </div>
+                <iframe src="demo/" title="Demo form: a new release request" loading="lazy"></iframe>
+            </div>
+            <p class="demo-phone">The live demo runs in Chrome on a computer, where Fillsmith is installed.
+                <a href="#top">Watch it fill a form</a> instead.</p>
+        </div>
+    </section>
+
+    <section id="faq">
+        <div class="wrap narrow">
+            <p class="kicker">FAQ</p>
+            <h2>Questions</h2>
+            <details>
+                <summary>Is it really free?</summary>
+                <p>Yes. There is no subscription, no Pro plan and no credits — one version, with everything in it. The
+                    code is open source under the MIT licence.</p>
+            </details>
+            <details>
+                <summary>Do I need an API key for the AI?</summary>
+                <p>No. Fillsmith uses Gemini Nano, the model built into Chrome, which runs on your machine. It needs
+                    Chrome 138 or later and a one-time download by Chrome of about 2 GB on supported hardware. Without
+                    it, the rules still fill every field they recognise. You can add your own Anthropic, OpenAI or
+                    Gemini key if you prefer a hosted model.</p>
+            </details>
+            <details>
+                <summary>What does it send, and where?</summary>
+                <p>By default, nothing — the rules and the built-in model run in your browser. Only if you add your own
+                    API key does anything go out: for fields no rule could answer, their labels, limits and options, the
+                    form's title and a few short texts from a table on the page, to the provider you chose. There is no
+                    analytics and no telemetry. <a
+                            href="https://github.com/vlad-artyomov/fillsmith/blob/main/PRIVACY.md">Read the privacy
+                        policy</a>.</p>
+            </details>
+            <details>
+                <summary>Will it work on my app?</summary>
+                <p>On any page you can open in Chrome: localhost, staging, production. It drives native controls and the
+                    widgets of the common component libraries, and falls back to ARIA for the rest. If a field comes out
+                    wrong, <a href="https://github.com/vlad-artyomov/fillsmith/issues">report it</a> — each fix ships with
+                    a test.</p>
+            </details>
+            <details>
+                <summary>Can I get the same data twice?</summary>
+                <p>Yes. Pin a seed in Settings and every fill produces the same person — what you want when you are
+                    reproducing a bug rather than finding one.</p>
+            </details>
+        </div>
+    </section>
+
+    <section class="final">
+        <div class="wrap">
+            <h2>Stop typing test data.</h2>
+            <p>One click, every field, one believable person. Free.</p>
+            <a class="btn light big" href="https://github.com/vlad-artyomov/fillsmith/releases/latest">Get Fillsmith
+                free</a>
+        </div>
+    </section>
+</main>
+
+<footer class="foot">
+    <div class="wrap foot-in">
+        <a class="brand small" href="#top"><img src="img/icon32.png" alt="" width="20" height="20">Fillsmith</a>
+        <span>
+            <a href="https://github.com/vlad-artyomov/fillsmith">GitHub</a>
+            <a href="https://github.com/vlad-artyomov/fillsmith/blob/main/PRIVACY.md">Privacy</a>
+            <a href="https://github.com/vlad-artyomov/fillsmith/issues">Report an issue</a>
+            <span class="dim">MIT licence</span>
+        </span>
+    </div>
+</footer>
+<script>
+    /* The demo is one origin with this page, so its frame can take the form's own
+     * height — and grow with it when the fill adds a preview and longer notes. */
+    const frame = document.querySelector('.browser iframe');
+    frame.addEventListener('load', () => {
+        const doc = frame.contentDocument;
+        if (!doc) return;
+        // The page, not the document: a document is never shorter than the frame it is in.
+        const page = doc.querySelector('.page') || doc.body;
+        const fit = () => { frame.style.height = Math.ceil(page.getBoundingClientRect().bottom + 40) + 'px'; };
+        new ResizeObserver(fit).observe(page);
+        fit();
+    });
+</script>
+</body>
+</html>

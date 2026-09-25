@@ -1,4 +1,4 @@
-/* Render the store screenshots and the README picture, reproducibly.
+/* Render the store screenshots and the site's popup pictures, reproducibly.
  *
  * The Chrome Web Store takes 1280×800 exactly, and a picture taken by hand on a
  * Retina screen is neither that size nor the same twice. This loads the real
@@ -20,7 +20,7 @@
  *   the window it is measured in, and `fullPage` hands back the empty half too:
  *   on a white card that reads as a screenshot of something that failed to load.
  *
- *   node tools/screenshots.mjs             # docs/store/*.png and docs/filled-form.png
+ *   node tools/screenshots.mjs             # docs/store/*.png and site/img/popup-*.png
  *   node tools/screenshots.mjs --dark      # the popup frames in the dark theme
  */
 import {chromium} from 'playwright';
@@ -122,7 +122,7 @@ await worker.evaluate(() => {
     nanoSession = null;
 });
 
-// 1. The form, filled, with the card still up: the README picture and the first frame.
+// 1. The form, filled, with the card still up: the first frame.
 const page = await ctx.newPage();
 await page.goto(`${origin}/form.html`);
 await page.waitForTimeout(500);
@@ -147,8 +147,6 @@ await page.waitForFunction(() => document.getElementById('ticket').value === 'RE
     .catch(() => console.log('the model answer did not land; the frame shows what did'));
 await page.waitForTimeout(350);
 const formPng = await page.screenshot({type: 'png'});
-writeFileSync(join(root, 'docs', 'filled-form.png'), await reduce(formPng, W, H));
-console.log('docs/filled-form.png');
 
 // 2–4. The popup's panes, magnified and staged beside one line about each.
 // The Debug tab is opt-in and hidden until it is asked for, here as anywhere.
@@ -157,6 +155,16 @@ const pop = await ctx.newPage();
 await pop.setViewportSize({width: 360, height: 900});
 await pop.goto(`chrome-extension://${id}/src/popup.html`);
 await pop.waitForTimeout(700);
+
+/* The site shows the panes at their own size beside text it writes itself: a
+ * store frame, text and all, shrunk to a third of a page is unreadable. */
+const SITE_IMG = join(root, 'site', 'img');
+mkdirSync(SITE_IMG, {recursive: true});
+const keep = (name, shot) => {
+    writeFileSync(join(SITE_IMG, name), shot.png);
+    console.log(`site/img/${name}`);
+    return shot;
+};
 
 const pane = async () => {
     const tall = await pop.evaluate(() => Math.ceil(document.body.getBoundingClientRect().height));
@@ -215,21 +223,21 @@ const frame = async (name, caption, shot) => {
 await frame('2-one-press.png', {
     title: 'One believable person, not random noise.',
     text: 'The email follows the name, the postcode follows the city, the phone follows the country — and every field shows where its value came from.'
-}, await pane());
+}, keep('popup-fill.png', await pane()));
 
 await pop.click('#tabDebug');
 await pop.waitForTimeout(400);
 await frame('3-debug.png', {
     title: 'Reproduce any bug with the same data.',
     text: 'Pin a seed to get the same person again. See which rule answered, what the AI was asked, and save one report for the ticket.'
-}, await pane());
+}, keep('popup-debug.png', await pane()));
 
 await pop.click('#tabSettings');
 await pop.waitForTimeout(300);
 await frame('4-settings.png', {
     title: 'AI built into Chrome.<br>No key. No bill.',
     text: 'Gemini Nano runs on your machine and answers the fields no rule knows. No account, no subscription — your own API key only if you want one.'
-}, await pane());
+}, keep('popup-settings.png', await pane()));
 
 /* The promo tile, drawn from the same mark the toolbar animates rather than
  * beside it: a second copy of a silhouette is a second thing to keep in step. */

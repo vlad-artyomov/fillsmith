@@ -82,7 +82,10 @@ check('the setup check covers both halves of the configured backend',
 check('the popup never hands the API key to the page', /apiKey, \.\.\.forPage/.test(popupSrc));
 // The report is a page with a plain download link; nothing needs the downloads permission any more.
 check('no permission is asked for that the report page made unnecessary', !(mf.permissions || []).includes('downloads'));
-check('the manifest names a homepage', /^https:\/\/github\.com\//.test(mf.homepage_url || ''));
+// The homepage is the site this repository publishes, so its page has to be here.
+check('the manifest names a homepage, and the site it names is in the tree',
+    mf.homepage_url === 'https://vlad-artyomov.github.io/fillsmith/' && existsSync(join(root, 'site/index.html')),
+    mf.homepage_url);
 check('the focused-field shortcut is declared and handled',
     !!(mf.commands['fill-field'] && mf.commands['fill-field'].suggested_key) && /command === 'fill-field'/.test(bgSrc)
     && mf.version === JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version,
@@ -243,7 +246,11 @@ if (worker) {
     if (welcome.length) {
         const keys = await welcome[0].evaluate(() => [...document.querySelectorAll('kbd')].map(k => k.textContent));
         check('and it shows the shortcuts as Chrome bound them',
-            keys.length === 4 && keys.every(k => /Shift|not set|⇧/.test(k)), keys.join(' · '));
+            keys.length >= 4 && keys.every(k => /Shift|not set|⇧/.test(k)), keys.join(' · '));
+        // The extension cannot script its own pages, so the place to try it is a real one.
+        const demo = await welcome[0].evaluate(() => (document.getElementById('try-demo') || {}).href || '');
+        check('and it opens the demo form on the site to try it on',
+            demo === 'https://vlad-artyomov.github.io/fillsmith/demo/', demo);
         for (const w of welcome) await w.close();
     }
 

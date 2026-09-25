@@ -64,6 +64,12 @@ The built-in AI needs Chrome 138 or later and a one-time model download by Chrom
 Open source (MIT): https://github.com/vlad-artyomov/fillsmith
 ```
 
+## URLs
+
+- **Homepage**: https://vlad-artyomov.github.io/fillsmith/ — the landing page, with the demo form to try it on
+- **Support**: https://github.com/vlad-artyomov/fillsmith/issues
+- **Privacy policy**: https://github.com/vlad-artyomov/fillsmith/blob/main/PRIVACY.md
+
 ## Single purpose
 
 Fillsmith fills forms on the current page with generated test data for QA and development, and reports what it

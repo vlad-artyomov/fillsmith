@@ -16,7 +16,8 @@
     "package": "node tools/package.mjs",
     "release": "node tools/release.mjs",
     "icons": "node tools/icons.mjs",
-    "screenshots": "node tools/screenshots.mjs"
+    "screenshots": "node tools/screenshots.mjs",
+    "site": "node tools/site.mjs"
   },
   "devDependencies": {
     "@faker-js/faker": "^10.6.0",

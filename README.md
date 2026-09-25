@@ -6,6 +6,8 @@
 
 For QA engineers who fill the same create-form forty times a day.
 
+**[Website and live demo →](https://vlad-artyomov.github.io/fillsmith/)**
+
 [![tests](https://github.com/vlad-artyomov/fillsmith/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/vlad-artyomov/fillsmith/actions/workflows/test.yml)
 [![latest release](https://img.shields.io/github/v/release/vlad-artyomov/fillsmith?color=1f6f4f&label=release)](https://github.com/vlad-artyomov/fillsmith/releases/latest)
 [![Chrome Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-1f6f4f)](manifest.json)
@@ -224,6 +226,7 @@ src/
   popup.*        the toolbar popup
   report.*       every kept fill, on a page you can read, copy or save
   welcome.html   the one screen a fresh install opens
+site/            the landing page; the pages workflow adds test/demo-form.html as its demo
 ```
 
 ```bash
@@ -231,7 +234,8 @@ npm install                 # Playwright and faker, dev only
 npm test                    # all four suites, in parallel
 npm run test:widgets        # just the widget layer (fast)
 npm run fixture             # serve test/ at :8099: demo-form.html by hand, primevue-form.html for the hard cases, libraries-form.html for one select per library
-npm run screenshots         # the store pictures and the README's, at the size the store wants
+npm run screenshots         # the store pictures and the site's popup pictures
+npm run site                # build the landing page and its demo, and serve it at :8100
 npm run typecheck           # the JSDoc and types/, read over the logic files — emits nothing
 npm run audit               # fill the fixture with the real extension and judge the page
 npm run audit -- --url URL  # the same against any page you can reach

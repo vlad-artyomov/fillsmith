@@ -26,6 +26,26 @@
             margin: 0 0 28px;
         }
 
+        /* The first thing to do is the thing it is for, on a form made to show it. */
+        .try {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin: -8px 0 28px;
+        }
+
+        .try .btn {
+            font-size: 14px;
+            padding: 9px 16px;
+            text-decoration: none;
+        }
+
+        .try span {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
         ol.steps {
             list-style: none;
             counter-reset: step;
@@ -95,20 +115,24 @@
 <p class="lead">Fillsmith fills the form on the page you are looking at with data that belongs to one invented person,
     reads every control back, and says what it did.</p>
 
+<p class="try"><a id="try-demo" class="btn primary" href="https://vlad-artyomov.github.io/fillsmith/demo/" target="_blank"
+                  rel="noopener">Try it on the demo form</a>
+    <span>Opens in a new tab: press <kbd data-cmd="fill-form">Alt+Shift+F</kbd> there.</span></p>
+
 <ol class="steps">
     <li>
         <div><b>Open a page with a
             form</b><span>Any page: a staging admin, a sign-up form, a checkout in test mode.</span></div>
     </li>
     <li>
-        <div><b>Press <kbd id="k-fill">Alt+Shift+F</kbd>, or the Fillsmith icon, then <em>Fill this page</em></b>
+        <div><b>Press <kbd data-cmd="fill-form">Alt+Shift+F</kbd>, or the Fillsmith icon, then <em>Fill this page</em></b>
             <span>Pin the icon in the toolbar puzzle menu if you want it in reach. A card in the corner of the page says
                 how many fields were filled and what was left.</span></div>
     </li>
     <li>
-        <div><b>Press <kbd id="k-refill">Alt+Shift+R</kbd> for a different person, <kbd id="k-clear">Alt+Shift+C</kbd>
+        <div><b>Press <kbd data-cmd="refill-form">Alt+Shift+R</kbd> for a different person, <kbd data-cmd="clear-form">Alt+Shift+C</kbd>
             to clear</b>
-            <span>Right-click a field for <em>Fill just this field</em>, or press <kbd id="k-field">Alt+Shift+D</kbd> with the
+            <span>Right-click a field for <em>Fill just this field</em>, or press <kbd data-cmd="fill-field">Alt+Shift+D</kbd> with the
                 cursor in it. Settings has the data language and, when a bug needs the same data twice, a way to repeat
                 a fill.</span></div>
     </li>
