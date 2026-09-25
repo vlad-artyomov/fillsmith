@@ -1,4 +1,4 @@
-name: A widget library FormForge does not drive
+name: A widget library Fillsmith does not drive
 description: A component library whose dropdowns, pickers or editors are skipped or filled blind.
 labels: [ adapter ]
 body:
@@ -38,4 +38,4 @@ body:
     id: dryrun
     attributes:
       label: What Dry run says about it
-      description: Popup → Dry run lists what FormForge saw and which adapter claimed each control.
+      description: Popup → Dry run lists what Fillsmith saw and which adapter claimed each control.

@@ -1,4 +1,4 @@
-/* FormForge — service worker.
+/* Fillsmith — service worker.
  *
  * Owns two things: the list of files that make up the filler, and the model.
  * Chrome's on-device Gemini Nano is tried first (no network, no key), then an
@@ -723,8 +723,8 @@ async function nanoCheck(onStage = (/** @type {string} */ _stage) => {
         out.inputUsage = session.contextUsage ?? session.inputUsage;
         out.inputQuota = session.contextWindow ?? session.inputQuota;
 
-        const probePrompt = buildUserPrompt(PROBE_PERSONA, 'FormForge self-check', PROBE_FIELD,
-            {dialog: 'FormForge self-check'}, []);
+        const probePrompt = buildUserPrompt(PROBE_PERSONA, 'Fillsmith self-check', PROBE_FIELD,
+            {dialog: 'Fillsmith self-check'}, []);
         const {s: turn, temporary} = await statelessSession(session);
         onStage('waiting for the on-device reply');
         const t0 = Date.now();
@@ -881,10 +881,10 @@ async function remember(r) {
  * nothing visible for a second. Draws the same element the real indicator
  * uses, which then adopts it. */
 function bootIndicator() {
-    if (document.getElementById('formforge-hud')) return;
+    if (document.getElementById('fillsmith-hud')) return;
     const box = document.createElement('div');
-    box.id = 'formforge-hud';
-    box.setAttribute('data-formforge-boot', '');
+    box.id = 'fillsmith-hud';
+    box.setAttribute('data-fillsmith-boot', '');
     box.setAttribute('role', 'status');
     const dark = matchMedia('(prefers-color-scheme: dark)').matches;
     box.style.cssText = [
@@ -899,15 +899,15 @@ function bootIndicator() {
     ].join(';');
     const spin = document.createElement('span');
     spin.style.cssText = `flex:none;width:11px;height:11px;border-radius:50%;border:2px solid ` +
-        `${dark ? '#35a377' : '#1f6f4f'};border-top-color:transparent;animation:formforge-spin .7s linear infinite`;
+        `${dark ? '#35a377' : '#1f6f4f'};border-top-color:transparent;animation:fillsmith-spin .7s linear infinite`;
     const label = document.createElement('span');
     label.style.cssText = 'font-weight:600';
-    label.textContent = 'Starting FormForge';
+    label.textContent = 'Starting Fillsmith';
     box.append(spin, label);
-    if (!document.getElementById('formforge-spin-style')) {
+    if (!document.getElementById('fillsmith-spin-style')) {
         const st = document.createElement('style');
-        st.id = 'formforge-spin-style';
-        st.textContent = '@keyframes formforge-spin{to{transform:rotate(360deg)}}';
+        st.id = 'fillsmith-spin-style';
+        st.textContent = '@keyframes fillsmith-spin{to{transform:rotate(360deg)}}';
         document.documentElement.appendChild(st);
     }
     document.documentElement.appendChild(box);
@@ -1066,7 +1066,7 @@ const MENUS = [
     },
     // `editable` only: a Select or a switch is a div and is filled with the whole form.
     {id: 'ff-fill-field', title: 'Fill just this field', contexts: ['editable']},
-    {id: 'ff-clear-page', title: 'Clear what FormForge filled', contexts: ['page', 'editable']}
+    {id: 'ff-clear-page', title: 'Clear what Fillsmith filled', contexts: ['page', 'editable']}
 ];
 
 function installMenus() {
@@ -1168,7 +1168,7 @@ async function setupCheck() {
         else if (!PROVIDERS[cfg.provider]) out.remote = {ok: false, error: `unknown provider "${cfg.provider}"`};
         else {
             await stage(`asking ${cfg.provider}`);
-            const prompt = buildUserPrompt(PROBE_PERSONA, 'FormForge self-check', PROBE_FIELD, {dialog: 'FormForge self-check'}, []);
+            const prompt = buildUserPrompt(PROBE_PERSONA, 'Fillsmith self-check', PROBE_FIELD, {dialog: 'Fillsmith self-check'}, []);
             const r = await keptAlive(remoteCall(cfg, PROBE_FIELD, prompt));
             const value = r.parsed['0'];
             out.model = r.model;

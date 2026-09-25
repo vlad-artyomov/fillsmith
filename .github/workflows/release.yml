@@ -72,6 +72,6 @@ jobs:
               echo "**Full changelog**: https://github.com/${{ github.repository }}/compare/$prev...$tag"
             fi
           } > release-notes.md
-          gh release create "$tag" "formforge-$version.zip" \
-            --title "FormForge $version" \
+          gh release create "$tag" "fillsmith-$version.zip" \
+            --title "Fillsmith $version" \
             --notes-file release-notes.md

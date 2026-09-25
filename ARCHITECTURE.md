@@ -1,6 +1,6 @@
 # Architecture
 
-FormForge is a Chrome MV3 extension with no build step: plain ES2020 scripts, loaded in order, each handing its public
+Fillsmith is a Chrome MV3 extension with no build step: plain ES2020 scripts, loaded in order, each handing its public
 surface to `globalThis`. This document is the shape of the thing and the rules that shaped it. README.md is what it does
 for a user.
 
@@ -95,7 +95,7 @@ what was clicked.
 
 ## Telling the user
 
-`#formforge-hud` on the page shows the stage, the progress and the result in one element, and relays each stage to the
+`#fillsmith-hud` on the page shows the stage, the progress and the result in one element, and relays each stage to the
 popup through `fill-progress`; the toolbar icon animates off the same signal. The result names what did not work. The
 whole trail lives in `chrome.storage.local`, written **by the worker** in `remember()` after `askPage` has added the
 frames up — the last ten fills in full (`fillHistory`) and the last hundred in outline (`fillLog`). "It worked a
@@ -139,7 +139,7 @@ built and driven against a page with a form, and a page whose form is partly ins
 - `chrome.scripting.executeScript` fails outright with *"Cannot access contents of the page. Extension manifest must
   request permission to access the respective host"* on any path that did not start with a user gesture Chrome
   itself counts. The three real entry points do; **nothing automated does**, so the extension suite and
-  `tools/audit.mjs` — the two things that judge FormForge by the page — could no longer drive a fill at all.
+  `tools/audit.mjs` — the two things that judge Fillsmith by the page — could no longer drive a fill at all.
 - `chrome.tabs.query` stops reporting `url` and `title`, which is how the suites and the audit find the tab.
 - A cross-origin frame needs the optional grant anyway, and asking for it opens a dialog no test can answer. An
   embedded payment or booking form is exactly the case a tester needs filled.
@@ -201,7 +201,7 @@ Each of these was a bug on a real form and has a regression check.
 - A day grid matches twice over — once as the cell, once as the day inside it — and the library binds its click to the
   inner one. A pool holding both filled about half the date fields, differently on every seed.
 - A dropdown is opened once per fill. Remember what was committed and restore that.
-- `data-formforge-opened` means "ours, and possibly still up", so it is cleared the moment the panel closes — by
+- `data-fillsmith-opened` means "ours, and possibly still up", so it is cleared the moment the panel closes — by
   whatever closes it. Only `closeOverlay` was taking it off, so a panel that outlived it and was shut by the
   end-of-fill sweep kept the mark for the life of the page, and the next scan read the fields under it as a popup's
   own furniture and skipped them. Both readers are misled by a stale one, so a fill clears them at both ends.
@@ -290,7 +290,7 @@ Each of these was a bug on a real form and has a regression check.
   miss is that a library marks its wrapper, not the surface inside it, so the branch for a contenteditable never
   saw them.
 - The name of one of our files carries no word boundary. A tile renders it against its neighbours with nothing
-  between them, `PDFformforge-a1.pdfHochgeladen`, and a `\b` on either side sits between two letters. Two PDFs
+  between them, `PDFfillsmith-a1.pdfHochgeladen`, and a `\b` on either side sits between two letters. Two PDFs
   survived every Clear for that reason while two images went; the prefix is ours and needs no fence.
 - Take attachments off one at a time, asking the page again each time. Removing one re-renders the list, so every
   other button in a list taken beforehand is a node that is no longer on the page: pressed, it does nothing, and
@@ -516,7 +516,7 @@ Each of these was a bug on a real form and has a regression check.
 
 **Showing the work**
 
-- Nothing FormForge writes goes to the console: a content-script warning is a red *Errors* badge on the extension. Notes
+- Nothing Fillsmith writes goes to the console: a content-script warning is a red *Errors* badge on the extension. Notes
   go to the Debug tab.
 - The indicator's stylesheet starts with `all: initial !important`; every rule in it is important too, run-time values
   travel in custom properties, hiding is a class.

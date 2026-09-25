@@ -150,7 +150,7 @@ if (worker) {
     /* A form under a policy that forbids everything the indicator needs — a
      * stylesheet, an animation, a script. Applications behind a login are
      * exactly where such a header is set. Its own markup carries nothing inline,
-     * so any violation reported on this page is one FormForge caused. */
+     * so any violation reported on this page is one Fillsmith caused. */
     const STRICT_CSP = "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'";
     pages['/csp.html'] = Buffer.from(
         '<!doctype html><meta charset="utf-8"><title>Strict policy</title><form>' +
@@ -279,12 +279,12 @@ if (worker) {
     /* The toast is a confirmation, not a panel to dismiss: it appears, and then
      * it goes away on its own. Both halves matter — the old one sat over the
      * form for nine seconds, which is what made it annoying. */
-    const toast = await page.locator('#formforge-hud').count();
+    const toast = await page.locator('#fillsmith-hud').count();
     check('on-page toast rendered', toast === 1);
-    const toastText = toast ? await page.locator('#formforge-hud').innerText() : '';
+    const toastText = toast ? await page.locator('#fillsmith-hud').innerText() : '';
     check('toast says what happened', /\d+\s+fields?/i.test(toastText), toastText.split('\n')[0] || '');
     await page.waitForTimeout(4200);
-    check('toast leaves by itself', (await page.locator('#formforge-hud').count()) === 0);
+    check('toast leaves by itself', (await page.locator('#fillsmith-hud').count()) === 0);
 
     /* The model is an enhancement, never a dependency. Creating an on-device
      * session takes seconds the first time even when the model is downloaded, and
@@ -369,7 +369,7 @@ if (worker) {
         };
     });
     check('the popup has a language, a title and a live region for the result',
-        access.lang === 'en' && access.title === 'FormForge' && access.live === 'polite',
+        access.lang === 'en' && access.title === 'Fillsmith' && access.live === 'polite',
         JSON.stringify({lang: access.lang, title: access.title, live: access.live}));
     check('the tablist is one tab stop and the arrow keys move within it',
         access.stops.filter(t => t === 0).length === 1 && access.afterArrow === 'tabSettings' && access.selectedPane,
@@ -758,7 +758,7 @@ if (worker) {
         // Zero it after injecting, so the count is this fill and nothing before it.
         await chrome.scripting.executeScript({
             target: {tabId: tab.id}, func: () => {
-                globalThis.__formforgeRuns = 0;
+                globalThis.__fillsmithRuns = 0;
             }
         });
         await chrome.tabs.sendMessage(tab.id, {
@@ -768,7 +768,7 @@ if (worker) {
         // executeScript runs in the same isolated world the filler lives in.
         const [{result}] = await chrome.scripting.executeScript({
             target: {tabId: tab.id},
-            func: () => globalThis.__formforgeRuns || 0
+            func: () => globalThis.__fillsmithRuns || 0
         });
         return result;
     }, INJECTED).catch(e => ({error: e.message})), 25000, 'double');
@@ -910,7 +910,7 @@ if (worker) {
     step('letting a build the fill gave up on finish anyway');
     const survived = await withTimeout(worker.evaluate(async () => {
         const ask = (sessionWaitMs) => generate({
-            persona: PROBE_PERSONA, pageTitle: 'FormForge self-check', fields: PROBE_FIELD,
+            persona: PROBE_PERSONA, pageTitle: 'Fillsmith self-check', fields: PROBE_FIELD,
             context: {}, examples: [], sessionWaitMs, budgetMs: 4000
         }, null);
         const real = self.LanguageModel;
@@ -1131,11 +1131,11 @@ if (worker) {
         const ms = Date.now() - t0;
         const read = async () => (await chrome.scripting.executeScript({
             target: {tabId: tab.id}, func: () => {
-                const b = document.getElementById('formforge-hud');
+                const b = document.getElementById('fillsmith-hud');
                 return {
-                    boxes: document.querySelectorAll('#formforge-hud').length,
+                    boxes: document.querySelectorAll('#fillsmith-hud').length,
                     text: b ? b.innerText.replace(/\s+/g, ' ').trim() : null,
-                    isStub: !!(b && b.hasAttribute('data-formforge-boot'))
+                    isStub: !!(b && b.hasAttribute('data-fillsmith-boot'))
                 };
             }
         }))[0].result;
@@ -1366,7 +1366,7 @@ if (worker) {
          * that is only being loaded reads as a model thinking very hard. */
         const readCard = async () => (await chrome.scripting.executeScript({
             target: {tabId: tab.id}, func: () => {
-                const hud = document.getElementById('formforge-hud');
+                const hud = document.getElementById('fillsmith-hud');
                 if (!hud) return {};
                 return {
                     title: (hud.querySelector('.ff-title') || {}).textContent || '',
@@ -1615,7 +1615,7 @@ if (worker) {
             for (let i = 0; i < 25; i++) {
                 const c = (await chrome.scripting.executeScript({
                     target: {tabId: tab.id}, func: () => {
-                        const h = document.getElementById('formforge-hud');
+                        const h = document.getElementById('fillsmith-hud');
                         return h ? {
                             title: (h.querySelector('.ff-title') || {}).textContent || '',
                             count: (h.querySelector('.ff-count') || {}).textContent || '',
@@ -2013,7 +2013,7 @@ if (worker) {
         spin && spin.error ? spin.error : `${spin.distinct} distinct of ${spin.frames}`);
     /* The motion has to survive being sixteen pixels wide. A spinner replacing
      * the icon was tried first: the arc was invisible for most of its cycle, so
-     * the icon appeared to blink out, and nothing on the toolbar said FormForge
+     * the icon appeared to blink out, and nothing on the toolbar said Fillsmith
      * while it ran. The silhouette stays; the light moves. */
     check('and light that visibly crosses the mark',
         spin && !spin.error && spin.maxInk - spin.minInk > 40,
@@ -2101,7 +2101,7 @@ if (worker) {
         };
     }).catch(e => ({error: e.message})), 15000, 'restore');
 
-    check('the icon FormForge restores to is one Chrome accepts',
+    check('the icon Fillsmith restores to is one Chrome accepts',
         restore && restore.real === 'ok', (restore && (restore.real || restore.error)) || '');
     /* Kept as checks rather than comments: if a future Chrome starts accepting
      * either of these, the workaround above can go — and this will say so. */
@@ -2132,11 +2132,11 @@ if (worker) {
         anyEntry && !anyEntry.error && anyEntry.before === false,
         (anyEntry && anyEntry.error) || 'listener present');
 
-    /* Nothing FormForge writes should land in Chrome's own error list for the
+    /* Nothing Fillsmith writes should land in Chrome's own error list for the
      * extension. A `console.warn` from a content script puts a red Errors button
      * on the card in chrome://extensions, where a tester finds it and reasonably
      * concludes the extension is broken — and most of what was written there was
-     * not a fault in FormForge at all: a panel an application will not close, a
+     * not a fault in Fillsmith at all: a panel an application will not close, a
      * model this machine does not have. Those are notes about the page and they
      * go in the Debug tab. */
     step('keeping the extension\'s own error list clean');
@@ -2190,7 +2190,7 @@ if (worker) {
             });
         }, {files: INJECTED, url: cspUrl});
         const hud = await tab.evaluate(() => {
-            const el = document.getElementById('formforge-hud');
+            const el = document.getElementById('fillsmith-hud');
             const cs = el && getComputedStyle(el);
             return {up: !!el, position: cs && cs.position, z: cs && cs.zIndex};
         });
@@ -2668,7 +2668,7 @@ if (worker) {
             target: {tabId: tab.id},
             func: () => {
                 const all = [...document.querySelectorAll('input')];
-                const hud = document.getElementById('formforge-hud');
+                const hud = document.getElementById('fillsmith-hud');
                 return {
                     empty: all.filter(i => !i.value).length, total: all.length,
                     fromModel: all.filter(i => /^Vom Modell/.test(i.value)).length,
@@ -2839,7 +2839,7 @@ if (worker) {
         await rep.waitForTimeout(600);
         const report = await rep.evaluate(async () => {
             const got = await new Promise(r => chrome.storage.local.get({fillHistory: [], fillLog: []}, r));
-            const text = globalThis.FormForgeReport.text(got.fillHistory, got.fillLog, {
+            const text = globalThis.FillsmithReport.text(got.fillHistory, got.fillLog, {
                 version: 't',
                 ua: 't',
                 locale: 't',

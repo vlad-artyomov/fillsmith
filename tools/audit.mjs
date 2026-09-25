@@ -1,4 +1,4 @@
-/* FormForge — self-audit.
+/* Fillsmith — self-audit.
  *
  * Loads the real unpacked extension into Chromium, fills a page through the
  * same path the shortcuts use, and judges the result the way a person would:
@@ -118,14 +118,14 @@ worker.on('console', m => {
     if (m.type() === 'error') swErrors.push(m.text());
 });
 
-/* An application's own console noise is not a finding about FormForge. Errors
+/* An application's own console noise is not a finding about Fillsmith. Errors
  * are collected with where they came from, and only the ones raised by our own
  * code count against us; the rest are reported so they are not mistaken for it. */
 const page = await ctx.newPage();
 const pageErrors = [];
 const theirErrors = [];
 const fileOf = (m) => (m.location && m.location().url) || '';
-const fromUs = (text, where) => /formforge/i.test(where) || /formforge/i.test(text);
+const fromUs = (text, where) => /fillsmith/i.test(where) || /fillsmith/i.test(text);
 page.on('pageerror', e => (fromUs(String(e.stack || e.message), String(e.stack || ''))
     ? pageErrors : theirErrors).push(String(e.message)));
 page.on('console', m => {
@@ -140,7 +140,7 @@ await page.waitForFunction(
     null, {timeout: 20000}).catch(() => console.log('WARN  no form controls appeared within 20s'));
 await page.waitForTimeout(400);
 
-console.log(`\nFormForge audit — ${target}\n`);
+console.log(`\nFillsmith audit — ${target}\n`);
 
 // ------------------------------------------------ what the indicator does --
 // Sampled while the fill runs: everything worth knowing about the indicator is only true in motion.
@@ -152,10 +152,10 @@ await page.evaluate(() => {
         + '.ant-select-dropdown,.MuiAutocomplete-popper,[data-pc-section="overlay"]')].filter(vis0);
     window.__ffWatch = {widths: [], stages: [], animations: new Set(), boxes: 0};
     const tick = () => {
-        const box = document.getElementById('formforge-hud');
+        const box = document.getElementById('fillsmith-hud');
         if (!box) return;
         window.__ffWatch.boxes = Math.max(window.__ffWatch.boxes,
-            document.querySelectorAll('#formforge-hud').length);
+            document.querySelectorAll('#fillsmith-hud').length);
         const bar = box.querySelector('.ff-bar'), fill = bar && bar.querySelector('i');
         if (fill) window.__ffWatch.widths.push(
             +(fill.getBoundingClientRect().width / bar.getBoundingClientRect().width).toFixed(3));
@@ -182,7 +182,7 @@ const result = await worker.evaluate(async ({files, at, url}) => {
     const seen = await new Promise(r => setTimeout(async () => r(
         (await chrome.scripting.executeScript({
             target: {tabId: tab.id}, func: () =>
-                !!document.querySelector('[data-formforge-boot]')
+                !!document.querySelector('[data-fillsmith-boot]')
         }))[0].result), 120));
     await chrome.scripting.executeScript({target: {tabId: tab.id, allFrames: true}, files});
     const t0 = Date.now();
@@ -226,7 +226,7 @@ if (back.length) note('bug', 'the progress bar goes backwards', `${back.length}�
 else if (w.length > 5) ok('the progress bar only moves forward', `${w.length} samples`);
 if (w.length && w[w.length - 1] < 0.98) note('warn', 'the progress bar never reaches the end', String(w[w.length - 1]));
 
-for (const a of ['formforge-spin', 'formforge-breathe', 'formforge-shimmer']) {
+for (const a of ['fillsmith-spin', 'fillsmith-breathe', 'fillsmith-shimmer']) {
     if (!watch.animations.includes(a)) note('warn', `the indicator never ran ${a}`);
 }
 if (watch.animations.length >= 3) ok('the indicator animated while it worked', watch.animations.join(', '));
@@ -250,7 +250,7 @@ const page_ = await page.evaluate(() => {
     const panels = [...document.querySelectorAll(
         '.p-select-overlay,.p-multiselect-overlay,.p-autocomplete-overlay,.p-datepicker-panel,'
         + '.ant-select-dropdown,.MuiAutocomplete-popper,[data-pc-section="overlay"]')]
-        .filter(el => vis(el) && !leaving(el) && !el.closest('#formforge-hud')
+        .filter(el => vis(el) && !leaving(el) && !el.closest('#fillsmith-hud')
             && !(window.__ffPanelsBefore || []).includes(el))
         .map(el => `${el.className} [${el.querySelectorAll('[role="option"]').length} options]`);
     return {emptyRequired, errors: [...new Set(errors)], panels};
@@ -270,8 +270,8 @@ else ok('everything planned was written', `${r.count} fields`);
 const unnamed = (r.filled || []).filter(f => (String(f.label).match(/\p{L}/gu) || []).length < 2);
 if (unnamed.length) note('warn', 'fields reported without a readable name', unnamed.map(f => f.label).join(', '));
 
-if (pageErrors.length) note('bug', 'FormForge logged errors on the page', pageErrors.slice(0, 3).join(' | '));
-else ok('nothing from FormForge in the page console');
+if (pageErrors.length) note('bug', 'Fillsmith logged errors on the page', pageErrors.slice(0, 3).join(' | '));
+else ok('nothing from Fillsmith in the page console');
 if (swErrors.length) note('bug', 'the service worker logged errors', swErrors.slice(0, 3).join(' | '));
 if (theirErrors.length) {
     console.log(`note  the page logged ${theirErrors.length} error(s) of its own  — ` +

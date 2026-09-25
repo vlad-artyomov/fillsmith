@@ -1,4 +1,4 @@
-/* FormForge — the report page.
+/* Fillsmith — the report page.
  *
  * A tab, not a popup: a popup closes the moment a save dialog takes focus,
  * which is why saving used to need the downloads permission. Here the browser
@@ -8,7 +8,7 @@
 (function () {
     'use strict';
 
-    const R = globalThis.FormForgeReport;
+    const R = globalThis.FillsmithReport;
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s == null ? '' : s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -126,11 +126,11 @@
             locale: chrome.i18n && chrome.i18n.getUILanguage ? chrome.i18n.getUILanguage() : navigator.language,
             model: (status && status.status) || 'unknown'
         };
-        $('env').textContent = `FormForge ${env.version} · ${env.ua} · model: ${env.model}`;
+        $('env').textContent = `Fillsmith ${env.version} · ${env.ua} · model: ${env.model}`;
         render(got.fillHistory || [], got.fillLog || []);
 
         const text = () => R.text(got.fillHistory || [], got.fillLog || [], env);
-        const name = () => `formforge-report-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.txt`;
+        const name = () => `fillsmith-report-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.txt`;
         $('download').addEventListener('click', () => {
             const url = URL.createObjectURL(new Blob([text()], {type: 'text/plain'}));
             const a = document.createElement('a');

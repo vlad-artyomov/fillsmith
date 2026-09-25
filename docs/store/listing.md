@@ -5,12 +5,11 @@ The screenshots come from `npm run screenshots`.
 
 ## Name
 
-FormForge — AI QA Form Filler
+Fillsmith — Free AI Form Filler & Test Data Generator
 
 ## Short description (132 characters max)
 
-Fills any form with coherent QA test data in one click — custom dropdowns, date pickers and editors included. On-device
-AI.
+One click fills any form with realistic test data, even custom dropdowns and date pickers. Free built-in AI: no API key, no account.
 
 ## Category
 
@@ -18,56 +17,56 @@ Developer Tools
 
 ## Detailed description
 
-One press fills the whole form — including the component-library dropdowns, date pickers, rich-text editors and
-file uploads that ordinary form fillers cannot touch.
+The first two lines show before "read more", so they carry the whole pitch. The sections after them answer the
+doubts in the order a tester has them: will it handle my form, is the data believable, will it pass validation, what
+does the AI cost. Search terms are written into sentences, never listed — a keyword list is spam to the reviewers.
 
-Most fillers assign a value and fire a change event. That works on a plain input and does nothing on the controls
-modern admin panels are built from: a Select that is a div with a popup, a date picker that refuses typed text, an
-editor that ignores anything but a real paste. FormForge drives each control the way a person does — opens the
-popup, picks a real option, waits for a list that comes from the server, clicks a day — and then reads it back to
-see whether the page kept it.
+Paste the block as it is: the store keeps line breaks, so a paragraph is one line.
 
-WHAT ONE PRESS DOES
-• Finds every fillable control: native inputs and selects, radios, checkboxes, file inputs, contenteditable, plus
-widgets from PrimeVue, MUI, Ant Design, react-select, Radix, Headless UI, Choices.js, Select2, Tom Select and
-vue-multiselect. An unknown library still works if it speaks ARIA.
-• Invents one coherent person: the email matches the name, the postcode matches the city, the phone number the
-country. A return date lands after the rental date. IBANs, VAT ids and card numbers pass their checksums.
-• Respects the control: min, max, step, maxlength, pattern. A dropdown only ever receives one of its own options. A
-required field is never left empty.
-• Generates the files an upload wants — a PNG, PDF, CSV or JSON matching the input's accept — in the page, from
-nothing.
-• Checks its own work: what a framework reverted is written again, fields that appeared because of the fill are
-filled too, and a limit that lives only in a validation message is read and obeyed.
-• Says what went wrong: a card on the page reports how many fields were filled and which were left; the Debug tab
-keeps every value and where it came from, and the report page holds the last ten fills, to read or to save as one
-text file for a ticket.
+```text
+Stop typing test data. One click fills the whole form — every field, every custom dropdown, every date picker — with one believable person. Free, with AI that runs on your own computer: no API key, no account, no subscription.
 
-THE MODEL IS OPTIONAL AND NEVER IN THE WAY
-Fields no rule recognises go to Chrome's built-in Gemini Nano — on your machine, no key, no account. The form is
-filled from the rules immediately; the model's answers replace what they improve as they arrive. Without a model
-nothing waits and nothing is left empty. You can add your own Anthropic, OpenAI or Gemini key for the fields the
-on-device model cannot answer, or switch the network off entirely.
+WORKS WHERE OTHER FORM FILLERS STOP
+Most fillers set a value and hope. That does nothing on the controls real apps are built from: a Select that is really a popup, a date picker that ignores typing, a rich-text editor that only accepts a real paste. Fillsmith works each control like a person: opens the dropdown and picks a real option, waits for lists that load from the server, clicks the day in the calendar — then reads the field back to check the page kept it.
+• PrimeVue, MUI, Ant Design, react-select, Radix, Headless UI, Choices.js, Select2, Tom Select, vue-multiselect — and any library that follows ARIA
+• React, Vue and Angular apps, on localhost, staging or any other host
 
-REPRODUCIBLE
-Every fill derives from a seed. Pin one to get the same person twice — what you want when you are reproducing a bug
-rather than finding one.
+ONE PERSON, NOT RANDOM NOISE
+• The email matches the name, the postcode matches the city, the phone matches the country
+• Dates make sense together: a return date lands after the start date
+• IBANs, VAT numbers and test card numbers pass their checksums
+• English or German data, with addresses and phone numbers to match
 
-SHORTCUTS
-Alt+Shift+F fills the page, Alt+Shift+D the focused field, Alt+Shift+R fills again as a new person, Alt+Shift+C
-clears. Right-click → Fill this page / Fill just this field.
+VALID ON THE FIRST SUBMIT
+• Respects min, max, step, maxlength and pattern
+• A dropdown only ever gets one of its own options
+• Required fields are never left empty
+• File uploads get real generated files — PNG, PDF, CSV or JSON, whatever the field accepts
+• Reads the validation messages and fixes what the form rejects; fills the fields that appear mid-fill
 
-PRIVACY
-Everything runs in your browser. Nothing leaves it unless you enter an API key, and then only for fields no rule could
-answer: their labels, limits and options, the form's title and a few short texts from a table on the page go to the
-provider you chose. No analytics, no telemetry, no remote code.
-https://github.com/vlad-artyomov/formforge/blob/main/PRIVACY.md
+AI WITHOUT THE BILL
+Fields no rule recognises go to Gemini Nano, the AI model built into Chrome. It runs on your machine: no API key, no account, no per-token cost, and your form never leaves the browser. The form is filled immediately; the AI's answers improve it as they arrive, so you never wait for it. Prefer a hosted model? Add your own Anthropic, OpenAI or Gemini key — or switch AI off entirely.
 
-Open source, MIT: https://github.com/vlad-artyomov/formforge
+BUILT FOR REPRODUCING BUGS
+• Pin a seed and get the exact same person again
+• See where every value came from: which rule, what the AI was asked, where the time went
+• Save a report of the last ten fills to attach to a ticket
+
+FAST
+Alt+Shift+F fills the page · Alt+Shift+D fills the focused field · Alt+Shift+R fills again as a new person · Alt+Shift+C clears. Or right-click → Fill this page.
+
+FREE. REALLY.
+No subscription, no Pro plan, no credits, no sign-up. No analytics, no tracking, nothing sent anywhere unless you add your own API key — and then only for fields no rule could answer: their labels, limits and options, the form's title and a few short texts from a table on the page, to the provider you chose.
+Privacy policy: https://github.com/vlad-artyomov/fillsmith/blob/main/PRIVACY.md
+
+The built-in AI needs Chrome 138 or later and a one-time model download by Chrome (about 2 GB) on supported hardware. Without it, Fillsmith still fills every field it recognises.
+
+Open source (MIT): https://github.com/vlad-artyomov/fillsmith
+```
 
 ## Single purpose
 
-FormForge fills forms on the current page with generated test data for QA and development, and reports what it
+Fillsmith fills forms on the current page with generated test data for QA and development, and reports what it
 filled. It does nothing else.
 
 ## Permission justifications

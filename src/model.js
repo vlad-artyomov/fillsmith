@@ -8,10 +8,10 @@
 (function () {
     'use strict';
 
-    const H = globalThis.FormForgeWidgets.helpers;
-    const {textOf, RICH_KINDS} = globalThis.FormForgeCollect;
-    const {readable} = globalThis.FormForgeGen;
-    const {progress} = globalThis.FormForgeHud;
+    const H = globalThis.FillsmithWidgets.helpers;
+    const {textOf, RICH_KINDS} = globalThis.FillsmithCollect;
+    const {readable} = globalThis.FillsmithGen;
+    const {progress} = globalThis.FillsmithHud;
 
     const S = {
         modelWarm: false,
@@ -294,7 +294,7 @@
         }
     }
 
-    globalThis.FormForgeModel = Object.assign(S, {
+    globalThis.FillsmithModel = Object.assign(S, {
         wake, modelBudget, pageContext, nearbyExamples, sendMessage, mergeDebug, askModel, waitLine,
         beginRequest
     });

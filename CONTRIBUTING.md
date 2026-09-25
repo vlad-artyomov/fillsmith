@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for looking. FormForge is small on purpose: plain ES2020, no build step, no runtime dependency, and four
+Thanks for looking. Fillsmith is small on purpose: plain ES2020, no build step, no runtime dependency, and four
 test suites that judge the page rather than the code's own opinion of itself. Keeping it that way is most of the job.
 
 ## Before you start
@@ -26,7 +26,7 @@ While iterating, run the one suite that can see your change: `npm run test:nativ
   the symptom first. The fixtures (`test/primevue-form.html` and the smaller pages in `test/`) exist to be extended:
   add the control shape that failed, then the check.
 - **Judge by the page.** A filler returns what the control holds afterwards, never what it typed. A check reads the
-  page's own model, never FormForge's report.
+  page's own model, never Fillsmith's report.
 - **Nothing to the console** from the content scripts or the worker; `note()` in `src/dom.js` lands in the Debug tab.
 - **No `Math.random()` in a fill path.** Every choice comes from the persona's RNG so a seed reproduces a fill.
 - **Waits are conditions with a budget**, never a fixed sleep.

@@ -1,4 +1,4 @@
-/* FormForge — the on-page indicator (#formforge-hud).
+/* Fillsmith — the on-page indicator (#fillsmith-hud).
  *
  * One element in three states: the stage the fill is in, how far along it is,
  * and what it did. It lives on the page rather than in the popup because a
@@ -16,15 +16,15 @@
     'use strict';
 
     const STYLE = `
-#formforge-hud, #formforge-hud *{ all: initial!important; }
-#formforge-hud *{
+#fillsmith-hud, #fillsmith-hud *{ all: initial!important; }
+#fillsmith-hud *{
   box-sizing:border-box!important; display:block!important; color:inherit!important;
   font:inherit!important; text-align:left!important; letter-spacing:normal!important;
   text-transform:none!important; background:transparent!important;
   border:0!important; margin:0!important; padding:0!important;
   overflow:hidden!important; text-overflow:ellipsis!important; white-space:nowrap!important;
 }
-#formforge-hud{
+#fillsmith-hud{
   position:fixed!important; z-index:2147483647!important; right:14px!important; bottom:14px!important;
   display:block!important; width:272px!important; box-sizing:border-box!important;
   padding:10px 12px!important; border-radius:10px!important; text-align:left!important;
@@ -36,111 +36,111 @@
   opacity:0!important; transform:translateY(6px)!important;
   transition:opacity .18s ease,transform .18s ease!important;
 }
-#formforge-hud.ff-in{ opacity:1!important; transform:none!important; }
-#formforge-hud .ff-top{ display:flex!important; align-items:center!important; gap:8px!important; overflow:visible!important; }
+#fillsmith-hud.ff-in{ opacity:1!important; transform:none!important; }
+#fillsmith-hud .ff-top{ display:flex!important; align-items:center!important; gap:8px!important; overflow:visible!important; }
 /* The stage wraps rather than being cut. Every descendant is nowrap-with-ellipsis
    by default, which is right for a field caption the page supplied and wrong for
    our own sentence: "Waiting for the model — 14 fields left" lost its half in a
    272px card and left the reader looking at "Waiting for the model — 1...".
    Clamped at two lines so an unexpectedly long one still cannot grow the card. */
-#formforge-hud .ff-title{ font-weight:600!important; flex:1 1 auto!important; min-width:0!important;
+#fillsmith-hud .ff-title{ font-weight:600!important; flex:1 1 auto!important; min-width:0!important;
   line-height:1.3!important;
   white-space:normal!important; overflow-wrap:anywhere!important;
   display:-webkit-box!important; -webkit-box-orient:vertical!important; -webkit-line-clamp:2!important; }
 /* Literal colours and background-image, not currentColor and the shorthand: the text is made
    transparent for the gradient to show through, and the shorthand resets background-clip. */
-#formforge-hud.ff-busy .ff-title{
+#fillsmith-hud.ff-busy .ff-title{
   background-image:linear-gradient(90deg,#14171c 20%,#a8b0ba 45%,#14171c 70%)!important;
   background-size:220% 100%!important;
   -webkit-background-clip:text!important; background-clip:text!important;
   -webkit-text-fill-color:transparent!important; color:transparent!important;
-  animation:formforge-shimmer 1.6s linear infinite!important; }
-#formforge-hud .ff-now.ff-rise{ animation:formforge-rise .22s ease-out!important; }
-#formforge-hud .ff-count{ flex:none!important; font-variant-numeric:tabular-nums!important;
+  animation:fillsmith-shimmer 1.6s linear infinite!important; }
+#fillsmith-hud .ff-now.ff-rise{ animation:fillsmith-rise .22s ease-out!important; }
+#fillsmith-hud .ff-count{ flex:none!important; font-variant-numeric:tabular-nums!important;
   font-size:11px!important; color:#5d6672!important; }
 /* 24px square: a target a finger or a shaky pointer can hit, drawn as the same small glyph. */
-#formforge-hud .ff-x{ flex:none!important; width:24px!important; height:24px!important;
+#fillsmith-hud .ff-x{ flex:none!important; width:24px!important; height:24px!important;
   margin:-6px -8px -6px 0!important; border-radius:6px!important; background:transparent!important;
   border:0!important; color:#6b7482!important; font:inherit!important; font-size:17px!important;
   line-height:22px!important; text-align:center!important; cursor:pointer!important; }
-#formforge-hud .ff-x:hover{ background:#f1f3f6!important; color:#14171c!important; }
+#fillsmith-hud .ff-x:hover{ background:#f1f3f6!important; color:#14171c!important; }
 /* An arc whose length changes as it turns reads as work; a fixed ring at 13px reads as a circle.
    The two rates must not divide each other or the loop stutters. */
 @property --ff-arc{ syntax:"<angle>"; inherits:false; initial-value:120deg; }
-#formforge-hud .ff-spin{ flex:none!important; width:14px!important; height:14px!important;
+#fillsmith-hud .ff-spin{ flex:none!important; width:14px!important; height:14px!important;
   border-radius:50%!important; border:0!important;
   background:conic-gradient(from 0deg,
     rgba(31,111,79,0) 0deg, rgba(31,111,79,.18) calc(var(--ff-arc) * .3),
     #1f6f4f var(--ff-arc), rgba(31,111,79,0) 0deg)!important;
   -webkit-mask:radial-gradient(farthest-side, #0000 calc(100% - 2.5px), #000 calc(100% - 2.5px))!important;
   mask:radial-gradient(farthest-side, #0000 calc(100% - 2.5px), #000 calc(100% - 2.5px))!important;
-  animation:formforge-spin .75s linear infinite, formforge-breathe 1.9s ease-in-out infinite!important; }
-#formforge-hud .ff-tick{ flex:none!important; width:13px!important; height:13px!important;
+  animation:fillsmith-spin .75s linear infinite, fillsmith-breathe 1.9s ease-in-out infinite!important; }
+#fillsmith-hud .ff-tick{ flex:none!important; width:13px!important; height:13px!important;
   border-radius:50%!important; background:#1f6f4f!important; position:relative!important;
-  animation:formforge-pop .32s cubic-bezier(.2,1.5,.4,1)!important; }
-#formforge-hud .ff-tick::after{ content:""!important; position:absolute!important;
+  animation:fillsmith-pop .32s cubic-bezier(.2,1.5,.4,1)!important; }
+#fillsmith-hud .ff-tick::after{ content:""!important; position:absolute!important;
   left:50%!important; top:47%!important; width:3px!important; height:6px!important;
   border:solid #fff!important; border-width:0 2px 2px 0!important;
   transform:translate(-50%,-50%) rotate(45deg)!important; }
-#formforge-hud .ff-tick.ff-warn{ background:#b1741a!important; }
-#formforge-hud .ff-bar{ position:relative!important; height:3px!important; margin:8px 0 0!important;
+#fillsmith-hud .ff-tick.ff-warn{ background:#b1741a!important; }
+#fillsmith-hud .ff-bar{ position:relative!important; height:3px!important; margin:8px 0 0!important;
   border-radius:2px!important; background:#e7eaef!important; }
-#formforge-hud .ff-bar i{ position:absolute!important; top:0!important; bottom:0!important;
+#fillsmith-hud .ff-bar i{ position:absolute!important; top:0!important; bottom:0!important;
   left:0!important; width:var(--ff-fill,0%)!important; border-radius:2px!important;
   background:#1f6f4f!important; overflow:hidden!important; transition:width .16s linear!important; }
 /* Wraps for the same reason the title does: this line is our own sentence, and
    the default nowrap-with-ellipsis cut it at "16 fields still to i...". Two
    lines at most, so an unexpectedly long one cannot grow the card. */
-#formforge-hud .ff-now{ margin-top:6px!important; font-size:11px!important; color:#5d6672!important;
+#fillsmith-hud .ff-now{ margin-top:6px!important; font-size:11px!important; color:#5d6672!important;
   line-height:1.35!important;
   white-space:normal!important; overflow-wrap:anywhere!important;
   display:-webkit-box!important; -webkit-box-orient:vertical!important; -webkit-line-clamp:2!important; }
-#formforge-hud .ff-now.ff-off{ display:none!important; }
+#fillsmith-hud .ff-now.ff-off{ display:none!important; }
 /* One shape while it works. A one-line title and a two-line title took
    different room, and the line naming the current field collapsed between
    stages, so the last second of a fill moved the card three times under the
    reader's eye: 72px, 68px, 50px, then 75px when it finished. Both are held
    open while busy; the card changes size once, when it has something else to
    say. */
-#formforge-hud.ff-busy .ff-title{ min-height:1.3em!important; }
-#formforge-hud.ff-busy .ff-now{ display:-webkit-box!important; min-height:1.35em!important; }
-#formforge-hud.ff-busy .ff-now.ff-off{ visibility:hidden!important; }
-#formforge-hud .ff-tags{ display:flex!important; flex-wrap:wrap!important; gap:4px 5px!important;
+#fillsmith-hud.ff-busy .ff-title{ min-height:1.3em!important; }
+#fillsmith-hud.ff-busy .ff-now{ display:-webkit-box!important; min-height:1.35em!important; }
+#fillsmith-hud.ff-busy .ff-now.ff-off{ visibility:hidden!important; }
+#fillsmith-hud .ff-tags{ display:flex!important; flex-wrap:wrap!important; gap:4px 5px!important;
   margin-top:7px!important; font-size:11px!important; overflow:visible!important; }
-#formforge-hud .ff-tags:empty{ display:none!important; margin-top:0!important; }
-#formforge-hud .ff-tag{ display:inline-block!important; padding:1px 6px!important;
+#fillsmith-hud .ff-tags:empty{ display:none!important; margin-top:0!important; }
+#fillsmith-hud .ff-tag{ display:inline-block!important; padding:1px 6px!important;
   border-radius:999px!important; background:#f1f3f6!important; color:#5d6672!important; }
-#formforge-hud .ff-tag.ff-ai{ background:#e7f3ed!important; color:#1f6f4f!important; }
-#formforge-hud .ff-tag.ff-miss{ background:#fdf3e3!important; color:#8a5a12!important; }
-#formforge-hud .ff-off{ display:none!important; }
-@keyframes formforge-spin{ to{ transform:rotate(360deg) } }
-@keyframes formforge-breathe{ 0%,100%{ --ff-arc:70deg } 50%{ --ff-arc:300deg } }
-@keyframes formforge-shimmer{ 0%{ background-position:120% 0 } 100%{ background-position:-120% 0 } }
-@keyframes formforge-pop{ 0%{ transform:scale(.4) } 60%{ transform:scale(1.12) } 100%{ transform:scale(1) } }
-@keyframes formforge-rise{ 0%{ opacity:0; transform:translateY(3px) } 100%{ opacity:1; transform:none } }
+#fillsmith-hud .ff-tag.ff-ai{ background:#e7f3ed!important; color:#1f6f4f!important; }
+#fillsmith-hud .ff-tag.ff-miss{ background:#fdf3e3!important; color:#8a5a12!important; }
+#fillsmith-hud .ff-off{ display:none!important; }
+@keyframes fillsmith-spin{ to{ transform:rotate(360deg) } }
+@keyframes fillsmith-breathe{ 0%,100%{ --ff-arc:70deg } 50%{ --ff-arc:300deg } }
+@keyframes fillsmith-shimmer{ 0%{ background-position:120% 0 } 100%{ background-position:-120% 0 } }
+@keyframes fillsmith-pop{ 0%{ transform:scale(.4) } 60%{ transform:scale(1.12) } 100%{ transform:scale(1) } }
+@keyframes fillsmith-rise{ 0%{ opacity:0; transform:translateY(3px) } 100%{ opacity:1; transform:none } }
 @media (prefers-color-scheme: dark){
-  #formforge-hud{ background:#1b2027!important; color:#e9ebef!important; border-color:#2c323a!important;
+  #fillsmith-hud{ background:#1b2027!important; color:#e9ebef!important; border-color:#2c323a!important;
     box-shadow:0 2px 6px rgba(0,0,0,.35),0 10px 28px rgba(0,0,0,.45)!important; }
-  #formforge-hud .ff-count,#formforge-hud .ff-now{ color:#98a1ac!important; }
-  #formforge-hud.ff-busy .ff-title{ background-image:linear-gradient(90deg,#e9ebef 20%,#6b7684 45%,#e9ebef 70%)!important; }
-  #formforge-hud .ff-spin{ background:conic-gradient(from 0deg,
+  #fillsmith-hud .ff-count,#fillsmith-hud .ff-now{ color:#98a1ac!important; }
+  #fillsmith-hud.ff-busy .ff-title{ background-image:linear-gradient(90deg,#e9ebef 20%,#6b7684 45%,#e9ebef 70%)!important; }
+  #fillsmith-hud .ff-spin{ background:conic-gradient(from 0deg,
     rgba(53,163,119,0) 0deg, rgba(53,163,119,.2) calc(var(--ff-arc) * .3),
     #35a377 var(--ff-arc), rgba(53,163,119,0) 0deg)!important; }
-  #formforge-hud .ff-tick{ background:#35a377!important; }
-  #formforge-hud .ff-tick::after{ border-color:#07130d!important; }
-  #formforge-hud .ff-tick.ff-warn{ background:#d9a344!important; }
-  #formforge-hud .ff-bar{ background:#2c323a!important; }
-  #formforge-hud .ff-bar i{ background:#35a377!important; }
-  #formforge-hud .ff-tag{ background:#242a32!important; color:#98a1ac!important; }
-  #formforge-hud .ff-tag.ff-ai{ background:#16281f!important; color:#59c295!important; }
-  #formforge-hud .ff-tag.ff-miss{ background:#2a2115!important; color:#d9a344!important; }
-  #formforge-hud .ff-x:hover{ background:#242a32!important; color:#e9ebef!important; }
+  #fillsmith-hud .ff-tick{ background:#35a377!important; }
+  #fillsmith-hud .ff-tick::after{ border-color:#07130d!important; }
+  #fillsmith-hud .ff-tick.ff-warn{ background:#d9a344!important; }
+  #fillsmith-hud .ff-bar{ background:#2c323a!important; }
+  #fillsmith-hud .ff-bar i{ background:#35a377!important; }
+  #fillsmith-hud .ff-tag{ background:#242a32!important; color:#98a1ac!important; }
+  #fillsmith-hud .ff-tag.ff-ai{ background:#16281f!important; color:#59c295!important; }
+  #fillsmith-hud .ff-tag.ff-miss{ background:#2a2115!important; color:#d9a344!important; }
+  #fillsmith-hud .ff-x:hover{ background:#242a32!important; color:#e9ebef!important; }
 }
 @media (prefers-reduced-motion: reduce){
-  #formforge-hud,#formforge-hud .ff-bar i{ transition:none!important; }
-  #formforge-hud .ff-spin,#formforge-hud .ff-tick,#formforge-hud .ff-now,
-  #formforge-hud.ff-busy .ff-title{ animation:none!important; }
-  #formforge-hud.ff-busy .ff-title{ background-image:none!important; color:inherit!important;
+  #fillsmith-hud,#fillsmith-hud .ff-bar i{ transition:none!important; }
+  #fillsmith-hud .ff-spin,#fillsmith-hud .ff-tick,#fillsmith-hud .ff-now,
+  #fillsmith-hud.ff-busy .ff-title{ animation:none!important; }
+  #fillsmith-hud.ff-busy .ff-title{ background-image:none!important; color:inherit!important;
     -webkit-text-fill-color:currentColor!important; }
 }`;
 
@@ -189,27 +189,27 @@
      * id before the filler was injected; adopting it means no blink and never
      * two of them. */
     function box() {
-        let st = document.getElementById('formforge-spin-style');
-        if (!st || st.getAttribute('data-formforge-full') == null) {
+        let st = document.getElementById('fillsmith-spin-style');
+        if (!st || st.getAttribute('data-fillsmith-full') == null) {
             if (st) st.remove();
             st = document.createElement('style');
-            st.id = 'formforge-spin-style';
-            st.setAttribute('data-formforge-full', '');
+            st.id = 'fillsmith-spin-style';
+            st.setAttribute('data-fillsmith-full', '');
             st.textContent = STYLE;
             document.documentElement.appendChild(st);
         }
 
-        let el = document.getElementById('formforge-hud');
+        let el = document.getElementById('fillsmith-hud');
         if (el && document.contains(el) && el.querySelector('.ff-top')) return el;
         const adopted = el && document.contains(el);
         if (!adopted) {
             el = document.createElement('div');
-            el.id = 'formforge-hud';
+            el.id = 'fillsmith-hud';
             document.documentElement.appendChild(el);
         }
         el.removeAttribute('style');
-        el.removeAttribute('data-formforge-boot');
-        el.setAttribute('data-formforge-hud', '');
+        el.removeAttribute('data-fillsmith-boot');
+        el.setAttribute('data-fillsmith-hud', '');
         el.setAttribute('role', 'status');
         el.setAttribute('aria-live', 'polite');
         el.innerHTML =
@@ -416,5 +416,5 @@
         el.onclick = dismiss;
     }
 
-    globalThis.FormForgeHud = {reset, progress, toast, ping};
+    globalThis.FillsmithHud = {reset, progress, toast, ping};
 })();

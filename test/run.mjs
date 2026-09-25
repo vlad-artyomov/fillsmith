@@ -37,7 +37,7 @@ for (const f of FILLER) await page.addScriptTag({content: src(f)});
  * the specific ones claims, writing a street into the postcode, the city and
  * the country alike. Ordering is the whole fix, so it needs a guard. */
 const ruleCases = await page.evaluate(() => {
-    const G = globalThis.FormForgeGen;
+    const G = globalThis.FillsmithGen;
     const p = G.buildPersona('LIVE001', 'de-DE', {});
     const ask = (label) => {
         const v = G.matchRule(label, p);
@@ -64,7 +64,7 @@ check('"Contact Person" resolves to a person, not a company', ruleCases.person =
  * The fixture reads in English now — a German label has to be checked here, or
  * the alternatives are a branch nothing ever walks. */
 const german = await page.evaluate(() => {
-    const G = globalThis.FormForgeGen;
+    const G = globalThis.FillsmithGen;
     const p = G.buildPersona('DE001', 'de-DE', {});
     const ask = (label) => {
         const v = G.matchRule(label, p);
@@ -96,7 +96,7 @@ check('a German label reaches the same rule as its English twin',
 
 // Dates for widgets travel in the locale's format; a birth date must not become a future date.
 const dates = await page.evaluate(() => {
-    const G = globalThis.FormForgeGen;
+    const G = globalThis.FillsmithGen;
     const p = G.buildPersona('BD1', 'de-DE', {});
     return {
         de: G.formatDate('1978-04-09', 'DD.MM.YYYY'), us: G.formatDate('1978-04-09', 'MM/DD/YYYY'),
@@ -114,7 +114,7 @@ check('"Initial stock" is not an initial, "Middle initial" is',
 /* A pair of numeric fields must read as a range, not as the same number
  * twice: "minimum 3 / maximum 3" exercises nothing. */
 const numbers = await page.evaluate(() => {
-    const G = globalThis.FormForgeGen;
+    const G = globalThis.FillsmithGen;
     const p = G.buildPersona('NUM001', 'de-DE', {});
     return {
         min: Number(G.numberFor('Minimum booking duration *', p)),
@@ -133,7 +133,7 @@ check('numeric fields get whole, positive values',
  * what happened, so it should name the field it landed in rather than the
  * generator that produced it. */
 const fallbacks = await page.evaluate(() => {
-    const G = globalThis.FormForgeGen;
+    const G = globalThis.FillsmithGen;
     const p = G.buildPersona('H65RFM', 'en-US', {});
     const f = (label, maxLength) => G.fallbackText({label, maxLength: maxLength || null}, p);
     return {
@@ -161,7 +161,7 @@ check('an unlabelled field still gets something', fallbacks.unlabelled.length > 
  * model has something to say; a rule encoding a fact the model cannot know
  * does not. */
 const strength = await page.evaluate(() => {
-    const G = globalThis.FormForgeGen;
+    const G = globalThis.FillsmithGen;
     const p = G.buildPersona('W1', 'de-DE', {});
     const tag = (l) => {
         const d = G.matchRuleDetail(l, p);
@@ -184,7 +184,7 @@ check('rules encoding a fact stay strong', [strength.email, strength.postcode, s
  * validator accepts. The right-hand side names the persona field a label must
  * reach, or `none` for a label no rule may claim. */
 const routing = await page.evaluate(() => {
-    const G = globalThis.FormForgeGen;
+    const G = globalThis.FillsmithGen;
     const p = G.buildPersona('ROUTE1', 'de-DE', {});
     const where = (label) => {
         const d = G.matchRuleDetail(label, p);
@@ -237,7 +237,7 @@ const routing = await page.evaluate(() => {
 check(`${routing.total} labels reach the field they mean, and no other`, routing.wrong.length === 0,
     routing.wrong.map(([l, k, got]) => `"${l}" → ${got}, wanted ${k}`).join('; ') || 'all routed');
 check('a German tax number and a VAT id have different shapes', await page.evaluate(() => {
-    const p = globalThis.FormForgeGen.buildPersona('TAX1', 'de-DE', {});
+    const p = globalThis.FillsmithGen.buildPersona('TAX1', 'de-DE', {});
     return /^\d{2}\/\d{3}\/\d{5}$/.test(p.taxNumber) && /^DE\d{9}$/.test(p.vatId);
 }));
 
@@ -247,7 +247,7 @@ check('a German tax number and a VAT id have different shapes', await page.evalu
  * faker's *words* rather than faker itself was that most of its German is not
  * German, and all of the coherence this project depends on is ours. */
 const vocab = await page.evaluate(() => {
-    const G = globalThis.FormForgeGen;
+    const G = globalThis.FillsmithGen;
     const seen = {};
     const broken = [];
     const pairs = new Set();
@@ -315,7 +315,7 @@ check('every city still carries its own postcode',
 /* The point of the exercise: a category the vocabulary unlocked is a field the
  * model no longer has to be asked about. */
 const unlocked = await page.evaluate(() => {
-    const G = globalThis.FormForgeGen;
+    const G = globalThis.FillsmithGen;
     const p = G.buildPersona('VOC1', 'de-DE', {});
     const ask = (l) => {
         const v = G.matchRule(l, p);
@@ -342,7 +342,7 @@ const alone = await (async () => {
     await solo.setContent('<html></html>');
     await solo.addScriptTag({content: src('generator.js')});      // deliberately no vocab.js
     const out = await solo.evaluate(() => {
-        const G = globalThis.FormForgeGen;
+        const G = globalThis.FillsmithGen;
         const p = G.buildPersona('NOVOC', 'de-DE', {});
         const names = new Set();
         for (let i = 0; i < 400; i++) names.add(G.buildPersona(G.newSeed(), 'de-DE', {}).firstName);
@@ -366,7 +366,7 @@ check('and simply has less to choose from', alone.distinct <= 25 && alone.distin
  * nothing. */
 const sections = await page.evaluate(() => {
     const seen = {};
-    for (const f of window.__formforge.collectFields({overwrite: true})) {
+    for (const f of window.__fillsmith.collectFields({overwrite: true})) {
         const k = f.label.split('|')[0].trim();
         if (k) seen[k] = f.section;
     }
@@ -381,7 +381,7 @@ check('a phone country picker gets a country, not the number',
     ruleCases.phoneCountry === ruleCases.want.country, ruleCases.phoneCountry);
 
 // Deterministic path only (no extension runtime here, so no model).
-const res = await page.evaluate(async () => await window.__formforge.run({
+const res = await page.evaluate(async () => await window.__fillsmith.run({
     seed: 'ABC123', locale: 'de-DE', useAI: false, overwrite: true, emailDomain: 'example.com'
 }));
 
@@ -495,7 +495,7 @@ check('VAT ID passes the German check-digit algorithm', vatOk, vals.vt);
 // Determinism
 await page.reload();
 for (const f of FILLER) await page.addScriptTag({content: src(f)});
-await page.evaluate(async () => await window.__formforge.run({
+await page.evaluate(async () => await window.__fillsmith.run({
     seed: 'ABC123', locale: 'de-DE', useAI: false, overwrite: true, emailDomain: 'example.com'
 }));
 const again = await page.evaluate(() => ({
@@ -517,7 +517,7 @@ check('same seed reproduces the same dropdown/radio/checkbox choices',
 // Different seed -> different persona
 await page.reload();
 for (const f of FILLER) await page.addScriptTag({content: src(f)});
-await page.evaluate(async () => await window.__formforge.run({
+await page.evaluate(async () => await window.__fillsmith.run({
     seed: 'ZZZ999', locale: 'de-DE', useAI: false, overwrite: true, emailDomain: 'example.com'
 }));
 const other = await page.evaluate(() => document.getElementById('em').value);
@@ -526,7 +526,7 @@ check('a different seed gives a different persona', other !== vals.em, `${other}
 // en-US locale coherence
 await page.reload();
 for (const f of FILLER) await page.addScriptTag({content: src(f)});
-await page.evaluate(async () => await window.__formforge.run({
+await page.evaluate(async () => await window.__fillsmith.run({
     seed: 'US0001', locale: 'en-US', useAI: false, overwrite: true, emailDomain: 'example.com'
 }));
 const us = await page.evaluate(() => ({
@@ -544,13 +544,13 @@ check('US locale: country select picked US', us.cn === 'US', us.cn);
 /* The mark on a written field is a ring that eases in and out, driven by an
  * attribute and one stylesheet; when it is over, the element is as it was. */
 const ring = await page.evaluate(async () => {
-    await window.__formforge.run({seed: 'RING1', locale: 'de-DE', useAI: false, overwrite: true});
-    const marked = document.querySelectorAll('[data-formforge-touch]').length;
-    const styled = !!document.getElementById('formforge-touch-style');
+    await window.__fillsmith.run({seed: 'RING1', locale: 'de-DE', useAI: false, overwrite: true});
+    const marked = document.querySelectorAll('[data-fillsmith-touch]').length;
+    const styled = !!document.getElementById('fillsmith-touch-style');
     const inlineOutline = Array.from(document.querySelectorAll('input'))
         .some(el => el.style.outline);
     await new Promise(r => setTimeout(r, 2300));
-    return {marked, styled, inlineOutline, left: document.querySelectorAll('[data-formforge-touch]').length};
+    return {marked, styled, inlineOutline, left: document.querySelectorAll('[data-fillsmith-touch]').length};
 });
 check('written fields carry the touch ring, through a stylesheet rather than inline styles',
     ring.marked > 0 && ring.styled && !ring.inlineOutline, JSON.stringify(ring));
@@ -562,12 +562,12 @@ check('and the ring is gone two seconds later', ring.left === 0, `${ring.left} s
  * empty state into the report as if the page had accepted it. Twelve seeds is
  * enough: with four options one in four picks would be the prompt. */
 const prompted = await page.evaluate(async () => {
-    const offered = window.__formforge.collectFields({overwrite: true})
+    const offered = window.__fillsmith.collectFields({overwrite: true})
         .filter(f => f.el && f.el.id === 'dw')
         .flatMap(f => (f.options || []).map(o => o.text));
     const picked = [];
     for (let i = 0; i < 12; i++) {
-        await window.__formforge.run({seed: `PROMPT${i}`, locale: 'en-US', useAI: false, overwrite: true});
+        await window.__fillsmith.run({seed: `PROMPT${i}`, locale: 'en-US', useAI: false, overwrite: true});
         picked.push(document.getElementById('dw').value);
     }
     return {offered, picked};
@@ -621,7 +621,7 @@ check('every text colour in the popup clears WCAG AA on the background it sits o
  * step counts from min, or from zero when there is no min; a pattern is
  * compiled with the flags HTML compiles it with, or \p{L} never matches. */
 const limits = await page.evaluate(() => {
-    const G = globalThis.FormForgeGen;
+    const G = globalThis.FillsmithGen;
     return {
         stepNoMin: G.constrain('12', {min: null, max: null, step: 5}),
         stepMin: G.constrain('12', {min: 1, max: null, step: 5}),
@@ -639,7 +639,7 @@ check('a digits-only pattern narrows the value to its digits', limits.digitsOnly
 /* The email domain is whatever the tester typed into a box: "@acme.test",
  * "acme" and "https://acme.test/" all used to reach the address as typed. */
 const domains = await page.evaluate(() => {
-    const G = globalThis.FormForgeGen;
+    const G = globalThis.FillsmithGen;
     const at = (d) => G.buildPersona('DOM1', 'en-US', {emailDomain: d}).email.split('@')[1];
     return {
         at: at('@acme.test'), bare: at('acme'), url: at('https://acme.test/x'),
@@ -655,7 +655,7 @@ check('and one that cannot be a domain falls back to example.com',
  * editor does. Its words are laid into the shape the rule builds, so a form
  * exercises the bold, the italic and the list whichever answered the field. */
 const laidOut = await page.evaluate(() => {
-    const G = globalThis.FormForgeGen;
+    const G = globalThis.FillsmithGen;
     const en = G.buildPersona('RICH1', 'en-US', {});
     const de = G.buildPersona('RICH1', 'de-DE', {});
     const prose = 'The release fixes intermittent API failures. Query times are down by 15%. Accessibility was reviewed.';
@@ -674,7 +674,7 @@ const laidOut = await page.evaluate(() => {
  * "Note:" over the same bullet list — one trick, five times, and four of the
  * editor's paths never exercised. */
 const shapes = await page.evaluate(() => {
-    const G = globalThis.FormForgeGen;
+    const G = globalThis.FillsmithGen;
     const p = G.buildPersona('SHAPES1', 'en-US', {});
     const out = ['Description', 'Instructions', 'Didactic notes', 'Accessories', 'Technical data',
         'Internal note', 'Summary', 'Remarks'].map(k => G.richLayout('', p, k));
@@ -721,7 +721,7 @@ check('and markup the model sent as text is escaped, not run',
  * fiction, "1234567890" is not an SSN, and "RDouglas123" is not a card number.
  * Taken from roboform.com/filling-test-all-fields, one fill of it. */
 const cryptic = await page.evaluate(() => {
-    const G = globalThis.FormForgeGen;
+    const G = globalThis.FillsmithGen;
     const p = G.buildPersona('CRYPT1', 'en-US', {emailDomain: 'example.com'});
     const at = (name) => {
         const hit = G.matchRuleDetail(name, p);
@@ -780,7 +780,7 @@ check('and what the model is shown is a name a person could read',
     cryptic.readable.join(' · '));
 
 // Clear
-await page.evaluate(async () => await window.__formforge.clearAll());
+await page.evaluate(async () => await window.__fillsmith.clearAll());
 const cleared = await page.evaluate(() => document.getElementById('fn').value);
 check('clear empties the fields', cleared === '');
 

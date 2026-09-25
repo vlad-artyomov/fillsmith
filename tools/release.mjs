@@ -89,7 +89,7 @@ try {
 
 console.log(`\n  ${manifest.version} -> ${version}   (${wrote.join(', ')})\n`);
 console.log('  Land it with the change it belongs to, then publish:\n');
-console.log(`    git commit -am "FormForge ${version}: what landed"`);
+console.log(`    git commit -am "Fillsmith ${version}: what landed"`);
 console.log(`    git push origin main`);
 console.log(`    git tag ${tag} && git push origin ${tag}\n`);
 console.log('  The tag runs the suites, checks it matches the manifest, and puts the ZIP on a release.\n');

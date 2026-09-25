@@ -1,4 +1,4 @@
-/* FormForge — page scanner and filler.
+/* Fillsmith — page scanner and filler.
  *
  * Finds every fillable control (native inputs and component-library widgets),
  * decides a value for each — rule, type default, model, fallback — writes them
@@ -7,17 +7,17 @@
 (function () {
     'use strict';
 
-    const G = globalThis.FormForgeGen;
-    const W = globalThis.FormForgeWidgets;
-    const O = globalThis.FormForgeOverlays;
-    const U = globalThis.FormForgeUploads;
-    const Hud = globalThis.FormForgeHud;
+    const G = globalThis.FillsmithGen;
+    const W = globalThis.FillsmithWidgets;
+    const O = globalThis.FillsmithOverlays;
+    const U = globalThis.FillsmithUploads;
+    const Hud = globalThis.FillsmithHud;
     const H = W.helpers;
-    const M = globalThis.FormForgeModel;
+    const M = globalThis.FillsmithModel;
     /* Its state is read off the object, because the model outlives the fill
      * that started it: a session built for one press answers the next. */
     const {wake, modelBudget, pageContext, nearbyExamples, sendMessage, mergeDebug, askModel} = M;
-    const C = globalThis.FormForgeCollect;
+    const C = globalThis.FillsmithCollect;
     /* The page-reading layer, pulled in by name so the call sites below read the
      * same as when it lived here. */
     const {
@@ -253,13 +253,13 @@
     /* The mark on a field just written. A ring that eases in and out reads as
      * attention; one that snaps on and off reads as an error. Outline moves no
      * layout, and the attribute leaves the element exactly as it was. */
-    const TOUCH = 'data-formforge-touch';
+    const TOUCH = 'data-fillsmith-touch';
     const touchTimers = new WeakMap();
 
     function touchStyle() {
-        if (document.getElementById('formforge-touch-style')) return;
+        if (document.getElementById('fillsmith-touch-style')) return;
         const style = document.createElement('style');
-        style.id = 'formforge-touch-style';
+        style.id = 'fillsmith-touch-style';
         style.textContent =
             `[${TOUCH}]{outline:2px solid rgba(47,158,111,0)!important;outline-offset:5px!important;` +
             `transition:outline-color .45s cubic-bezier(.2,.7,.2,1),outline-offset .45s cubic-bezier(.2,.7,.2,1)!important}` +
@@ -284,7 +284,7 @@
     // ------------------------------------------------------------------ run ----
     async function run(settings) {
         M.beginRequest(settings);
-        globalThis.__formforgeRuns = (globalThis.__formforgeRuns || 0) + 1;   // observable double-injection
+        globalThis.__fillsmithRuns = (globalThis.__fillsmithRuns || 0) + 1;   // observable double-injection
         filesAttached.clear();
         uploads = [];
         Hud.reset();
@@ -303,13 +303,13 @@
          * disabled at collect time is skipped, and a stale mark then keeps the later
          * passes from seeing it as new once our writes have enabled it. */
         document.querySelectorAll(`[${MARK}]`).forEach(el => el.removeAttribute(MARK));
-        /* And the ownership marks. `data-formforge-opened` says "ours, and possibly
+        /* And the ownership marks. `data-fillsmith-opened` says "ours, and possibly
          * still up"; one left over from a previous fill makes the scan read a
          * settled part of the page as a popup's own furniture and skip the fields
          * in it. Anything genuinely on screen is picked up by panelsBefore below,
          * which is the right way to call it not ours. */
-        document.querySelectorAll('[data-formforge-opened]')
-            .forEach(el => el.removeAttribute('data-formforge-opened'));
+        document.querySelectorAll('[data-fillsmith-opened]')
+            .forEach(el => el.removeAttribute('data-fillsmith-opened'));
 
         // A panel that was on screen before we started (an inline calendar) is not one we opened.
         const panelsBefore = new Set();
@@ -794,7 +794,7 @@
         }
         let leftOpen = [];
         try {
-            const sel = `${O.PANEL_SELECTOR}, [data-formforge-opened]`;
+            const sel = `${O.PANEL_SELECTOR}, [data-fillsmith-opened]`;
             const stillOpen = () => Array.from(document.querySelectorAll(sel))
                 .filter(el => H.visible(el) && !panelsBefore.has(el)
                     && !/-leave-/.test(String(el.className || ''))
@@ -820,8 +820,8 @@
          * already reported in leftOpen and in the notes; the attribute is not
          * the record of that. */
         try {
-            document.querySelectorAll('[data-formforge-opened]')
-                .forEach(el => el.removeAttribute('data-formforge-opened'));
+            document.querySelectorAll('[data-fillsmith-opened]')
+                .forEach(el => el.removeAttribute('data-fillsmith-opened'));
         } catch (_) {
         }
 
@@ -908,12 +908,12 @@
         const f = fields.find(x => x.el === el || x.el.contains(el) || (x.group || []).includes(el));
         if (!f) {
             /* A control the form has switched off is a different answer from one
-             * FormForge does not recognise, and only one of them is worth acting
+             * Fillsmith does not recognise, and only one of them is worth acting
              * on. Said on the page, because a fill from the keyboard or the
              * context menu has nowhere else to say it. */
             const off = el.closest('[contenteditable="false"], [disabled], [aria-disabled="true"], [class*="disabled"]');
             const why = off ? 'That field is switched off — turn it on first'
-                : 'FormForge does not know how to fill that control';
+                : 'Fillsmith does not know how to fill that control';
             toast(why, {hint: true});
             return {ok: false, error: why};
         }
@@ -993,11 +993,11 @@
         '[aria-label*="entfernen" i]', '[title*="remove" i]', '[title*="delete" i]', '[title*="löschen" i]', '[title*="entfernen" i]'
     ].join(', ');
     /* No word boundary on either side. A tile renders the name against its
-     * neighbouring labels with nothing between them — "PDFformforge-a1.pdf" in
-     * front, "formforge-a1.pngGröße" behind — and a `\b` there sits between two
+     * neighbouring labels with nothing between them — "PDFfillsmith-a1.pdf" in
+     * front, "fillsmith-a1.pngGröße" behind — and a `\b` there sits between two
      * letters, so a row holding our own file did not look like one and Clear
      * left the attachment on the page. The prefix is ours; it needs no fence. */
-    const OUR_FILE = /formforge-[a-z0-9]+(?:-\d+)?\.[a-z0-9]{2,4}/i;
+    const OUR_FILE = /fillsmith-[a-z0-9]+(?:-\d+)?\.[a-z0-9]{2,4}/i;
 
     /* The row a remove button belongs to is the nearest ancestor that names one
      * of our files; a container naming one through some other row holds more
@@ -1091,12 +1091,12 @@
     /* Injection happens on demand and can happen twice (the popup warms the page,
      * then dispatches). A second listener would turn one Fill into two racing
      * runs, so everything below registers once per document. */
-    if (globalThis.__formforgeListening) return;
-    globalThis.__formforgeListening = true;
+    if (globalThis.__fillsmithListening) return;
+    globalThis.__fillsmithListening = true;
     let busy = false;
 
     // Exposed for the test suites, which call these through the content-script world.
-    globalThis.__formforge = {
+    globalThis.__fillsmith = {
         run, fillOne, clearAll, collectFields, describe, pageContext, nearbyExamples,
         pendingUploads: () => uploads.length
     };

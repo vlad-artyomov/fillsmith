@@ -1,4 +1,4 @@
-/* FormForge — vocabulary. GENERATED FILE, do not edit by hand.
+/* Fillsmith — vocabulary. GENERATED FILE, do not edit by hand.
  *
  *   npm run vocab      # regenerates this from @faker-js/faker
  *
@@ -14,7 +14,7 @@
  */
 (function () {
     'use strict';
-    globalThis.FormForgeVocab = {
+    globalThis.FillsmithVocab = {
         de: {
             first: [
                 "Ada", "Ahmed", "Alea", "Alena", "Alessio", "Alexa", "Alexandra", "Alexis", "Alfred",

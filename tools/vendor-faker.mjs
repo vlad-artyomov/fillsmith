@@ -155,7 +155,7 @@ const body = Object.entries(out).map(([loc, groups]) =>
         }).join(',\n') + '\n        }'
 ).join(',\n');
 
-const file = `/* FormForge — vocabulary. GENERATED FILE, do not edit by hand.
+const file = `/* Fillsmith — vocabulary. GENERATED FILE, do not edit by hand.
  *
  *   npm run vocab      # regenerates this from @faker-js/faker
  *
@@ -170,7 +170,7 @@ const file = `/* FormForge — vocabulary. GENERATED FILE, do not edit by hand.
  */
 (function () {
     'use strict';
-    globalThis.FormForgeVocab = {
+    globalThis.FillsmithVocab = {
 ${body}
     };
 })();

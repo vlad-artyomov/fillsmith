@@ -143,11 +143,11 @@ await worker.evaluate(async ({url}) => {
 }, {url: `${origin}/form.html`});
 // The model's answer lands after the rules have filled the form; the frame wants both.
 await page.waitForFunction(() => document.getElementById('ticket').value === 'REL-2417' &&
-    !!document.querySelector('#formforge-hud:not(.ff-busy) .ff-tick'), null, {timeout: 20000})
+    !!document.querySelector('#fillsmith-hud:not(.ff-busy) .ff-tick'), null, {timeout: 20000})
     .catch(() => console.log('the model answer did not land; the frame shows what did'));
 await page.waitForTimeout(350);
-const formShot = await save('1-filled-form.png', await page.screenshot({type: 'png'}));
-writeFileSync(join(root, 'docs', 'filled-form.png'), formShot);
+const formPng = await page.screenshot({type: 'png'});
+writeFileSync(join(root, 'docs', 'filled-form.png'), await reduce(formPng, W, H));
 console.log('docs/filled-form.png');
 
 // 2–4. The popup's panes, magnified and staged beside one line about each.
@@ -194,23 +194,41 @@ const frame = async (name, caption, shot) => {
     await save(name, await stage.screenshot({type: 'png'}));
 };
 
+/* The first frame is the only one most people see, so it carries the claim in
+ * words as well as in the picture: the form, under one line saying what it shows. */
+{
+    const bg = dark ? '#14171c' : '#eef1f5';
+    const shadow = dark ? '0 24px 60px rgba(0,0,0,.55)'
+        : '0 2px 8px rgba(16,24,40,.07),0 24px 60px rgba(16,24,40,.18)';
+    await stage.setContent(`<!doctype html><html><body style="margin:0;width:${W}px;height:${H}px;background:${bg};
+      display:flex;flex-direction:column;align-items:center;gap:26px;padding-top:40px;box-sizing:border-box;
+      overflow:hidden;font:16px/1.5 ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+      color:${dark ? '#e9ebef' : '#101418'};-webkit-font-smoothing:antialiased">
+      <div style="font-size:38px;line-height:1.1;font-weight:700;letter-spacing:-.025em">One click. Every field. Even the custom ones.</div>
+      <img src="data:image/png;base64,${formPng.toString('base64')}"
+           style="display:block;width:1000px;height:auto;border-radius:14px;box-shadow:${shadow}" alt="">
+      </body></html>`);
+    await stage.waitForTimeout(120);
+    await save('1-filled-form.png', await stage.screenshot({type: 'png'}));
+}
+
 await frame('2-one-press.png', {
-    title: 'One press. The whole form.',
-    text: 'Every field, and where its value came from. They belong to one invented person: the email follows the name, the postcode follows the city.'
+    title: 'One believable person, not random noise.',
+    text: 'The email follows the name, the postcode follows the city, the phone follows the country — and every field shows where its value came from.'
 }, await pane());
 
 await pop.click('#tabDebug');
 await pop.waitForTimeout(400);
 await frame('3-debug.png', {
-    title: 'Says why, field by field.',
-    text: 'Which rule answered, what the model was asked, where the time went — and one report to attach to the ticket.'
+    title: 'Reproduce any bug with the same data.',
+    text: 'Pin a seed to get the same person again. See which rule answered, what the AI was asked, and save one report for the ticket.'
 }, await pane());
 
 await pop.click('#tabSettings');
 await pop.waitForTimeout(300);
 await frame('4-settings.png', {
-    title: 'On-device by default.',
-    text: 'Chrome’s built-in model answers the fields no rule knows. Your own API key is optional, and the network can be switched off entirely.'
+    title: 'AI built into Chrome.<br>No key. No bill.',
+    text: 'Gemini Nano runs on your machine and answers the fields no rule knows. No account, no subscription — your own API key only if you want one.'
 }, await pane());
 
 /* The promo tile, drawn from the same mark the toolbar animates rather than
@@ -222,8 +240,8 @@ await stage.setContent(`<!doctype html><html><body style="margin:0;width:${TILE.
   justify-content:center;gap:13px;font:16px ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   color:${dark ? '#e9ebef' : '#101418'};-webkit-font-smoothing:antialiased">
   <canvas id="m" width="144" height="144" style="width:72px;height:72px"></canvas>
-  <div style="font-size:27px;font-weight:700;letter-spacing:-.02em">FormForge</div>
-  <div style="font-size:15px;color:${dark ? '#98a1ac' : '#5a6472'}">Fills any form with QA test data, in one press</div>
+  <div style="font-size:27px;font-weight:700;letter-spacing:-.02em">Fillsmith</div>
+  <div style="font-size:15px;color:${dark ? '#98a1ac' : '#5a6472'}">Free AI form filler. No key. No subscription.</div>
   <script>${drawMark ? drawMark[0] : ''}
     drawMark(document.getElementById('m').getContext('2d'), 144);
   <\/script></body></html>`);
