@@ -78,17 +78,37 @@ filled. It does nothing else.
 
 ## Permission justifications
 
-- **activeTab, scripting** — to inject the filler into the tab the user invoked it on (toolbar, shortcut or context
-  menu) and read the form's controls and labels there. There is no declared content script; nothing runs while the
-  user browses.
-- **storage** — the user's settings, an API key if one is entered, and the trail of the last ten fills that the
-  Debug tab and the report page are built from. Local to the profile.
-- **contextMenus** — the "Fill this page", "Fill just this field" and "Clear" entries in the page's context menu.
-- **Host permission `<all_urls>`** — the extension fills whatever form the user is looking at, and a tester's form is
-  on their own staging host, which cannot be known in advance. Forms are also routinely split across origins: a
-  payment provider's card fields, an embedded booking widget. `activeTab` alone covers neither, because a frame from
-  another origin is outside the tab's own origin. Nothing is declared as a content script and nothing runs while the
-  user browses: the filler is injected into one tab, on the user's action, and is removed when the page is left.
+The dashboard has one field per permission, titled with its name. Paste each block into its own field as it is.
+
+**storage**
+
+```text
+Stores the user's settings, an API key if one is entered, and the record of the last ten fills that the Debug tab and the report page are built from. Everything stays local to the browser profile; nothing is synced or sent.
+```
+
+**activeTab**
+
+```text
+Gives access to the tab the user invoked the extension on — from the toolbar button, a keyboard shortcut or the context menu — so the filler can read that page's form controls and labels and fill them. Nothing runs until the user asks.
+```
+
+**scripting**
+
+```text
+Injects the form filler into the tab the user invoked it on. There is no declared content script: the filler is injected only on the user's action (toolbar button, keyboard shortcut or context menu), and nothing runs while the user browses.
+```
+
+**contextMenus**
+
+```text
+Adds three entries to the page's right-click menu: "Fill this page with test data", "Fill just this field" and "Clear what Fillsmith filled".
+```
+
+**Host permission (`<all_urls>`)**
+
+```text
+The extension fills whatever form the user is looking at, and a tester's form lives on their own localhost or staging host, which cannot be known in advance. Forms are also routinely split across origins — a payment provider's card fields, an embedded booking widget — and activeTab alone does not reach a frame from another origin. Nothing is declared as a content script and nothing runs while the user browses: the filler is injected into one tab, only on the user's action.
+```
 
 ## Remote code
 
@@ -105,14 +125,16 @@ None. All code ships in the package. The optional hosted providers are called wi
 
 ## Assets
 
+The store takes screenshots and tiles only as 24-bit PNG without an alpha channel, which is what the tool writes.
 All of it comes out of `npm run screenshots`, drawn at twice the size and reduced, so the text holds up wherever the
 store shrinks it. `--dark` renders the same set in the dark theme.
 
-| File                             | Size     | What it shows                                                                 |
-|----------------------------------|----------|-------------------------------------------------------------------------------|
-| `docs/store/1-filled-form.png`   | 1280×800 | A form filled in one press, with the card reporting what came from where      |
-| `docs/store/2-one-press.png`     | 1280×800 | The result: every field and the source of its value                           |
-| `docs/store/3-debug.png`         | 1280×800 | The decision trail: which rule, what the model was asked, where the time went |
-| `docs/store/4-settings.png`      | 1280×800 | On-device by default, the key optional, the network optional                  |
-| `docs/store/5-promo-440x280.png` | 440×280  | The small promo tile: the mark and the one line                               |
-| `docs/store-icon128.png`         | 128×128  | The listing icon — the mark inside the store's 16 px of padding               |
+| File                                | Size     | What it shows                                                                 |
+|-------------------------------------|----------|-------------------------------------------------------------------------------|
+| `docs/store/1-filled-form.png`      | 1280×800 | A form filled in one press, with the card reporting what came from where      |
+| `docs/store/2-one-press.png`        | 1280×800 | The result: every field and the source of its value                           |
+| `docs/store/3-debug.png`            | 1280×800 | The decision trail: which rule, what the model was asked, where the time went |
+| `docs/store/4-settings.png`         | 1280×800 | On-device by default, the key optional, the network optional                  |
+| `docs/store/5-promo-440x280.png`    | 440×280  | The small promo tile: the mark and the one line                               |
+| `docs/store/6-marquee-1400x560.png` | 1400×560 | The marquee, shown when the store features it: the claim beside the form      |
+| `docs/store-icon128.png`            | 128×128  | The listing icon — the mark inside the store's 16 px of padding               |
