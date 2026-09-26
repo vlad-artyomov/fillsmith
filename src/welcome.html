@@ -32,7 +32,7 @@
             align-items: center;
             gap: 14px;
             flex-wrap: wrap;
-            margin: -8px 0 28px;
+            margin: 0 0 28px;
         }
 
         .try .btn {
@@ -98,6 +98,52 @@
             color: var(--fg);
         }
 
+        /* Pointing at where the toolbar is: up and to the right, above the page. */
+        .pin {
+            position: fixed;
+            top: 10px;
+            /* Under the puzzle piece, left of the profile and the menu. The toolbar
+             * is drawn in screen points and the page in CSS pixels, which agree at
+             * any resolution until the page is zoomed; --zoom takes that back out. */
+            right: calc(148px / var(--zoom, 1));
+            width: 220px;
+            text-align: right;
+            color: var(--accent);
+        }
+
+        .pin svg {
+            display: block;
+            width: 120px;
+            height: 70px;
+            margin: 0 0 4px auto;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .pin b {
+            display: block;
+            font-size: 15px;
+        }
+
+        .pin span {
+            display: block;
+            color: var(--muted);
+            font-size: 13px;
+            margin-top: 2px;
+        }
+
+        /* Too narrow to sit beside the page: it goes above it, still pointing up. */
+        @media (max-width: 1380px) {
+            .pin {
+                position: static;
+                width: auto;
+                margin: -32px 0 16px;
+            }
+        }
+
         .foot {
             border-top: 0;
             padding: 0;
@@ -110,14 +156,18 @@
     </style>
 </head>
 <body>
+<aside class="pin" id="pin-hint" hidden>
+    <svg viewBox="0 0 120 70" aria-hidden="true">
+        <path d="M8 64 C 50 62, 92 52, 106 10"/>
+        <path d="M94 18 L106 8 L113 24"/>
+    </svg>
+    <b>Pin Fillsmith to the toolbar</b>
+    <span>Click the puzzle piece up here, then the pin next to Fillsmith.</span>
+</aside>
 <div class="brand"><span class="mark" aria-hidden="true">F</span><span class="brand-name">Fillsmith</span></div>
 <h1>Installed. Nothing runs until you ask it to.</h1>
 <p class="lead">Fillsmith fills the form on the page you are looking at with data that belongs to one invented person,
     reads every control back, and says what it did.</p>
-
-<p class="try"><a id="try-demo" class="btn primary" href="https://vlad-artyomov.github.io/fillsmith/demo/" target="_blank"
-                  rel="noopener">Try it on the demo form</a>
-    <span>Opens in a new tab: press <kbd data-cmd="fill-form">Alt+Shift+F</kbd> there.</span></p>
 
 <ol class="steps">
     <li>
@@ -137,6 +187,10 @@
                 a fill.</span></div>
     </li>
 </ol>
+
+<p class="try"><a id="try-demo" class="btn primary" href="https://vlad-artyomov.github.io/fillsmith/demo/" target="_blank"
+                  rel="noopener">Try it on the demo form</a>
+    <span>Opens in a new tab: press <kbd data-cmd="fill-form">Alt+Shift+F</kbd> there.</span></p>
 
 <p class="lead" style="font-size:14px">The on-device model is optional: without it the rules fill every field they
     recognise. If Chrome offers it, the popup shows a download button — one time, about two gigabytes, on your

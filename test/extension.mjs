@@ -251,6 +251,20 @@ if (worker) {
         const demo = await welcome[0].evaluate(() => (document.getElementById('try-demo') || {}).href || '');
         check('and it opens the demo form on the site to try it on',
             demo === 'https://vlad-artyomov.github.io/fillsmith/demo/', demo);
+        /* An unpinned icon hides in the puzzle menu, so the page points at the
+         * toolbar until it is pinned; the demo comes after the steps that say how. */
+        const pin = await welcome[0].evaluate(async () => {
+            const hint = document.getElementById('pin-hint');
+            const settings = await chrome.action.getUserSettings();
+            const steps = document.querySelector('ol.steps');
+            const demo = document.getElementById('try-demo');
+            return {
+                onToolbar: settings.isOnToolbar, shown: !!hint && !hint.hidden,
+                demoAfterSteps: !!(steps && demo && (steps.compareDocumentPosition(demo) & Node.DOCUMENT_POSITION_FOLLOWING))
+            };
+        });
+        check('and it points at the toolbar while the icon is not pinned, after the steps the demo follows',
+            pin.shown === !pin.onToolbar && pin.demoAfterSteps, JSON.stringify(pin));
         for (const w of welcome) await w.close();
     }
 
