@@ -37,6 +37,7 @@ const dark = process.argv.includes('--dark');
 
 const W = 1280, H = 800;          // what the store takes, exactly
 const TILE = {w: 440, h: 280};    // the small promo tile
+const MARQUEE = {w: 1400, h: 560}; // the large one, used when the store features it
 const SHOT_WIDTH = 440;           // how wide a popup sits in a frame
 const SHOT_MAX = Math.round(730 * 360 / SHOT_WIDTH);   // and how much of it fits at that width
 
@@ -61,23 +62,29 @@ const ctx = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'f
 const worker = ctx.serviceWorkers()[0] || await ctx.waitForEvent('serviceworker', {timeout: 15000});
 const id = worker.url().split('/')[2];
 
-/* The 2x render, boxed down to the size the store wants — in the browser that
- * is already open, so this needs nothing else installed. */
-const scaler = await ctx.newPage();
-await scaler.setContent('<body style="margin:0">');
-const reduce = async (png, w, h) => Buffer.from(await scaler.evaluate(async ({data, w, h}) => {
-    const img = new Image();
-    img.src = 'data:image/png;base64,' + data;
-    await img.decode();
-    const c = document.createElement('canvas');
-    c.width = w;
-    c.height = h;
-    const g = c.getContext('2d');
-    g.imageSmoothingEnabled = true;
-    g.imageSmoothingQuality = 'high';
-    g.drawImage(img, 0, 0, w, h);
-    return c.toDataURL('image/png').split(',')[1];
-}, {data: png.toString('base64'), w, h}), 'base64');
+/* The 2x render, boxed down to the size the store wants, in a browser of its
+ * own at 1x so the screenshot is the canvas pixel for pixel. Through a
+ * screenshot, not the canvas's own encoder: that one writes RGBA, and the store
+ * takes screenshots and tiles only as 24-bit PNG, without alpha. */
+const plain = await chromium.launch({channel: 'chromium', headless: true});
+const scaler = await plain.newPage({deviceScaleFactor: 1});
+const reduce = async (png, w, h) => {
+    await scaler.setViewportSize({width: w, height: h});
+    await scaler.setContent('<body style="margin:0;overflow:hidden"><canvas id="c" style="display:block"></canvas>');
+    await scaler.evaluate(async ({data, w, h}) => {
+        const img = new Image();
+        img.src = 'data:image/png;base64,' + data;
+        await img.decode();
+        const c = document.getElementById('c');
+        c.width = w;
+        c.height = h;
+        const g = c.getContext('2d');
+        g.imageSmoothingEnabled = true;
+        g.imageSmoothingQuality = 'high';
+        g.drawImage(img, 0, 0, w, h);
+    }, {data: png.toString('base64'), w, h});
+    return scaler.screenshot({type: 'png', clip: {x: 0, y: 0, width: w, height: h}});
+};
 
 const save = async (name, png, w = W, h = H) => {
     const out = await reduce(png, w, h);
@@ -256,5 +263,29 @@ await stage.setContent(`<!doctype html><html><body style="margin:0;width:${TILE.
 await stage.waitForTimeout(150);
 await save('5-promo-440x280.png', await stage.screenshot({type: 'png'}), TILE.w, TILE.h);
 
+/* The marquee, shown only when the store features the extension: the claim on
+ * the left, the filled form on the right, in the site's closing green. */
+await stage.setViewportSize({width: MARQUEE.w, height: MARQUEE.h});
+await stage.setContent(`<!doctype html><html><body style="margin:0;width:${MARQUEE.w}px;height:${MARQUEE.h}px;
+  overflow:hidden;position:relative;color:#fff;-webkit-font-smoothing:antialiased;
+  font:16px ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  background:radial-gradient(120% 140% at 30% 0%, #2a8a62, #16553b 60%, #0f3a29)">
+  <div style="position:absolute;left:84px;top:0;bottom:0;width:560px;display:flex;flex-direction:column;justify-content:center">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:30px">
+      <canvas id="m" width="112" height="112" style="width:56px;height:56px"></canvas>
+      <span style="font-size:30px;font-weight:700;letter-spacing:-.02em">Fillsmith</span>
+    </div>
+    <div style="font-size:50px;line-height:1.05;font-weight:700;letter-spacing:-.03em;margin-bottom:22px">Fill any form with realistic test data. In one click.</div>
+    <div style="font-size:20px;color:rgba(255,255,255,.8)">Free · AI built into Chrome · No API key · No account</div>
+  </div>
+  <img src="data:image/png;base64,${formPng.toString('base64')}" alt=""
+       style="position:absolute;left:720px;top:70px;width:760px;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.45)">
+  <script>${drawMark ? drawMark[0] : ''}
+    drawMark(document.getElementById('m').getContext('2d'), 112);
+  <\/script></body></html>`);
+await stage.waitForTimeout(150);
+await save('6-marquee-1400x560.png', await stage.screenshot({type: 'png'}), MARQUEE.w, MARQUEE.h);
+
 await ctx.close();
+await plain.close();
 server.close();
