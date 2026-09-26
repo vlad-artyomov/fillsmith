@@ -291,7 +291,8 @@
                 <summary>Will it work on my app?</summary>
                 <p>On any page you can open in Chrome: localhost, staging, production. It drives native controls and the
                     widgets of the common component libraries, and falls back to ARIA for the rest. If a field comes out
-                    wrong, <a href="https://github.com/vlad-artyomov/fillsmith/issues">report it</a> — each fix ships with
+                    wrong, <a href="https://github.com/vlad-artyomov/fillsmith/issues">report it</a> — each fix ships
+                    with
                     a test.</p>
             </details>
             <details>
@@ -332,7 +333,9 @@
         if (!doc) return;
         // The page, not the document: a document is never shorter than the frame it is in.
         const page = doc.querySelector('.page') || doc.body;
-        const fit = () => { frame.style.height = Math.ceil(page.getBoundingClientRect().bottom + 40) + 'px'; };
+        const fit = () => {
+            frame.style.height = Math.ceil(page.getBoundingClientRect().bottom + 40) + 'px';
+        };
         new ResizeObserver(fit).observe(page);
         fit();
     });

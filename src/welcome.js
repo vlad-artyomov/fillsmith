@@ -24,16 +24,21 @@
         chrome.tabs.getCurrent((tab) => {
             if (!tab) return;
             chrome.tabs.getZoom(tab.id, zoomed);
-            chrome.tabs.onZoomChange.addListener((e) => { if (e.tabId === tab.id) zoomed(e.newZoomFactor); });
+            chrome.tabs.onZoomChange.addListener((e) => {
+                if (e.tabId === tab.id) zoomed(e.newZoomFactor);
+            });
         });
     }
 
     /* Until the icon is pinned it hides in the puzzle menu, and a user who
      * cannot find it cannot press it. Once it is pinned the hint has done its job. */
     const hint = document.getElementById('pin-hint');
-    const show = (settings) => { hint.hidden = !!(settings && settings.isOnToolbar); };
+    const show = (settings) => {
+        hint.hidden = !!(settings && settings.isOnToolbar);
+    };
     if (hint && chrome.action && chrome.action.getUserSettings) {
-        chrome.action.getUserSettings().then(show, () => {});
+        chrome.action.getUserSettings().then(show, () => {
+        });
         if (chrome.action.onUserSettingsChanged) chrome.action.onUserSettingsChanged.addListener(show);
     }
 })();

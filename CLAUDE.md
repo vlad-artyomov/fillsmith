@@ -14,7 +14,8 @@ npm run test:complete   # one fill on a clean page leaves nothing empty
 npm run test:ext        # unpacked extension + popup in Chromium (slowest)
 npm run audit           # drive the real extension and judge the page
 npm run typecheck       # the JSDoc and types/, over the logic files; emits nothing
-npm run screenshots     # the store pictures and the README's, at the size the store wants
+npm run screenshots     # the store pictures and the site's popup pictures
+npm run site            # build the landing page and its demo, and serve it at :8100
 npm run vocab           # regenerate src/vocab.js (only when changing tools/vendor-faker.mjs)
 npm run release -- patch # move the version on in manifest.json, package.json and the lockfile together
 ```

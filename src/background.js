@@ -754,7 +754,11 @@ async function nanoCheck(onStage = (/** @type {string} */ _stage) => {
  * never goes idle, and an injection waiting for it never returned — the fill did
  * not start. A frame that is not ready yet simply has nothing to fill. */
 async function injectFiller(tabId) {
-    await chrome.scripting.executeScript({target: {tabId, allFrames: true}, injectImmediately: true, files: FILLER_FILES});
+    await chrome.scripting.executeScript({
+        target: {tabId, allFrames: true},
+        injectImmediately: true,
+        files: FILLER_FILES
+    });
 }
 
 /* A page is usually more than one frame: an analytics pixel, an ad, an
@@ -768,7 +772,11 @@ async function injectFiller(tabId) {
  * script's context is invalidated but the variable it set is still there, and a
  * frame that can no longer answer anything read as ready for work. */
 async function liveFrames(tabId) {
-    const seen = await chrome.scripting.executeScript({target: {tabId, allFrames: true}, injectImmediately: true, func: () => 1});
+    const seen = await chrome.scripting.executeScript({
+        target: {tabId, allFrames: true},
+        injectImmediately: true,
+        func: () => 1
+    });
     const ids = seen.map(r => r.frameId);
     const alive = await Promise.all(ids.map(frameId =>
         chrome.tabs.sendMessage(tabId, {kind: 'ping'}, {frameId})

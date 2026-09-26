@@ -2414,13 +2414,17 @@ if (worker) {
             working(t.id, true);                       // as any fill leaves it while it runs
             await chrome.scripting.executeScript({target: {tabId: t.id, allFrames: true}, files});
             // The popup's path: through askPage, without send()'s finally to stop the icon.
-            const r = await self.askPage(t.id, {kind: 'fill', settings: {locale: 'en-US', useAI: false, overwrite: true}});
+            const r = await self.askPage(t.id, {
+                kind: 'fill',
+                settings: {locale: 'en-US', useAI: false, overwrite: true}
+            });
             // The done signal reaches the worker as a message; give it a moment to land.
             for (let i = 0; i < 40 && spinTimer; i++) await new Promise(x => setTimeout(x, 50));
             return {count: r.count, spinning: !!spinTimer, tab: spinTab};
         }, {files: INJECTED, title: 'Nothing to fill'});
         await tab.waitForFunction(() => /No fillable/.test((document.getElementById('fillsmith-hud') || {}).textContent || ''),
-            null, {timeout: 3000}).catch(() => {});
+            null, {timeout: 3000}).catch(() => {
+        });
         res.card = await tab.evaluate(() => ((document.getElementById('fillsmith-hud') || {}).textContent || '').trim());
         await tab.close();
         return res;
@@ -2436,7 +2440,10 @@ if (worker) {
         await tab.waitForTimeout(300);
         const r = await worker.evaluate(async () => {
             const t = (await chrome.tabs.query({})).find(x => x.url && x.url.includes('onlyframed.html'));
-            return self.askPage(t.id, {kind: 'fill', settings: {seed: 'FRAMED1', locale: 'en-US', useAI: false, overwrite: true}});
+            return self.askPage(t.id, {
+                kind: 'fill',
+                settings: {seed: 'FRAMED1', locale: 'en-US', useAI: false, overwrite: true}
+            });
         });
         await tab.waitForTimeout(600);
         const card = await tab.evaluate(() => ((document.getElementById('fillsmith-hud') || {}).textContent || '').trim());
@@ -2451,7 +2458,10 @@ if (worker) {
             const t = (await chrome.tabs.query({})).find(x => x.url && x.url.includes('lazyframe.html'));
             const t0 = Date.now();
             const res = await Promise.race([
-                self.askPage(t.id, {kind: 'fill', settings: {seed: 'LAZY1', locale: 'en-US', useAI: false, overwrite: true}}),
+                self.askPage(t.id, {
+                    kind: 'fill',
+                    settings: {seed: 'LAZY1', locale: 'en-US', useAI: false, overwrite: true}
+                }),
                 new Promise(done => setTimeout(() => done({ok: false, error: 'still waiting after 10s'}), 10000))
             ]);
             return {ok: res.ok, count: res.count, error: res.error, ms: Date.now() - t0};

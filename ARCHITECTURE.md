@@ -127,7 +127,8 @@ overlays, the fillers and the model client — and emits nothing. `popup.js`, `c
 out on purpose: they are almost
 entirely DOM narrowing, and ninety complaints that `getElementById` returns an `HTMLElement` would bury the one that
 mattered. `model.js` is checked, and the first thing the checker caught there was two names its move out of
-`content.js` had left behind — a class of mistake no suite sees until the path that uses them runs. What it is for is the shapes that travel between files, where a misremembered property name is silent at
+`content.js` had left behind — a class of mistake no suite sees until the path that uses them runs. What it is for is
+the shapes that travel between files, where a misremembered property name is silent at
 run time and reads as a control that would not take a value.
 
 ## Why `<all_urls>`
