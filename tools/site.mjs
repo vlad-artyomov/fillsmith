@@ -26,6 +26,7 @@ for (const f of readdirSync(join(root, 'docs/store')).filter(f => f.endsWith('.p
     copyFileSync(join(root, 'docs/store', f), join(out, 'img', f));
 }
 for (const f of ['icon32.png', 'icon128.png']) copyFileSync(join(root, 'icons', f), join(out, 'img', f));
+copyFileSync(join(root, 'docs/social-preview.png'), join(out, 'img/social.png'));
 console.log(`site built in ${out}`);
 
 if (at < 0) {
