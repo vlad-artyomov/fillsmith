@@ -38,6 +38,7 @@ const dark = process.argv.includes('--dark');
 const W = 1280, H = 800;          // what the store takes, exactly
 const TILE = {w: 440, h: 280};    // the small promo tile
 const MARQUEE = {w: 1400, h: 560}; // the large one, used when the store features it
+const SOCIAL = {w: 1280, h: 640};   // the card a link to the repository or the site unfurls into
 const SHOT_WIDTH = 440;           // how wide a popup sits in a frame
 const SHOT_MAX = Math.round(730 * 360 / SHOT_WIDTH);   // and how much of it fits at that width
 
@@ -285,6 +286,34 @@ await stage.setContent(`<!doctype html><html><body style="margin:0;width:${MARQU
   <\/script></body></html>`);
 await stage.waitForTimeout(150);
 await save('6-marquee-1400x560.png', await stage.screenshot({type: 'png'}), MARQUEE.w, MARQUEE.h);
+
+/* The social card: what a link to the repository or the site turns into in a
+ * chat. 2:1, which is what GitHub shows and what the chats crop least; the
+ * marquee's 2.5:1 would lose its edges. GitHub takes it by hand, in Settings. */
+await stage.setViewportSize({width: SOCIAL.w, height: SOCIAL.h});
+await stage.setContent(`<!doctype html><html><body style="margin:0;width:${SOCIAL.w}px;height:${SOCIAL.h}px;
+  overflow:hidden;position:relative;color:#fff;-webkit-font-smoothing:antialiased;
+  font:16px ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  background:radial-gradient(120% 140% at 30% 0%, #2a8a62, #16553b 60%, #0f3a29)">
+  <div style="position:absolute;left:72px;top:0;bottom:0;width:540px;display:flex;flex-direction:column;justify-content:center">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:34px">
+      <canvas id="m" width="112" height="112" style="width:56px;height:56px"></canvas>
+      <span style="font-size:32px;font-weight:700;letter-spacing:-.02em">Fillsmith</span>
+    </div>
+    <div style="font-size:52px;line-height:1.06;font-weight:700;letter-spacing:-.03em;margin-bottom:24px">Fill any form with<br>realistic test data.<br><span style="color:#9fe3c2">In one click.</span></div>
+    <div style="font-size:21px;line-height:1.45;color:rgba(255,255,255,.82)">Free AI form filler for Chrome.<br>No API key · No account · No subscription</div>
+  </div>
+  <img src="data:image/png;base64,${formPng.toString('base64')}" alt=""
+       style="position:absolute;left:660px;top:92px;width:760px;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.45)">
+  <script>${drawMark ? drawMark[0] : ''}
+    drawMark(document.getElementById('m').getContext('2d'), 112);
+  <\/script></body></html>`);
+await stage.waitForTimeout(150);
+{
+    const card = await reduce(await stage.screenshot({type: 'png'}), SOCIAL.w, SOCIAL.h);
+    writeFileSync(join(root, 'docs', 'social-preview.png'), card);
+    console.log(`docs/social-preview.png  ${SOCIAL.w}×${SOCIAL.h}`);
+}
 
 await ctx.close();
 await plain.close();
