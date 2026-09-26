@@ -1664,7 +1664,10 @@ const shape = await page.evaluate(async () => {
     await window.__fillsmith.run({seed: 'SHAPE9', locale: 'de-DE', useAI: false, overwrite: true});
     clearInterval(timer);
     const hs = seen.map(x => x.h);
-    return {steps: seen.map(x => `${x.h}px at "${x.title}"`), spread: hs.length ? Math.max(...hs) - Math.min(...hs) : 0};
+    return {
+        steps: seen.map(x => `${x.h}px at "${x.title}"`),
+        spread: hs.length ? Math.max(...hs) - Math.min(...hs) : 0
+    };
 });
 check('the card keeps one shape through every stage of a fill',
     shape.spread <= 2, shape.steps.join(' → ') || '(never busy)');

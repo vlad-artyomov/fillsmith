@@ -1,6 +1,6 @@
 {
   "name": "fillsmith",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "private": true,
   "description": "Chrome MV3 extension that fills forms with coherent, reproducible QA test data, including component-library widgets. On-device AI, no SaaS.",
   "scripts": {

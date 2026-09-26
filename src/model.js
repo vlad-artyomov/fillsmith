@@ -158,6 +158,7 @@
 
     /* Ask the model about the fields nothing local could answer. Always bounded:
      * whatever has not answered by the deadline is filled by the rules. */
+
     /* Everything a new request must forget, and the one question it must ask
      * again. Kept here rather than in the caller because both callers need it
      * and only one of them had it: filling a single field reused the answer to

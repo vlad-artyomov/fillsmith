@@ -9,7 +9,8 @@ Fillsmith — Free AI Form Filler & Test Data Generator
 
 ## Short description (132 characters max)
 
-One click fills any form with realistic test data, even custom dropdowns and date pickers. Free built-in AI: no API key, no account.
+One click fills any form with realistic test data, even custom dropdowns and date pickers. Free built-in AI: no API key,
+no account.
 
 ## Category
 
