@@ -21,6 +21,8 @@ Developer Tools
 The first two lines show before "read more", so they carry the whole pitch. The sections after them answer the
 doubts in the order a tester has them: will it handle my form, is the data believable, will it pass validation, what
 does the AI cost. Search terms are written into sentences, never listed — a keyword list is spam to the reviewers.
+The first submission was rejected as Yellow Argon (excessive keywords) for naming the ten supported component
+libraries in one line; they are named on the site and in the README, never in the store's description.
 
 Paste the block as it is: the store keeps line breaks, so a paragraph is one line.
 
@@ -29,8 +31,8 @@ Stop typing test data. One click fills the whole form — every field, every cus
 
 WORKS WHERE OTHER FORM FILLERS STOP
 Most fillers set a value and hope. That does nothing on the controls real apps are built from: a Select that is really a popup, a date picker that ignores typing, a rich-text editor that only accepts a real paste. Fillsmith works each control like a person: opens the dropdown and picks a real option, waits for lists that load from the server, clicks the day in the calendar — then reads the field back to check the page kept it.
-• PrimeVue, MUI, Ant Design, react-select, Radix, Headless UI, Choices.js, Select2, Tom Select, vue-multiselect — and any library that follows ARIA
-• React, Vue and Angular apps, on localhost, staging or any other host
+• Custom selects, date pickers, rich-text editors and file uploads from the popular component libraries, and any control that follows ARIA
+• Any web app, on localhost, staging or any other host
 
 ONE PERSON, NOT RANDOM NOISE
 • The email matches the name, the postcode matches the city, the phone matches the country
@@ -66,6 +68,8 @@ Open source (MIT): https://github.com/vlad-artyomov/fillsmith
 ```
 
 ## URLs
+
+- **The listing**: https://chromewebstore.google.com/detail/amhpkgalagghaabpdnkjclkkjcellabm — published 2026-10-02
 
 - **Homepage**: https://vlad-artyomov.github.io/fillsmith/ — the landing page, with the demo form to try it on
 - **Support**: https://github.com/vlad-artyomov/fillsmith/issues
