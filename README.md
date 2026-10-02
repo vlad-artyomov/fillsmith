@@ -6,8 +6,9 @@
 
 For QA engineers who fill the same create-form forty times a day.
 
-**[Website and live demo →](https://vlad-artyomov.github.io/fillsmith/)**
+**[Add to Chrome — it's free](https://chromewebstore.google.com/detail/amhpkgalagghaabpdnkjclkkjcellabm)** · **[Website and live demo](https://vlad-artyomov.github.io/fillsmith/)**
 
+[![Chrome Web Store](https://img.shields.io/chrome-web-store/v/amhpkgalagghaabpdnkjclkkjcellabm?color=1f6f4f&label=chrome%20web%20store)](https://chromewebstore.google.com/detail/amhpkgalagghaabpdnkjclkkjcellabm)
 [![tests](https://github.com/vlad-artyomov/fillsmith/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/vlad-artyomov/fillsmith/actions/workflows/test.yml)
 [![latest release](https://img.shields.io/github/v/release/vlad-artyomov/fillsmith?color=1f6f4f&label=release)](https://github.com/vlad-artyomov/fillsmith/releases/latest)
 [![Chrome Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-1f6f4f)](manifest.json)
@@ -67,10 +68,11 @@ Fillsmith drives each control the way a person does — then reads it back to se
 
 ## 📦 Install
 
-Either take the packaged build from [**Releases**](https://github.com/vlad-artyomov/fillsmith/releases/latest) —
-`fillsmith-<version>.zip`, unzipped — or clone this repository. Then:
+From the [**Chrome Web Store**](https://chromewebstore.google.com/detail/amhpkgalagghaabpdnkjclkkjcellabm) — one click, and it updates itself.
 
-Open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked**, pick the folder.
+To run a build of your own instead, take `fillsmith-<version>.zip` from
+[**Releases**](https://github.com/vlad-artyomov/fillsmith/releases/latest), unzipped, or clone this repository. Then
+open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked**, pick the folder.
 
 Chrome 128+, and Chrome 138+ for the on-device model — without it the rules still fill every recognised field.
 Nothing to build, nothing to sign up for. The ZIP is built by CI from the tag, holds the manifest,
