@@ -138,7 +138,15 @@
             option: '[role="option"]'
         },
         {id: 'aria-switch', kind: 'bool', root: '[role="switch"]'},
-        {id: 'aria-radiogroup', kind: 'inline-choice', root: '[role="radiogroup"]', option: '[role="radio"]'}
+        /* Only a group of ARIA radios. A radiogroup role on a wrapper of native
+         * radios (MKIS's RadioButtonInput, as accessible markup should be) is
+         * named, not drawn: claiming it hid the radios and found no options. */
+        {
+            id: 'aria-radiogroup',
+            kind: 'inline-choice',
+            root: '[role="radiogroup"]:not(:has(input[type="radio"]))',
+            option: '[role="radio"]'
+        }
     ];
 
     /* Deliberately not `[readonly]`: PrimeVue puts readonly on every Select's

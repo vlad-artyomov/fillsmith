@@ -103,6 +103,8 @@ function renderShortcuts() {
 }
 
 let providerDefaults = {};
+let defaultsArrived;
+const defaultsReady = new Promise(r => { defaultsArrived = r; });
 
 async function load() {
     showTab('fill');
@@ -110,6 +112,7 @@ async function load() {
     chrome.runtime.sendMessage({kind: 'providers'}, (r) => {
         providerDefaults = (r && r.defaults) || {};
         syncBackendUi();
+        defaultsArrived();
     });
     for (const [k, v] of Object.entries(localeOptions())) {
         const o = document.createElement('option');
@@ -158,9 +161,73 @@ async function load() {
     tabId().then(id => {
         if (id != null) chrome.runtime.sendMessage({kind: 'inject', tabId: id}, () => void chrome.runtime.lastError);
     });
-    chrome.runtime.sendMessage({kind: 'nano-warm'}, () => void chrome.runtime.lastError);
+    showStatus();
+}
 
+/* What will answer the fields no rule knows, said in the pill. With "Key only"
+ * that is the provider's model, checked with a real round trip; with the model
+ * switched off it is nobody; otherwise it is Chrome's own, as before. */
+let statusRun = 0;
+function showStatus() {
+    let run = ++statusRun;
+    const pill = $('status');
+    const text = $('statusText');
+    $('modelSlot').innerHTML = '';
+    if (!$('useAI').checked) {
+        pill.className = 'pill';
+        text.textContent = 'AI off';
+        pill.title = 'The rules fill every field they recognise; the model is switched off in Settings.';
+        return;
+    }
+    if ($('backend').value === 'remote-only') {
+        // The provider's default model comes from the worker; a moment's wait for it, never longer.
+        Promise.race([defaultsReady, new Promise(r => setTimeout(r, 300))]).then(() => {
+            if (run === statusRun) hostedStatus(run);
+        });
+        return;
+    }
+    chrome.runtime.sendMessage({kind: 'nano-warm'}, () => void chrome.runtime.lastError);
+    deviceStatus(run);
+}
+
+function hostedStatus(run) {
+    const pill = $('status');
+    const text = $('statusText');
+    /* Who answers is known from the settings before the check comes back, so
+     * the pill says it at once and the check only colours it. It must also
+     * end: a worker that never answers — an older one, still running until
+     * the extension is reloaded — left it saying "checking" for good. */
+    const option = $('provider').selectedOptions[0];
+    const name = $('provider').value && option ? option.textContent.trim() : '';
+    const model = $('model').value.trim() || providerDefaults[$('provider').value] || '';
+    const who = [name, model].filter(Boolean).join(' · ') || 'hosted model';
+    pill.className = 'pill checking';
+    text.textContent = who;
+    pill.title = `Checking that ${who} answers…`;
+    const verdict = (cls, line, title) => {
+        if (run !== statusRun) return;
+        run = -1;                                   // one verdict per check, whichever comes first
+        pill.className = cls;
+        text.textContent = line;
+        pill.title = title;
+    };
+    const late = setTimeout(() => verdict('pill warn', `${name || 'API'} · no answer`,
+        `${who} did not answer the check within 35s. Rules still fill every recognised field.`), 35000);
+    chrome.runtime.sendMessage({kind: 'remote-status'}, (r) => {
+        const lost = chrome.runtime.lastError;
+        clearTimeout(late);
+        if (!r || lost) return verdict('pill warn', `${who} · not checked`,
+            'The background part of Fillsmith did not answer — reload the extension in chrome://extensions.');
+        const named = [r.name, r.model].filter(Boolean).join(' · ') || who;
+        if (r.ok) verdict('pill ok', named, `${named} answers the fields no rule recognises — replied in ${fmtMs(r.ms || 0)}.`);
+        else verdict('pill warn', [r.name || name, r.problem].filter(Boolean).join(' · '),
+            `${named}: ${r.problem}. Rules still fill every recognised field.`);
+    });
+}
+
+function deviceStatus(run) {
     chrome.runtime.sendMessage({kind: 'nano-status'}, (res) => {
+        if (run !== statusRun) return;
         const pill = $('status');
         const text = $('statusText');
         const status = res && res.status;
@@ -186,6 +253,7 @@ async function load() {
             };
             if (settle(res)) return;
             const poll = setInterval(() => {
+                if (run !== statusRun) return clearInterval(poll);
                 chrome.runtime.sendMessage({kind: 'nano-status'}, (r) => {
                     void chrome.runtime.lastError;
                     if (settle(r)) clearInterval(poll);
@@ -249,13 +317,15 @@ function settings() {
     };
 }
 
+let saved = Promise.resolve();
 function save() {
     // Store the pinned seed as typed — writing the rolled one back would make
     // today's random person tomorrow's fixed one.
-    chrome.storage.local.set(Object.assign(settings(), {
+    saved = chrome.storage.local.set(Object.assign(settings(), {
         seed: fixedSeed(),
         seedPinned: fixedSeed() !== ''
     }));
+    return saved;
 }
 
 async function tabId() {
@@ -845,6 +915,9 @@ const flush = () => {
     save();
 };
 document.addEventListener('change', flush);
+document.addEventListener('change', (e) => {
+    if (DECIDES_STATUS.has(e.target && e.target.id)) saved.then(showStatus, showStatus);
+});
 document.addEventListener('focusout', () => {
     if (saveTimer) flush();
 });
@@ -853,7 +926,20 @@ document.addEventListener('input', () => {
     saveTimer = setTimeout(flush, 120);
 });
 for (const id of ['backend', 'provider', 'apiKey']) $(id).addEventListener('input', syncBackendUi);
+/* A model is named for one provider. Typed for Anthropic and left in the field
+ * when the provider became OpenAI, it was sent to OpenAI, which refused it — and
+ * the refusal read like a bad key. A model of another provider's family goes;
+ * an empty field means that provider's default. */
+const MODEL_FAMILY = {anthropic: /^claude/i, openai: /^(gpt|o\d|chatgpt|codex)/i, gemini: /^(gemini|gemma)/i};
+$('provider').addEventListener('change', () => {
+    const model = $('model').value.trim();
+    const owner = Object.keys(MODEL_FAMILY).find(p => MODEL_FAMILY[p].test(model));
+    if (model && owner && owner !== $('provider').value) $('model').value = '';
+});
 for (const id of ['backend', 'provider']) $(id).addEventListener('change', syncBackendUi);
+/* The pill follows the settings that decide who answers, once they are stored —
+ * the worker reads them from there — and a key once it is typed, not per keystroke. */
+const DECIDES_STATUS = new Set(['useAI', 'backend', 'provider', 'model', 'apiKey']);
 // The domain as it will be used, shown the moment the box is left: "@acme.test" becomes acme.test.
 $('emailDomain').addEventListener('blur', () => {
     const G = globalThis.FillsmithGen;

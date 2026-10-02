@@ -66,4 +66,5 @@ interface WorkerGlobalScope {
     injectFiller?(tabId: number): Promise<void>;
 
     askPage?(tabId: number, msg: object): Promise<any>;
+    remoteStatus?(): Promise<object>;
 }

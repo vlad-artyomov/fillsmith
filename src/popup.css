@@ -110,6 +110,27 @@ body {
     white-space: nowrap;
 }
 
+/* A provider's error can carry one long token — OpenAI echoes the masked key — and an
+   unbreakable line pushed the check out of the popup. */
+#setupCheck {
+    overflow-wrap: anywhere;
+}
+
+/* A hosted model's name can be long; the pill keeps to the header and says it all in its title. */
+.pill {
+    max-width: 230px;
+}
+
+/* A check in flight: the dot breathes until the verdict colours the pill. */
+.pill.checking .dot {
+    animation: ff-pulse 1.2s ease-out infinite;
+}
+
+#statusText {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .pill .dot {
     width: 6px;
     height: 6px;
@@ -910,7 +931,7 @@ details[open] summary {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .act.is-now .act-dot {
+    .act.is-now .act-dot, .pill.checking .dot {
         animation: none;
     }
 }

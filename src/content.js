@@ -169,15 +169,37 @@
         }
     };
 
+    /* A widget's popup is the page's own, and opening one can scroll the whole
+     * window: PrimeVue puts the caret in its search box, unasked to keep still,
+     * and with the field below the screen the browser goes there. On an app that
+     * scrolls an inner pane and never the window, that showed a blank page while
+     * a list loaded and left the layout shifted up after. Such a window is put
+     * back the moment it moves; any window is put back when the control is done. */
+    async function holdingWindow(work) {
+        const x = scrollX, y = scrollY;
+        const page = document.scrollingElement || document.documentElement;
+        const still = page.scrollHeight <= innerHeight + 1;
+        const back = () => {
+            if (scrollX !== x || scrollY !== y) scrollTo(x, y);
+        };
+        if (still) addEventListener('scroll', back);
+        try {
+            return await work();
+        } finally {
+            if (still) removeEventListener('scroll', back);
+            back();
+        }
+    }
+
     // Write one value and return what the control holds afterwards (null = nothing landed).
     async function applyValue(f, rawValue, persona) {
         if (f.kind === 'widget') {
-            return await W.fill(f.widget, G.constrain(shapeFor(f, rawValue, persona), f), {
+            return await holdingWindow(() => W.fill(f.widget, G.constrain(shapeFor(f, rawValue, persona), f), {
                 rng, persona, label: captionOf(f, 24),
                 required: !!f.required,
                 requireMatch: REAL_WORLD_CHOICE.test(f.label || ''),
                 typeFirst: !!f.typeFirst
-            });
+            }));
         }
 
         const el = f.el;
@@ -212,7 +234,7 @@
                 const opts = f.options || [];
                 if (!opts.length) return null;
                 const choice = O.matchAmong(opts, rawValue) || opts[Math.floor(rng() * opts.length)];
-                el.focus();
+                el.focus({preventScroll: true});
                 H.setNativeValue(el, choice.value);
                 fire(el, ['input', 'change']);
                 const picked = el.selectedOptions && el.selectedOptions[0];

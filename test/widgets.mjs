@@ -253,9 +253,16 @@ check('still sees the plain inputs', scan.filter(f => f.kind === 'native').lengt
 check('does not double-count widget-owned inputs',
     !scan.some(f => f.kind === 'native' && /Capacity|Regions|Contact person/.test(f.label)));
 
+const windowBefore = await page.evaluate(() => (scrollTo(0, 0), scrollY));
 const res = await page.evaluate(() => window.__fillsmith.run({
     seed: 'WID001', locale: 'de-DE', useAI: false, overwrite: true, emailDomain: 'example.com'
 }));
+const windowAfter = await page.evaluate(() => scrollY);
+/* A widget's popup can scroll the whole window — its search box takes focus
+ * below the screen — and the fill left it there: on the real app the page went
+ * blank while a list loaded and stayed shifted up after. */
+check('the fill leaves the window where it found it', windowAfter === windowBefore,
+    `scrollY ${windowBefore} → ${windowAfter}`);
 
 const snap = await page.evaluate(() => window.__snapshot());
 console.log('Page model after fill:');

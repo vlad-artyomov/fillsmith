@@ -708,6 +708,118 @@ if (worker) {
     check('and the refusal is remembered, so the next batch asks once',
         effort.triesSecond === 1 && effort.second && effort.second.value === 'Köln',
         JSON.stringify({tries: effort.triesSecond, asked: effort.asked}));
+    /* With "Key only" there is no on-device model to wait for: nothing builds a
+     * session — a fill does not, and opening the popup does not — and the
+     * popup says which provider and model will answer, from a real round trip,
+     * instead of "model ready" about a model the fills never use. */
+    step('a hosted-only setup');
+    const keyOnly = await withTimeout((async () => {
+        const defaultModel = await worker.evaluate(async () => {
+            self.__real = {lm: self.LanguageModel, fetch: self.fetch};
+            self.__creates = 0;
+            self.LanguageModel = {
+                async availability() {
+                    return 'available';
+                },
+                async create() {
+                    self.__creates++;
+                    return {inputUsage: 1, inputQuota: 99, async prompt() { return '{}'; }, async clone() { return this; }, destroy() {}};
+                }
+            };
+            // Slow enough that the popup can be read while the check is still in flight.
+            self.fetch = async (url, o) => (await new Promise(r => setTimeout(r, 800))) || o.headers['x-api-key'] === 'bad'
+                ? new Response(JSON.stringify({type: 'error', error: {type: 'authentication_error', message: 'invalid x-api-key'}}), {status: 401})
+                : new Response(JSON.stringify({content: [{type: 'text', text: '{"0":"Köln"}'}]}), {status: 200});
+            nanoSession = null;
+            await chrome.storage.session.remove('remoteStatus');
+            await chrome.storage.local.set({backend: 'remote-only', provider: 'anthropic', apiKey: 'good', model: '', useAI: true});
+            return PROVIDERS.anthropic.model;
+        });
+        try {
+            const p = await ctx.newPage();
+            await p.goto(`chrome-extension://${id}/src/popup.html`);
+            const read = () => p.evaluate(() => ({text: document.getElementById('statusText').textContent, cls: document.getElementById('status').className}));
+            await p.waitForFunction(() => /checking/.test(document.getElementById('status').className), null, {timeout: 3000}).catch(() => {});
+            const checking = await read();
+            await p.waitForFunction(() => /\bok\b/.test(document.getElementById('status').className), null, {timeout: 6000}).catch(() => {});
+            const pill = await read();
+            const [warm, status] = await p.evaluate(() => Promise.all([
+                new Promise(r => chrome.runtime.sendMessage({kind: 'nano-warm'}, r)),
+                new Promise(r => chrome.runtime.sendMessage({kind: 'remote-status'}, r))
+            ]));
+            await p.close();
+            const rest = await worker.evaluate(async () => {
+                await new Promise(r => setTimeout(r, 300));    // a build, had one started, would have called create() by now
+                const built = {creates: self.__creates, session: !!nanoSession};
+                await chrome.storage.local.set({apiKey: 'bad'});
+                return {built, bad: await remoteStatus()};
+            });
+            return {defaultModel, checking, pill, warm, status, built: rest.built, bad: rest.bad};
+        } finally {
+            await worker.evaluate(async () => {
+                self.LanguageModel = self.__real.lm;
+                self.fetch = self.__real.fetch;
+                nanoSession = null;
+                await chrome.storage.local.set({backend: 'ondevice-first', provider: '', apiKey: '', model: ''});
+                await chrome.storage.session.remove('remoteStatus');
+            });
+        }
+    })().catch(e => ({error: e.message})), 30000, 'key-only');
+    check('with "Key only" neither the popup nor a fill builds an on-device session',
+        keyOnly && !keyOnly.error && keyOnly.warm && keyOnly.warm.ready === true
+        && keyOnly.built && keyOnly.built.creates === 0 && !keyOnly.built.session,
+        keyOnly.error || JSON.stringify({warm: keyOnly.warm, built: keyOnly.built}));
+    check('and the popup names the provider and model that answer, from a real round trip',
+        keyOnly.pill && /Anthropic/.test(keyOnly.pill.text) && keyOnly.pill.text.includes(keyOnly.defaultModel)
+        && /\bok\b/.test(keyOnly.pill.cls) && keyOnly.status && keyOnly.status.ok === true,
+        JSON.stringify({pill: keyOnly.pill, status: keyOnly.status}));
+    check('and it names them at once, while the check is still in flight',
+        keyOnly.checking && /checking/.test(keyOnly.checking.cls) && /Anthropic/.test(keyOnly.checking.text),
+        JSON.stringify(keyOnly.checking));
+    check('and a rejected key says so instead of claiming it is ready',
+        keyOnly.bad && keyOnly.bad.ok === false && /key/i.test(keyOnly.bad.problem || ''),
+        JSON.stringify(keyOnly.bad));
+    /* A provider's error can carry one long token — OpenAI echoes the masked
+     * key — and it pushed the setup check out of the popup. And a model typed
+     * for one provider stayed in the field when the provider changed, so OpenAI
+     * was asked for claude-haiku-4-5 and refused a key that was fine. */
+    const setupLayout = await withTimeout((async () => {
+        const p = await ctx.newPage();
+        await p.setViewportSize({width: 360, height: 700});
+        await p.goto(`chrome-extension://${id}/src/popup.html`);
+        await p.waitForTimeout(300);
+        const out = await p.evaluate(() => {
+            const box = document.getElementById('setupCheck');
+            renderSetupCheck(box, {backend: 'remote-only', provider: 'openai', model: 'gpt-4o-mini', ondevice: {ok: false, note: 'not used'},
+                remote: {ok: false, status: 401, error: 'openai answered HTTP 401: Incorrect API key provided: sk-ant-a' + '*'.repeat(90) + 'TQAA.'}});
+            document.getElementById('tabSettings').click();
+            document.getElementById('advanced').open = true;
+            const wide = document.documentElement.scrollWidth > document.documentElement.clientWidth + 1;
+            const $ = (x) => document.getElementById(x);
+            $('provider').value = 'anthropic';
+            $('provider').dispatchEvent(new Event('change', {bubbles: true}));
+            $('model').value = 'claude-haiku-4-5';
+            $('model').dispatchEvent(new Event('change', {bubbles: true}));
+            $('provider').value = 'openai';
+            $('provider').dispatchEvent(new Event('change', {bubbles: true}));
+            const model = $('model').value;
+            $('provider').value = 'openai';
+            $('model').value = 'gpt-4.1-mini';
+            $('provider').value = 'openai';
+            $('provider').dispatchEvent(new Event('change', {bubbles: true}));
+            const kept = $('model').value;
+            $('provider').value = '';
+            $('model').value = '';
+            $('provider').dispatchEvent(new Event('change', {bubbles: true}));
+            return {wide, model, kept};
+        });
+        await p.close();
+        return out;
+    })().catch(e => ({error: e.message})), 15000, 'setup-layout');
+    check('a long token in a provider error wraps inside the popup',
+        setupLayout && !setupLayout.error && setupLayout.wide === false, JSON.stringify(setupLayout));
+    check('changing the provider drops a model typed for another one, and keeps its own',
+        setupLayout && setupLayout.model === '' && setupLayout.kept === 'gpt-4.1-mini', JSON.stringify(setupLayout));
     check('a closed port is explained by the stage the worker reached',
         /stopped while waiting for the on-device reply/.test(closed.text) && /running since|restarted/.test(closed.text),
         closed.text.slice(0, 160));
