@@ -42,6 +42,10 @@ OpenAI or Google):
   On an admin page these can be real records — use *On-device only* where that matters;
 - the invented persona.
 
+With the backend set to *Key only*, opening the popup also checks that the key works: one request to that provider
+with made-up data — a test person and a single field, nothing from any page — at most every ten minutes. A digest of
+the key, never the key itself, is kept to know when it was last checked.
+
 It never sends what is typed into the form's fields, your key to anyone but that provider, or anything at all when
 the backend is set to *On-device only*.
 

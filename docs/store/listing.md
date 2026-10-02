@@ -59,19 +59,20 @@ FAST
 Alt+Shift+F fills the page · Alt+Shift+D fills the focused field · Alt+Shift+R fills again as a new person · Alt+Shift+C clears. Or right-click → Fill this page.
 
 FREE. REALLY.
-No subscription, no Pro plan, no credits, no sign-up. No analytics, no tracking, nothing sent anywhere unless you add your own API key — and then only for fields no rule could answer: their labels, limits and options, the form's title and a few short texts from a table on the page, to the provider you chose.
+No subscription, no Pro plan, no credits, no sign-up. No analytics, no tracking, nothing sent anywhere unless you add your own API key — and then only for fields no rule could answer: their labels, limits and options, the form's title and a few short texts from a table on the page, to the provider you chose. With the key as the only backend, the popup also checks that it works, with one test request of made-up data at most every ten minutes.
 Privacy policy: https://github.com/vlad-artyomov/fillsmith/blob/main/PRIVACY.md
 
 The built-in AI needs Chrome 138 or later and a one-time model download by Chrome (about 2 GB) on supported hardware. Without it, Fillsmith still fills every field it recognises.
 
+Website and live demo: https://vlad-artyomov.github.io/fillsmith/
 Open source (MIT): https://github.com/vlad-artyomov/fillsmith
 ```
 
 ## URLs
 
 - **The listing**: https://chromewebstore.google.com/detail/amhpkgalagghaabpdnkjclkkjcellabm — published 2026-10-02
-
-- **Homepage**: https://vlad-artyomov.github.io/fillsmith/ — the landing page, with the demo form to try it on
+- **Homepage / Official URL**: https://vlad-artyomov.github.io/fillsmith/ — the landing page, with the demo form to try
+  it on; verified in Google Search Console, so the store can name it as the official URL
 - **Support**: https://github.com/vlad-artyomov/fillsmith/issues
 - **Privacy policy**: https://github.com/vlad-artyomov/fillsmith/blob/main/PRIVACY.md
 
