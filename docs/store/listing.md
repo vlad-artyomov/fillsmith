@@ -74,7 +74,9 @@ Open source (MIT): https://github.com/vlad-artyomov/fillsmith
 - **Homepage / Official URL**: https://vlad-artyomov.github.io/fillsmith/ — the landing page, with the demo form to try
   it on; verified in Google Search Console, so the store can name it as the official URL
 - **Support**: https://github.com/vlad-artyomov/fillsmith/issues
-- **Privacy policy**: https://github.com/vlad-artyomov/fillsmith/blob/main/PRIVACY.md
+- **Privacy policy**: https://github.com/vlad-artyomov/fillsmith/blob/main/PRIVACY.md — what the dashboard holds. Its
+  link check once refused it and took it after a refresh; https://vlad-artyomov.github.io/fillsmith/privacy/ is the
+  same text, built from PRIVACY.md with the site, if it refuses again
 
 ## Single purpose
 
