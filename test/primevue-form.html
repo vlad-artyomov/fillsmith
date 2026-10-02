@@ -1242,7 +1242,10 @@
         </div>
 
         <h2 class="sec">Booking</h2>
-        <div class="field" id="bestaetigung">
+        <!-- As MKIS renders RadioButtonInput since MKIS-3605: the wrapper is an
+             ARIA radiogroup named by its label, and the radios in it are native.
+             The ARIA adapter claimed the wrapper and found no [role="radio"]. -->
+        <div class="field" id="bestaetigung" role="radiogroup" aria-labelledby="lbl-best">
             <label id="lbl-best">Booking confirmation</label>
             <div class="p-radiobutton p-component" data-pc-name="radiobutton" data-pc-section="root">
                 <input class="p-radiobutton-input" type="radio" name="bookingConfirmation" value="AUTOMATIC"
@@ -2282,8 +2285,13 @@
             ov.querySelector('.p-select-filter').addEventListener('input', (ev) => search(ev.target.value, true));
             document.body.appendChild(ov);
             const r = root.getBoundingClientRect();
-            ov.style.cssText = 'position:absolute;left:' + r.left + 'px;top:' + (r.bottom + 2) + 'px;width:' + r.width + 'px';
+            ov.style.cssText = 'position:absolute;left:' + r.left + 'px;top:' + (r.bottom + scrollY + 2) + 'px;width:' + r.width + 'px';
             combo.setAttribute('aria-expanded', 'true');
+            /* PrimeVue puts the caret in the search box when the list opens, and
+             * without preventScroll: with the field below the screen, the browser
+             * scrolls the whole window to it. On the real app's location form that
+             * left the page blank while the countries loaded, then shifted up. */
+            ov.querySelector('.p-select-filter').focus();
             search('');
         });
     })();

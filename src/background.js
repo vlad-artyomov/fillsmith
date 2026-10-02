@@ -1152,6 +1152,45 @@ chrome.commands.onCommand.addListener(async (command) => {
 });
 
 // --------------------------------------------------------------- messaging ----
+/* With "Key only" the popup names who answers and whether they do: one round
+ * trip through the same prompt a fill sends. A working answer is kept for a few
+ * minutes, keyed by a digest of the key rather than the key itself — opening the
+ * popup must not cost a request every time. A failure is never kept. */
+const PROVIDER_NAMES = {anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gemini'};
+const REMOTE_STATUS_KEPT_MS = 10 * 60 * 1000;
+
+async function digest(text) {
+    const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(bytes).slice(0, 8), b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function remoteStatus() {
+    const cfg = await chrome.storage.local.get(['provider', 'apiKey', 'model']);
+    const provider = PROVIDERS[cfg.provider];
+    const out = {
+        provider: cfg.provider || '', name: PROVIDER_NAMES[cfg.provider] || cfg.provider || '',
+        model: cfg.model || (provider ? provider.model : '')
+    };
+    if (!provider) return Object.assign(out, {ok: false, problem: 'no provider chosen'});
+    if (!cfg.apiKey) return Object.assign(out, {ok: false, problem: 'no API key'});
+    const sig = `${cfg.provider}|${out.model}|${await digest(cfg.apiKey)}`;
+    /** @type {{sig?: string, at?: number} | undefined} */
+    const kept = (await scratch.get('remoteStatus')).remoteStatus;
+    if (kept && kept.sig === sig && Date.now() - kept.at < REMOTE_STATUS_KEPT_MS) return kept;
+    const prompt = buildUserPrompt(PROBE_PERSONA, 'Fillsmith self-check', PROBE_FIELD, {dialog: 'Fillsmith self-check'}, []);
+    const r = await keptAlive(remoteCall(cfg, PROBE_FIELD, prompt));
+    const value = r.parsed['0'];
+    const ok = !r.error && typeof value === 'string' && value.trim() !== '';
+    const problem = ok ? ''
+        : r.status === 401 || r.status === 403 ? 'key rejected'
+            : r.status === 429 ? 'rate limited'
+                : r.status === 404 ? 'model not found'
+                    : r.status ? `HTTP ${r.status}` : r.error ? 'no answer' : 'no usable answer';
+    const result = Object.assign(out, {ok, problem, ms: r.ms, at: Date.now(), sig});
+    if (ok) await scratch.set({remoteStatus: result}).catch(ignore);
+    return result;
+}
+
 /* The whole setup, checked the way a fill would use it: which backend is
  * configured, whether the on-device model answers, and whether the hosted
  * provider accepts the key and the model name — a real round trip, with the
@@ -1233,12 +1272,22 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
         working(tabId, !(msg.step && msg.step.stage === 'done'));
         return false;
     }
-    // Answer whether a session already exists, and start building one if not.
+    /* Answer whether a session already exists, and start building one if not —
+     * unless no fill will use it. "Key only" has nothing to start, and is ready
+     * by definition: a hosted model has no cold start for a fill to wait out. */
     if (msg.kind === 'nano-warm') {
-        const ready = !!nanoSession;
-        nanoSessionGet({allowDownload: false}).catch(ignore);
-        respond({ok: true, ready});
-        return false;
+        chrome.storage.local.get(['backend', 'useAI']).then(cfg => {
+            if (cfg.useAI === false) return respond({ok: true, ready: false, off: true});
+            if (cfg.backend === 'remote-only') return respond({ok: true, ready: true, hosted: true});
+            const ready = !!nanoSession;
+            nanoSessionGet({allowDownload: false}).catch(ignore);
+            respond({ok: true, ready});
+        }, () => respond({ok: false}));
+        return true;
+    }
+    if (msg.kind === 'remote-status') {
+        remoteStatus().then(respond, e => respond({ok: false, problem: String(e && e.message || e)}));
+        return true;
     }
     if (msg.kind === 'last-exchange') {
         respond({ok: true, exchange: lastExchange});
@@ -1279,3 +1328,4 @@ const worker = /** @type {WorkerGlobalScope} */ (/** @type {unknown} */ (self));
 worker.FILLER_FILES = FILLER_FILES;
 worker.injectFiller = injectFiller;
 worker.askPage = askPage;
+worker.remoteStatus = remoteStatus;
