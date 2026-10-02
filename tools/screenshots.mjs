@@ -20,7 +20,7 @@
  *   the window it is measured in, and `fullPage` hands back the empty half too:
  *   on a white card that reads as a screenshot of something that failed to load.
  *
- *   node tools/screenshots.mjs             # docs/store/*.png and site/img/popup-*.png
+ *   node tools/screenshots.mjs             # docs/store/*.png, docs/filled-form.png, site/img/popup-*.png
  *   node tools/screenshots.mjs --dark      # the popup frames in the dark theme
  */
 import {chromium} from 'playwright';
@@ -166,6 +166,9 @@ const boxOf = (target, pick, pad = 0) => target.evaluate(({pick, pad}) => {
 }, {pick, pad});
 const formCrop = await page.screenshot({type: 'png', clip: await boxOf(page, [{css: '.field', from: 0, to: 6}], 14)});
 const cardCrop = await page.screenshot({type: 'png', clip: await boxOf(page, [{css: '#fillsmith-hud'}], 0)});
+// The form's first column alone, for a card that has half of 1280 pixels to show it in.
+const columnCrop = await page.screenshot({type: 'png', clip: await boxOf(page,
+    [{css: '.field', from: 0, to: 1}, {css: '.field', from: 2, to: 3}, {css: '.field', from: 4, to: 5}], 16)});
 
 // 2–4. The popup's panes, magnified and staged beside one line about each.
 // The Debug tab is opt-in and hidden until it is asked for, here as anywhere.
@@ -306,10 +309,11 @@ const popCrop = async (pick, pad = 10, full = false) => {
     await save('2-features.png', await stage.screenshot({type: 'png'}));
 }
 
+const fillPane = keep('popup-fill.png', await pane());
 await frame('3-one-person.png', {
     title: 'One believable<br>person.',
-    text: 'Email, postcode and phone that belong together.'
-}, (keep('popup-fill.png', await pane()), await popCrop([{css: '#result'}])));
+    text: 'The email follows the name. Every value says where it came from.'
+}, await popCrop([{css: '#result'}]));
 
 await pop.click('#tabDebug');
 await pop.waitForTimeout(400);
@@ -359,11 +363,12 @@ await stage.setContent(`<!doctype html><html><body style="margin:0;width:${MARQU
       <canvas id="m" width="112" height="112" style="width:56px;height:56px"></canvas>
       <span style="font-size:30px;font-weight:700;letter-spacing:-.02em">Fillsmith</span>
     </div>
-    <div style="font-size:50px;line-height:1.05;font-weight:700;letter-spacing:-.03em;margin-bottom:22px">Fill any form with realistic test data. In one click.</div>
-    <div style="font-size:20px;color:rgba(255,255,255,.8)">Free · AI built into Chrome · No API key · No account</div>
+    <div style="font-size:52px;line-height:1.05;font-weight:800;letter-spacing:-.035em;margin-bottom:22px">Fill any form with<br>realistic test data.<br><span style="color:#9fe3c2">In one click.</span></div>
+    <div style="font-size:22px;font-weight:500;color:rgba(255,255,255,.9)">Free · AI built into Chrome · No API key</div>
   </div>
-  <img src="data:image/png;base64,${formPng.toString('base64')}" alt=""
-       style="position:absolute;left:720px;top:70px;width:760px;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.45)">
+  <!-- As the social card: a part of the form, magnified, and the card whole — never the screen shrunk. -->
+  <div style="position:absolute;left:740px;top:70px">${card(columnCrop, Math.round((await widthOf(columnCrop)) * 1.4))}</div>
+  <div style="position:absolute;right:48px;bottom:26px">${card(cardCrop, Math.round((await widthOf(cardCrop)) * 1.4), 'border-radius:16px')}</div>
   <script>${drawMark ? drawMark[0] : ''}
     drawMark(document.getElementById('m').getContext('2d'), 112);
   <\/script></body></html>`);
@@ -384,10 +389,11 @@ await stage.setContent(`<!doctype html><html><body style="margin:0;width:${SOCIA
       <span style="font-size:32px;font-weight:700;letter-spacing:-.02em">Fillsmith</span>
     </div>
     <div style="font-size:52px;line-height:1.06;font-weight:700;letter-spacing:-.03em;margin-bottom:24px">Fill any form with<br>realistic test data.<br><span style="color:#9fe3c2">In one click.</span></div>
-    <div style="font-size:21px;line-height:1.45;color:rgba(255,255,255,.82)">Free AI form filler for Chrome.<br>No API key · No account · No subscription</div>
+    <div style="font-size:23px;line-height:1.4;font-weight:500;color:rgba(255,255,255,.9)">Free AI form filler for Chrome.<br>No API key · No account · No subscription</div>
   </div>
-  <img src="data:image/png;base64,${formPng.toString('base64')}" alt=""
-       style="position:absolute;left:660px;top:92px;width:760px;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.45)">
+  <!-- A chat shows this card a third of its size: a part of the form, magnified, and the card whole. -->
+  <div style="position:absolute;right:72px;top:84px">${card(columnCrop, Math.round((await widthOf(columnCrop)) * 1.35))}</div>
+  <div style="position:absolute;right:44px;bottom:112px">${card(cardCrop, Math.round((await widthOf(cardCrop)) * 1.35), 'border-radius:16px')}</div>
   <script>${drawMark ? drawMark[0] : ''}
     drawMark(document.getElementById('m').getContext('2d'), 112);
   <\/script></body></html>`);
@@ -396,6 +402,39 @@ await stage.waitForTimeout(150);
     const card = await reduce(await stage.screenshot({type: 'png'}), SOCIAL.w, SOCIAL.h);
     writeFileSync(join(root, 'docs', 'social-preview.png'), card);
     console.log(`docs/social-preview.png  ${SOCIAL.w}×${SOCIAL.h}`);
+}
+
+/* The README's picture: the filled form whole, in a browser window on the
+ * brand's green, the card in its corner and the popup dropped from its icon at
+ * the window's edge, where it hides no field. Kept at 2x — the README is read
+ * on high-density screens and GitHub scales it down itself. */
+{
+    const R = {w: 1600, h: 1000};
+    const win = {x: 64, w: 1190, bar: 52};
+    const formW = win.w;
+    const formH = Math.round(formW * H / W);
+    win.y = Math.round((R.h - win.bar - formH) / 2);
+    await stage.setViewportSize({width: R.w, height: R.h});
+    await stage.setContent(`<!doctype html><html><body style="margin:0;width:${R.w}px;height:${R.h}px;overflow:hidden;
+      position:relative;background:${GREEN};font:14px ${FONT};-webkit-font-smoothing:antialiased">
+      <div style="position:absolute;left:${win.x}px;top:${win.y}px;width:${win.w}px;border-radius:14px;overflow:hidden;
+                  background:#f4f6f9;box-shadow:0 50px 110px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.10)">
+        <div style="height:${win.bar}px;display:flex;align-items:center;gap:14px;padding:0 18px;background:#fff;border-bottom:1px solid #e3e6ec">
+          <span style="display:flex;gap:8px">${['#ff5f57', '#febc2e', '#28c840'].map(c =>
+              `<i style="width:12px;height:12px;border-radius:50%;background:${c};display:block"></i>`).join('')}</span>
+          <span style="flex:1;margin:0 24px;padding:7px 14px;border-radius:9px;background:#f1f3f5;color:#5b6573;font-size:14px">staging.example.com/releases/new</span>
+          <span style="width:32px;height:32px;border-radius:8px;background:#e7f3ed;display:grid;place-items:center">
+            <canvas class="mark" width="40" height="40" style="width:20px;height:20px"></canvas></span>
+        </div>
+        <img src="data:image/png;base64,${formPng.toString('base64')}" alt="" style="display:block;width:${formW}px;height:${formH}px">
+      </div>
+      <img src="data:image/png;base64,${fillPane.png.toString('base64')}" alt=""
+           style="position:absolute;left:${win.x + win.w - 150}px;top:${win.y + win.bar + 10}px;width:396px;border-radius:14px;
+                  box-shadow:0 40px 90px rgba(0,0,0,.45),0 0 0 1px rgba(0,0,0,.06)">
+      ${MARK_SCRIPT}</body></html>`);
+    await stage.waitForTimeout(200);
+    writeFileSync(join(root, 'docs', 'filled-form.png'), await stage.screenshot({type: 'png'}));
+    console.log(`docs/filled-form.png  ${R.w * 2}×${R.h * 2}`);
 }
 
 await ctx.close();
