@@ -329,18 +329,21 @@ await frame('5-ai-free.png', {
     await popCrop([{css: '#advanced > summary'}], 12, true)
 ]), 0, 1.8);
 
-/* The promo tile, drawn from the same mark the toolbar animates. */
+/* The tile is what a search result shows, beside a dozen others: the brand's
+ * green, the mark, and the claim set as large as 440 pixels allow. On white it
+ * read as a placeholder next to the competitors' colour. */
 await stage.setViewportSize({width: TILE.w, height: TILE.h});
-await stage.setContent(`<!doctype html><html><body style="margin:0;width:${TILE.w}px;height:${TILE.h}px;
-  background:${dark ? '#14171c' : '#ffffff'};display:flex;flex-direction:column;align-items:center;
-  justify-content:center;gap:13px;font:16px ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
-  color:${dark ? '#e9ebef' : '#101418'};-webkit-font-smoothing:antialiased">
-  <canvas id="m" width="144" height="144" style="width:72px;height:72px"></canvas>
-  <div style="font-size:27px;font-weight:700;letter-spacing:-.02em">Fillsmith</div>
-  <div style="font-size:15px;color:${dark ? '#98a1ac' : '#5a6472'}">Free AI form filler. No key. No subscription.</div>
-  <script>${drawMark ? drawMark[0] : ''}
-    drawMark(document.getElementById('m').getContext('2d'), 144);
-  <\/script></body></html>`);
+await stage.setContent(`<!doctype html><html><body style="margin:0;width:${TILE.w}px;height:${TILE.h}px;overflow:hidden;
+  background:${GREEN};color:#fff;font:16px ${FONT};-webkit-font-smoothing:antialiased;
+  display:flex;flex-direction:column;justify-content:center;padding:0 34px;box-sizing:border-box">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+    <div style="padding:2px;border-radius:10px;background:rgba(255,255,255,.14);display:flex">
+      <canvas class="mark" width="72" height="72" style="width:36px;height:36px"></canvas></div>
+    <span style="font-size:22px;font-weight:700;letter-spacing:-.02em">Fillsmith</span>
+  </div>
+  <div style="font-size:38px;line-height:1.04;font-weight:800;letter-spacing:-.035em">Fill any form<br>in one click.</div>
+  <div style="font-size:17px;font-weight:500;color:rgba(255,255,255,.9);margin-top:14px">Free · AI built into Chrome · No API key</div>
+  ${MARK_SCRIPT}</body></html>`);
 await stage.waitForTimeout(150);
 await save('promo-440x280.png', await stage.screenshot({type: 'png'}), TILE.w, TILE.h);
 
