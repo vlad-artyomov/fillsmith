@@ -156,6 +156,17 @@ await page.waitForFunction(() => document.getElementById('ticket').value === 'RE
 await page.waitForTimeout(350);
 const formPng = await page.screenshot({type: 'png'});
 
+/* What a store frame shows has to be read at half its size, so a frame shows a
+ * part, magnified, never a whole screen: the first rows of the form and the card. */
+const boxOf = (target, pick, pad = 0) => target.evaluate(({pick, pad}) => {
+    const els = pick.flatMap(sel => Array.from(document.querySelectorAll(sel.css)).slice(sel.from || 0, sel.to));
+    const r = els.map(e => e.getBoundingClientRect()).filter(b => b.width && b.height);
+    const x = Math.min(...r.map(b => b.left)) - pad, y = Math.min(...r.map(b => b.top)) - pad;
+    return {x, y, width: Math.max(...r.map(b => b.right)) + pad - x, height: Math.max(...r.map(b => b.bottom)) + pad - y};
+}, {pick, pad});
+const formCrop = await page.screenshot({type: 'png', clip: await boxOf(page, [{css: '.field', from: 0, to: 6}], 14)});
+const cardCrop = await page.screenshot({type: 'png', clip: await boxOf(page, [{css: '#fillsmith-hud'}], 0)});
+
 // 2–4. The popup's panes, magnified and staged beside one line about each.
 // The Debug tab is opt-in and hidden until it is asked for, here as anywhere.
 await worker.evaluate(() => chrome.storage.local.set({debugTab: true}));
@@ -185,71 +196,140 @@ const pane = async () => {
 
 const stage = await ctx.newPage();
 await stage.setViewportSize({width: W, height: H});
-const frame = async (name, caption, shot) => {
-    const bg = dark ? '#14171c' : '#eef1f5';
-    const fg = dark ? '#e9ebef' : '#101418';
-    const dim = dark ? '#98a1ac' : '#5a6472';
-    const shadow = dark ? '0 30px 70px rgba(0,0,0,.55)'
-        : '0 2px 8px rgba(16,24,40,.07),0 30px 70px rgba(16,24,40,.20)';
-    await stage.setContent(`<!doctype html><html><body style="margin:0;width:${W}px;height:${H}px;background:${bg};
-      display:flex;align-items:center;justify-content:center;gap:72px;overflow:hidden;
-      font:16px/1.5 ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:${fg};
-      -webkit-font-smoothing:antialiased">
-      <div style="width:450px;flex:none">
-        <div style="font-size:40px;line-height:1.12;font-weight:700;letter-spacing:-.025em;margin-bottom:18px">${caption.title}</div>
-        <div style="font-size:19px;line-height:1.55;color:${dim}">${caption.text}</div>
-      </div>
-      <div style="position:relative;flex:none;border-radius:16px;box-shadow:${shadow}">
-        <img src="data:image/png;base64,${shot.png.toString('base64')}"
-             style="display:block;width:${SHOT_WIDTH}px;height:auto;border-radius:16px" alt="">
-        ${shot.cut ? `<div style="position:absolute;left:0;right:0;bottom:0;height:72px;border-radius:0 0 16px 16px;
-             background:linear-gradient(to bottom, rgba(0,0,0,0), ${bg})"></div>` : ''}
-      </div>
-      </body></html>`);
-    await stage.waitForTimeout(120);
+/* The mark is drawn from the toolbar's own function rather than kept as a
+ * second copy of the silhouette, which would be a second thing to keep in step. */
+const drawMark = readFileSync(join(root, 'src/background.js'), 'utf8').match(/^function drawMark\(g, size\) \{[\s\S]*?^\}/m);
+const MARK_SCRIPT = `<script>${drawMark ? drawMark[0] : ''}
+  document.querySelectorAll('canvas.mark').forEach(c => drawMark(c.getContext('2d'), c.width));<\/script>`;
+
+/* Every store frame on the brand's green, the claim set large enough to read
+ * in the carousel's thumbnail, the product big and running off the edge. On a
+ * pale ground the frames sank into the store's own white page. */
+const GREEN = 'radial-gradient(120% 140% at 22% 0%, #2a8a62, #16553b 58%, #0f3a29)';
+const FONT = "ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif";
+const brandRow = `<div style="position:absolute;left:64px;top:50px;display:flex;align-items:center;gap:12px">
+  <div style="padding:3px;border-radius:12px;background:rgba(255,255,255,.14);display:flex">
+    <canvas class="mark" width="88" height="88" style="width:44px;height:44px"></canvas></div>
+  <span style="font-size:26px;font-weight:700;letter-spacing:-.02em">Fillsmith</span></div>`;
+const claim = (caption, width) => `<div style="position:absolute;left:64px;top:0;bottom:0;width:${width}px;
+    display:flex;flex-direction:column;justify-content:center">
+    <div style="font-size:60px;line-height:1.02;font-weight:800;letter-spacing:-.035em;margin-bottom:22px">${caption.title}</div>
+    <div style="font-size:32px;line-height:1.25;font-weight:500;letter-spacing:-.01em;color:rgba(255,255,255,.93);text-wrap:balance">${caption.text}</div>
+  </div>`;
+const greenFrame = (inner) => `<!doctype html><html><body style="margin:0;width:${W}px;height:${H}px;overflow:hidden;
+  position:relative;background:${GREEN};color:#fff;font:16px/1.5 ${FONT};-webkit-font-smoothing:antialiased">
+  ${brandRow}${inner}${MARK_SCRIPT}</body></html>`;
+
+/* A part of the popup, magnified: at its own size it is a stamp the store
+ * shrinks again. Flat, on a white card — the angle read as a gimmick. */
+const POP_ZOOM = 1.7;
+const card = (png, width, extra = '') => `<img src="data:image/png;base64,${png.toString('base64')}" alt=""
+    style="display:block;width:${width}px;border-radius:18px;background:#fff;
+           box-shadow:0 40px 90px rgba(0,0,0,.42),0 0 0 1px rgba(255,255,255,.10);${extra}">`;
+const widthOf = async (png) => (await scaler.evaluate(async (d) => {
+    const i = new Image();
+    i.src = 'data:image/png;base64,' + d;
+    await i.decode();
+    return i.naturalWidth;
+}, png.toString('base64'))) / 2;      // the captures are 2x
+
+/* One or more crops on one white card, in order, each at the popup zoom. A crop
+ * taken tight to its content gets the card's padding instead of the page's
+ * neighbours, which leaked a stray shadow into the corner. */
+const frame = async (name, caption, pngs, pad = 0, zoom = POP_ZOOM) => {
+    const parts = Array.isArray(pngs) ? pngs : [pngs];
+    const imgs = [];
+    for (const [k, png] of parts.entries()) {
+        const w = Math.round((await widthOf(png)) * zoom);
+        imgs.push(`<img src="data:image/png;base64,${png.toString('base64')}" alt="" style="display:block;width:${w}px;
+            ${k ? 'border-top:1px solid #e3e6ec;' : ''}">`);
+    }
+    await stage.setContent(greenFrame(`${claim(caption, 470)}
+      <div style="position:absolute;right:72px;top:0;bottom:0;display:flex;align-items:center">
+        <div style="background:#fff;border-radius:18px;padding:${pad}px;overflow:hidden;
+                    box-shadow:0 40px 90px rgba(0,0,0,.42),0 0 0 1px rgba(255,255,255,.10)">${imgs.join('')}</div>
+      </div>`));
+    await stage.waitForTimeout(150);
     await save(name, await stage.screenshot({type: 'png'}));
 };
 
-/* The first frame is the only one most people see, so it carries the claim in
- * words as well as in the picture: the form, under one line saying what it shows. */
+// `full` takes the popup's whole width, so crops stacked on one card line up.
+const popCrop = async (pick, pad = 10, full = false) => {
+    const box = await boxOf(pop, pick, pad);
+    if (full) Object.assign(box, {x: 0, width: 360});
+    return pop.screenshot({type: 'png', clip: box});
+};
+
+/* The first frame is the only one most people see: the claim across the top,
+ * the form's first rows under it, and the card that says what one press did. */
 {
-    const bg = dark ? '#14171c' : '#eef1f5';
-    const shadow = dark ? '0 24px 60px rgba(0,0,0,.55)'
-        : '0 2px 8px rgba(16,24,40,.07),0 24px 60px rgba(16,24,40,.18)';
-    await stage.setContent(`<!doctype html><html><body style="margin:0;width:${W}px;height:${H}px;background:${bg};
-      display:flex;flex-direction:column;align-items:center;gap:26px;padding-top:40px;box-sizing:border-box;
-      overflow:hidden;font:16px/1.5 ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
-      color:${dark ? '#e9ebef' : '#101418'};-webkit-font-smoothing:antialiased">
-      <div style="font-size:38px;line-height:1.1;font-weight:700;letter-spacing:-.025em">One click. Every field. Even the custom ones.</div>
-      <img src="data:image/png;base64,${formPng.toString('base64')}"
-           style="display:block;width:1000px;height:auto;border-radius:14px;box-shadow:${shadow}" alt="">
-      </body></html>`);
-    await stage.waitForTimeout(120);
+    const fw = Math.round((await widthOf(formCrop)) * 1.3);
+    const cw = Math.round((await widthOf(cardCrop)) * 1.5);
+    await stage.setContent(greenFrame(`
+      <div style="position:absolute;left:64px;top:128px;right:64px">
+        <div style="font-size:64px;line-height:1;font-weight:800;letter-spacing:-.035em">Fill any form in one click.</div>
+        <div style="font-size:32px;line-height:1.25;font-weight:500;letter-spacing:-.01em;color:rgba(255,255,255,.93);margin-top:16px">Even custom dropdowns, date pickers and uploads.</div>
+      </div>
+      <div style="position:absolute;left:64px;top:330px">${card(formCrop, fw)}</div>
+      <div style="position:absolute;right:44px;bottom:40px">${card(cardCrop, cw, 'border-radius:16px')}</div>`));
+    await stage.waitForTimeout(150);
     await save('1-filled-form.png', await stage.screenshot({type: 'png'}));
 }
 
-await frame('2-one-press.png', {
-    title: 'One believable person, not random noise.',
-    text: 'The email follows the name, the postcode follows the city, the phone follows the country — and every field shows where its value came from.'
-}, keep('popup-fill.png', await pane()));
+/* The second frame is the whole case at a glance, the way a reader skims: four
+ * claims, each a word-sized title and one line, large enough to read as a thumbnail. */
+{
+    const ICONS = {
+        cursor: '<path d="M4 4l7.5 16 2.2-6.3L20 11.5z"/>',
+        person: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>',
+        shield: '<path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>',
+        spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>'
+    };
+    const tiles = [
+        ['cursor', 'Custom controls', 'Dropdowns, calendars, editors, uploads.'],
+        ['person', 'One person', 'Email, postcode and phone that match.'],
+        ['shield', 'Valid on submit', 'Limits kept, nothing left empty.'],
+        ['spark', 'Free AI', 'Built into Chrome. No API key.']
+    ].map(([icon, title, text]) => `<div style="background:#fff;color:#101418;border-radius:20px;padding:30px 26px;
+          box-shadow:0 28px 44px -18px rgba(0,0,0,.55)">
+        <svg viewBox="0 0 24 24" style="width:56px;height:56px;padding:12px;border-radius:14px;background:#e7f3ed;
+             stroke:#1f6f4f;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;box-sizing:border-box">${ICONS[icon]}</svg>
+        <div style="font-size:27px;line-height:1.15;font-weight:800;letter-spacing:-.02em;margin:22px 0 12px">${title}</div>
+        <div style="font-size:23px;line-height:1.35;color:#3d4653">${text}</div></div>`).join('');
+    await stage.setContent(greenFrame(`
+      <div style="position:absolute;left:64px;right:64px;top:150px;text-align:center">
+        <div style="font-size:56px;line-height:1.05;font-weight:800;letter-spacing:-.035em">What one click does</div>
+        <div style="font-size:32px;font-weight:500;letter-spacing:-.01em;color:rgba(255,255,255,.93);margin-top:14px">Every field, filled like a person would.</div>
+      </div>
+      <div style="position:absolute;left:64px;right:64px;top:330px;display:grid;grid-template-columns:repeat(4,1fr);gap:22px">${tiles}</div>`));
+    await stage.waitForTimeout(150);
+    await save('2-features.png', await stage.screenshot({type: 'png'}));
+}
+
+await frame('3-one-person.png', {
+    title: 'One believable<br>person.',
+    text: 'Email, postcode and phone that belong together.'
+}, (keep('popup-fill.png', await pane()), await popCrop([{css: '#result'}])));
 
 await pop.click('#tabDebug');
 await pop.waitForTimeout(400);
-await frame('3-debug.png', {
-    title: 'Reproduce any bug with the same data.',
-    text: 'Pin a seed to get the same person again. See which rule answered, what the AI was asked, and save one report for the ticket.'
-}, keep('popup-debug.png', await pane()));
+await frame('4-debug.png', {
+    title: 'Reproduce<br>any bug.',
+    text: 'Same seed, same data. One report for the ticket.'
+}, (keep('popup-debug.png', await pane()), await popCrop([{css: '#debugBody .dbg-sec', from: 0, to: 3}], 0)), 22);
 
 await pop.click('#tabSettings');
 await pop.waitForTimeout(300);
-await frame('4-settings.png', {
-    title: 'AI built into Chrome.<br>No key. No bill.',
-    text: 'Gemini Nano runs on your machine and answers the fields no rule knows. No account, no subscription — your own API key only if you want one.'
-}, keep('popup-settings.png', await pane()));
+await frame('5-ai-free.png', {
+    title: 'AI built into<br>Chrome. Free.',
+    text: 'No API key. No account. No subscription.'
+}, (keep('popup-settings.png', await pane()), [
+    await popCrop([{css: 'header.head'}], 0, true),
+    await popCrop([{css: '#paneSettings .opt', from: 0, to: 1}], 8, true),
+    await popCrop([{css: '#advanced > summary'}], 12, true)
+]), 0, 1.8);
 
-/* The promo tile, drawn from the same mark the toolbar animates rather than
- * beside it: a second copy of a silhouette is a second thing to keep in step. */
-const drawMark = readFileSync(join(root, 'src/background.js'), 'utf8').match(/^function drawMark\(g, size\) \{[\s\S]*?^\}/m);
+/* The promo tile, drawn from the same mark the toolbar animates. */
 await stage.setViewportSize({width: TILE.w, height: TILE.h});
 await stage.setContent(`<!doctype html><html><body style="margin:0;width:${TILE.w}px;height:${TILE.h}px;
   background:${dark ? '#14171c' : '#ffffff'};display:flex;flex-direction:column;align-items:center;
@@ -262,7 +342,7 @@ await stage.setContent(`<!doctype html><html><body style="margin:0;width:${TILE.
     drawMark(document.getElementById('m').getContext('2d'), 144);
   <\/script></body></html>`);
 await stage.waitForTimeout(150);
-await save('5-promo-440x280.png', await stage.screenshot({type: 'png'}), TILE.w, TILE.h);
+await save('promo-440x280.png', await stage.screenshot({type: 'png'}), TILE.w, TILE.h);
 
 /* The marquee, shown only when the store features the extension: the claim on
  * the left, the filled form on the right, in the site's closing green. */
@@ -285,7 +365,7 @@ await stage.setContent(`<!doctype html><html><body style="margin:0;width:${MARQU
     drawMark(document.getElementById('m').getContext('2d'), 112);
   <\/script></body></html>`);
 await stage.waitForTimeout(150);
-await save('6-marquee-1400x560.png', await stage.screenshot({type: 'png'}), MARQUEE.w, MARQUEE.h);
+await save('marquee-1400x560.png', await stage.screenshot({type: 'png'}), MARQUEE.w, MARQUEE.h);
 
 /* The social card: what a link to the repository or the site turns into in a
  * chat. 2:1, which is what GitHub shows and what the chats crop least; the

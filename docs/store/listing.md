@@ -130,15 +130,17 @@ None. All code ships in the package. The optional hosted providers are called wi
 ## Assets
 
 The store takes screenshots and tiles only as 24-bit PNG without an alpha channel, which is what the tool writes.
-All of it comes out of `npm run screenshots`, drawn at twice the size and reduced, so the text holds up wherever the
-store shrinks it. `--dark` renders the same set in the dark theme.
+All of it comes out of `npm run screenshots`, drawn at twice the size and reduced. The carousel shows a frame at
+about half size, so a frame carries one claim in large type and shows a part of the product magnified, never a
+whole screen. `--dark` renders the same set in the dark theme.
 
-| File                                | Size     | What it shows                                                                 |
-|-------------------------------------|----------|-------------------------------------------------------------------------------|
-| `docs/store/1-filled-form.png`      | 1280×800 | A form filled in one press, with the card reporting what came from where      |
-| `docs/store/2-one-press.png`        | 1280×800 | The result: every field and the source of its value                           |
-| `docs/store/3-debug.png`            | 1280×800 | The decision trail: which rule, what the model was asked, where the time went |
-| `docs/store/4-settings.png`         | 1280×800 | On-device by default, the key optional, the network optional                  |
-| `docs/store/5-promo-440x280.png`    | 440×280  | The small promo tile: the mark and the one line                               |
-| `docs/store/6-marquee-1400x560.png` | 1400×560 | The marquee, shown when the store features it: the claim beside the form      |
-| `docs/store-icon128.png`            | 128×128  | The listing icon — the mark inside the store's 16 px of padding               |
+| File                              | Size     | What it shows                                                                                  |
+|-----------------------------------|----------|------------------------------------------------------------------------------------------------|
+| `docs/store/1-filled-form.png`    | 1280×800 | The claim across the top, the form's first rows filled, and the card saying what one press did |
+| `docs/store/2-features.png`       | 1280×800 | The case at a glance: four claims, a title and one line each                                   |
+| `docs/store/3-one-person.png`     | 1280×800 | The popup's list of every field and where its value came from                                  |
+| `docs/store/4-debug.png`          | 1280×800 | The decision trail: the seed, where the time went, what the model answered                     |
+| `docs/store/5-ai-free.png`        | 1280×800 | The model ready on the device, the API key optional                                            |
+| `docs/store/promo-440x280.png`    | 440×280  | The small promo tile: the mark and the one line                                                |
+| `docs/store/marquee-1400x560.png` | 1400×560 | The marquee, shown when the store features it: the claim beside the form                       |
+| `docs/store-icon128.png`          | 128×128  | The listing icon — the mark inside the store's 16 px of padding                                |
