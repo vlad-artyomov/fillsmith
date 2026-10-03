@@ -7,7 +7,8 @@
 For QA engineers who fill the same create-form forty times a day.
 
 **[Add to Chrome — it's free](https://chromewebstore.google.com/detail/amhpkgalagghaabpdnkjclkkjcellabm)** ·
-**[Website and live demo](https://vlad-artyomov.github.io/fillsmith/)**
+**[Website and live demo](https://vlad-artyomov.github.io/fillsmith/)** ·
+**[▶ Watch the 41-second film](https://www.youtube.com/watch?v=iMCCoZ3luHU)**
 
 [![Chrome Web Store](https://img.shields.io/chrome-web-store/v/amhpkgalagghaabpdnkjclkkjcellabm?color=1f6f4f&label=chrome%20web%20store)](https://chromewebstore.google.com/detail/amhpkgalagghaabpdnkjclkkjcellabm)
 [![tests](https://github.com/vlad-artyomov/fillsmith/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/vlad-artyomov/fillsmith/actions/workflows/test.yml)
@@ -65,6 +66,8 @@ Fillsmith drives each control the way a person does — then reads it back to se
 
 <div align="center">
 <img src="docs/video/fillsmith-demo.gif" alt="Alt+Shift+F filling a form: a name and an email that belong to the same person, a country picked from the dropdown's own options, a date clicked in the calendar, a generated PNG previewed, the model's answers landing, and a card reporting eight fields filled — then the dropdown, the calendar, the upload and the editor up close">
+
+<sub>▶ <a href="https://www.youtube.com/watch?v=iMCCoZ3luHU">Watch the whole film on YouTube</a> — 41 seconds, with sound</sub>
 </div>
 
 ## 📦 Install

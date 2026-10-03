@@ -73,6 +73,7 @@ Open source (MIT): https://github.com/vlad-artyomov/fillsmith
 - **The listing**: https://chromewebstore.google.com/detail/amhpkgalagghaabpdnkjclkkjcellabm — published 2026-10-02
 - **Homepage / Official URL**: https://vlad-artyomov.github.io/fillsmith/ — the landing page, with the demo form to try
   it on; verified in Google Search Console, so the store can name it as the official URL
+- **Promo video**: https://www.youtube.com/watch?v=iMCCoZ3luHU — the film from `npm run video`, the listing's first slide
 - **Support**: https://github.com/vlad-artyomov/fillsmith/issues
 - **Privacy policy**: https://github.com/vlad-artyomov/fillsmith/blob/main/PRIVACY.md — what the dashboard holds. Its
   link check once refused it and took it after a refresh; https://vlad-artyomov.github.io/fillsmith/privacy/ is the
