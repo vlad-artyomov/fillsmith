@@ -21,11 +21,11 @@ cpSync(join(root, 'site'), out, {recursive: true});
 mkdirSync(join(out, 'demo'), {recursive: true});
 mkdirSync(join(out, 'img'), {recursive: true});
 copyFileSync(join(root, 'test/demo-form.html'), join(out, 'demo/index.html'));
-// The film's loop for the top of the page, and the whole film, with its poster, further down.
+// The demo video's loop for the top of the page, and the whole video, with its poster, further down.
 copyFileSync(join(root, 'docs/video/fillsmith-demo.mp4'), join(out, 'img/demo.mp4'));
 copyFileSync(join(root, 'docs/video/fillsmith-demo.jpg'), join(out, 'img/demo.jpg'));
-copyFileSync(join(root, 'docs/video/fillsmith-promo.mp4'), join(out, 'img/film.mp4'));
-copyFileSync(join(root, 'docs/video/poster.png'), join(out, 'img/film.png'));
+copyFileSync(join(root, 'docs/video/fillsmith-promo.mp4'), join(out, 'img/demo-video.mp4'));
+copyFileSync(join(root, 'docs/video/poster.png'), join(out, 'img/demo-video.png'));
 for (const f of readdirSync(join(root, 'docs/store')).filter(f => f.endsWith('.png'))) {
     copyFileSync(join(root, 'docs/store', f), join(out, 'img', f));
 }

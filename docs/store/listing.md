@@ -73,7 +73,7 @@ Open source (MIT): https://github.com/vlad-artyomov/fillsmith
 - **The listing**: https://chromewebstore.google.com/detail/amhpkgalagghaabpdnkjclkkjcellabm — published 2026-10-02
 - **Homepage / Official URL**: https://vlad-artyomov.github.io/fillsmith/ — the landing page, with the demo form to try
   it on; verified in Google Search Console, so the store can name it as the official URL
-- **Promo video**: https://www.youtube.com/watch?v=iMCCoZ3luHU — the film from `npm run video`, the listing's first slide
+- **Promo video**: https://www.youtube.com/watch?v=iMCCoZ3luHU — the demo video from `npm run video`, the listing's first slide
 - **Support**: https://github.com/vlad-artyomov/fillsmith/issues
 - **Privacy policy**: https://github.com/vlad-artyomov/fillsmith/blob/main/PRIVACY.md — what the dashboard holds. Its
   link check once refused it and took it after a refresh; https://vlad-artyomov.github.io/fillsmith/privacy/ is the
@@ -163,7 +163,7 @@ Fillsmith — fill any web form with realistic test data (free Chrome extension)
 ```
 
 **Description.** The link comes first, because it is all most people read. Chapters need at least three, each ten
-seconds or longer, so the film's seven scenes are four here. They move with the scenes in `tools/video/script.mjs`. The film has no speech, so the text on screen is
+seconds or longer, so the video's seven scenes are four here. They move with the scenes in `tools/video/script.mjs`. The video has no speech, so the text on screen is
 written out below for anyone who cannot see it.
 
 ```text
