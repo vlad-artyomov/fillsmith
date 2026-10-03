@@ -21,7 +21,11 @@ cpSync(join(root, 'site'), out, {recursive: true});
 mkdirSync(join(out, 'demo'), {recursive: true});
 mkdirSync(join(out, 'img'), {recursive: true});
 copyFileSync(join(root, 'test/demo-form.html'), join(out, 'demo/index.html'));
-copyFileSync(join(root, 'docs/video/fillsmith-demo.gif'), join(out, 'img/demo.gif'));
+// The film's loop for the top of the page, and the whole film, with its poster, further down.
+copyFileSync(join(root, 'docs/video/fillsmith-demo.mp4'), join(out, 'img/demo.mp4'));
+copyFileSync(join(root, 'docs/video/fillsmith-demo.jpg'), join(out, 'img/demo.jpg'));
+copyFileSync(join(root, 'docs/video/fillsmith-promo.mp4'), join(out, 'img/film.mp4'));
+copyFileSync(join(root, 'docs/video/poster.png'), join(out, 'img/film.png'));
 for (const f of readdirSync(join(root, 'docs/store')).filter(f => f.endsWith('.png'))) {
     copyFileSync(join(root, 'docs/store', f), join(out, 'img', f));
 }
@@ -74,7 +78,8 @@ ${body}
 console.log(`site built in ${out}`);
 
 if (at < 0) {
-    const TYPES = {'.html': 'text/html; charset=utf-8', '.css': 'text/css', '.png': 'image/png', '.gif': 'image/gif'};
+    const TYPES = {'.html': 'text/html; charset=utf-8', '.css': 'text/css', '.png': 'image/png', '.gif': 'image/gif',
+        '.jpg': 'image/jpeg', '.mp4': 'video/mp4'};
     const PORT = 8100;
     createServer((q, r) => {
         let p = join(out, decodeURIComponent((q.url || '/').split('?')[0]));
@@ -84,7 +89,16 @@ if (at < 0) {
             r.writeHead(404);
             return r.end('not found');
         }
-        r.writeHead(200, {'content-type': TYPES[extname(p)] || 'application/octet-stream'});
-        r.end(readFileSync(p));
+        const file = readFileSync(p), type = TYPES[extname(p)] || 'application/octet-stream';
+        // A video is asked for in ranges, as GitHub Pages answers them; without one it will not seek.
+        const range = /bytes=(\d*)-(\d*)/.exec(q.headers.range || '');
+        if (range) {
+            const from = Number(range[1] || 0), to = range[2] ? Number(range[2]) : file.length - 1;
+            r.writeHead(206, {'content-type': type, 'accept-ranges': 'bytes', 'content-length': to - from + 1,
+                'content-range': `bytes ${from}-${to}/${file.length}`});
+            return r.end(file.subarray(from, to + 1));
+        }
+        r.writeHead(200, {'content-type': type, 'accept-ranges': 'bytes'});
+        r.end(file);
     }).listen(PORT, '127.0.0.1', () => console.log(`http://localhost:${PORT}/`));
 }

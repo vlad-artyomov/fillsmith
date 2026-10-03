@@ -15,7 +15,7 @@
  *   node tools/video.mjs --music track.mp3  # someone else's music instead of the score; --silent for none
  *   node tools/video.mjs --draft            # half the pixels and no motion blur, for checking timing
  *   node tools/video.mjs --workers 3        # how many browsers render at once
- *   node tools/video.mjs --gif              # only the README GIF again, from the film already rendered
+ *   node tools/video.mjs --loops            # only the README GIF and the site's loop again, from the film already rendered
  */
 import {chromium} from 'playwright';
 import {spawn, spawnSync} from 'node:child_process';
@@ -55,16 +55,28 @@ const ffmpeg = (args, opts = {}) => {
     return r;
 };
 
-/* The README's loop, cut from the 4K master where there is one: reduced from
+/* The loops: the README's GIF and the site's silent video, the same stretch of
+ * the film, both cut from the 4K master where there is one: reduced from
  * four times the pixels, the dark green arrives clean, where the 1080p copy's
  * own compression shows as blotches once a 256-colour palette has had its say.
  * gifski where it is installed — thousands of colours a frame, dithering that
  * holds still between frames — at full quality: its lossy mode smears dark
  * gradients into stripes. ffmpeg's palette otherwise, built from what changes. */
-function makeGif() {
+function makeLoops() {
     const gif = join(OUT, 'fillsmith-demo.gif');
     const source = [join(OUT, 'fillsmith-promo-4k.mp4'), join(OUT, 'fillsmith-promo.mp4')].find(existsSync);
     const cut = ['-ss', String(GIF.from), '-to', String(GIF.to), '-i', source];
+
+    /* The site plays the loop as a video: a GIF's 256 colours and whole-hundredth
+     * delays are a README's limits, not a browser's. Silent, so it may start on
+     * its own; twice the width it is shown at, for a high-density screen; and its
+     * first frame as the poster, for a visitor who has asked for less motion. */
+    const loop = join(OUT, 'fillsmith-demo.mp4'), still = join(OUT, 'fillsmith-demo.jpg');
+    ffmpeg([...cut, '-vf', `scale=${GIF.width * 2}:-2:flags=lanczos:out_color_matrix=bt709:out_range=tv,format=yuv420p`,
+        '-c:v', 'libx264', '-preset', 'veryslow', '-crf', '24', '-tune', 'animation', '-profile:v', 'high',
+        '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-an', '-movflags', '+faststart', loop]);
+    ffmpeg(['-ss', String(GIF.from), '-i', source, '-frames:v', '1', '-vf', `scale=${GIF.width * 2}:-2:flags=lanczos`, '-q:v', '3', still]);
+    console.log(`docs/video/fillsmith-demo.mp4  ${GIF.width * 2}px, ${(readFileSync(loop).length / 1e6).toFixed(1)} MB, and its poster`);
     const has = spawnSync('gifski', ['--version']).status === 0;
     if (has) {
         const dir = join(TMP, 'gif');
@@ -81,8 +93,8 @@ function makeGif() {
         `, from ${rel(source)}${has ? ', gifski' : ''}`);
 }
 
-if (flag('--gif')) {
-    makeGif();
+if (flag('--loops')) {
+    makeLoops();
     rmSync(TMP, {recursive: true, force: true});
     process.exit(0);
 }
@@ -602,7 +614,7 @@ if (!PART) console.log(`docs/video/poster.png  ${POSTER.w}×${POSTER.h}`);
         `${flashes.length ? `flashing near ${flashes[0].toFixed(1)} s` : 'no flashing'}`);
 }
 
-if (!PART) makeGif();
+if (!PART) makeLoops();
 
 rmSync(TMP, {recursive: true, force: true});
 server.close();

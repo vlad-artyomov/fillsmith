@@ -45,8 +45,12 @@
             </div>
             <p class="note">Free on the <a href="https://chromewebstore.google.com/detail/amhpkgalagghaabpdnkjclkkjcellabm">Chrome Web Store</a> · Chrome 128+</p>
             <div class="hero-shot">
-                <img src="img/demo.gif" width="880" height="495"
-                     alt="Pressing Alt+Shift+F fills a release form: a name and a matching email, a country from the dropdown, a date from the calendar, a generated screenshot and rich-text notes">
+                <video src="img/demo.mp4" poster="img/demo.jpg" width="880" height="495" autoplay muted loop playsinline preload="auto"
+                       aria-label="Pressing Alt+Shift+F fills a release form: a name and a matching email, a country from the dropdown, a date from the calendar, a generated screenshot and rich-text notes"></video>
+                <button class="loop-toggle" type="button" aria-label="Pause the animation" hidden>
+                    <svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="2.5" width="3" height="11" rx="1"/><rect x="9.5" y="2.5" width="3" height="11" rx="1"/></svg>
+                    <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.8v10.4a.8.8 0 0 0 1.2.7l8.4-5.2a.8.8 0 0 0 0-1.4L5.7 2.1a.8.8 0 0 0-1.2.7z"/></svg>
+                </button>
             </div>
         </div>
     </section>
@@ -239,6 +243,19 @@
         </div>
     </section>
 
+    <section id="film">
+        <div class="wrap">
+            <p class="kicker">The film</p>
+            <h2>Forty-one seconds, sound on</h2>
+            <p class="lead">The extension itself, filling real forms: the custom controls, one believable person, and the AI
+                built into Chrome.</p>
+            <div class="film">
+                <video src="img/film.mp4" poster="img/film.png" width="1280" height="720" controls preload="none" playsinline
+                       aria-label="The Fillsmith film, 41 seconds"></video>
+            </div>
+        </div>
+    </section>
+
     <section id="demo" class="band">
         <div class="wrap">
             <p class="kicker">Live demo</p>
@@ -258,7 +275,7 @@
                 <iframe src="demo/" title="Demo form: a new release request" loading="lazy"></iframe>
             </div>
             <p class="demo-phone">The live demo runs in Chrome on a computer, where Fillsmith is installed.
-                <a href="#top">Watch it fill a form</a> instead.</p>
+                <a href="#film">Watch it fill a form</a> instead.</p>
         </div>
     </section>
 
@@ -324,6 +341,26 @@
     </div>
 </footer>
 <script>
+    /* The loop at the top plays on its own, silently, like the GIF it replaced —
+     * unless the visitor has asked for less motion, who gets its first frame. It
+     * runs longer than five seconds beside other content, so it can be paused. */
+    const loop = document.querySelector('.hero-shot video');
+    const toggle = document.querySelector('.loop-toggle');
+    // The browser starts it, and only once the page can be seen; the button follows whatever it is doing.
+    const show = () => {
+        toggle.classList.toggle('paused', loop.paused);
+        toggle.setAttribute('aria-label', loop.paused ? 'Play the animation' : 'Pause the animation');
+    };
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        loop.removeAttribute('autoplay');
+        loop.pause();
+    }
+    loop.addEventListener('play', show);
+    loop.addEventListener('pause', show);
+    toggle.addEventListener('click', () => (loop.paused ? loop.play() : loop.pause()));
+    toggle.hidden = false;
+    show();
+
     /* The demo is one origin with this page, so its frame can take the form's own
      * height — and grow with it when the fill adds a preview and longer notes. */
     const frame = document.querySelector('.browser iframe');
