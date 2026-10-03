@@ -117,7 +117,8 @@ h3 {
     margin: 0 0 12px;
 }
 
-#features .kicker, #features h2, #demo .kicker, #demo h2, .compare .kicker, .compare h2, #faq .kicker, #faq h2 {
+#features .kicker, #features h2, #demo .kicker, #demo h2, .compare .kicker, .compare h2, #faq .kicker, #faq h2,
+#film .kicker, #film h2 {
     text-align: center;
 }
 
@@ -310,6 +311,7 @@ kbd {
 
 /* As wide as the recording itself and no wider: stretched, a GIF goes soft. */
 .hero-shot {
+    position: relative;
     max-width: 902px;
     margin: 0 auto;
     padding: 10px;
@@ -319,11 +321,67 @@ kbd {
     box-shadow: var(--shadow-lg);
 }
 
-.hero-shot img {
+.hero-shot video {
     display: block;
     width: 100%;
     height: auto;
     border-radius: 12px;
+}
+
+/* Small and quiet in the corner of the loop, where a player's own control would be. */
+.loop-toggle {
+    position: absolute;
+    right: 22px;
+    bottom: 22px;
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(16, 20, 24, .5);
+    color: #fff;
+    cursor: pointer;
+    opacity: .75;
+    transition: opacity .15s ease;
+}
+
+.loop-toggle:hover, .loop-toggle:focus-visible {
+    opacity: 1;
+}
+
+.loop-toggle svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+}
+
+.loop-toggle .i-play, .loop-toggle.paused .i-pause {
+    display: none;
+}
+
+.loop-toggle.paused .i-play {
+    display: block;
+}
+
+/* -------------------------------------------------------------- film ---- */
+/* The whole film, framed as the loop at the top is, and loaded only when it is played. */
+.film {
+    max-width: 982px;
+    margin: 0 auto;
+    padding: 10px;
+    border-radius: 20px;
+    background: color-mix(in srgb, var(--card) 70%, transparent);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow-lg);
+}
+
+.film video {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 12px;
+    background: #0f3a29;
 }
 
 /* ------------------------------------------------------------ libs ---- */
