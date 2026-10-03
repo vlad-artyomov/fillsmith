@@ -17,6 +17,7 @@
     "release": "node tools/release.mjs",
     "icons": "node tools/icons.mjs",
     "screenshots": "node tools/screenshots.mjs",
+    "video": "node tools/video.mjs",
     "site": "node tools/site.mjs"
   },
   "devDependencies": {

@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>New customer — Fillsmith demo</title>
+    <!--
+      The film's second page: the fields whose values have to agree with each
+      other, laid out so the ones that agree sit side by side — the name beside
+      the email, the city beside its ZIP code and above its phone number.
+      Styled as test/demo-form.html is, so the two read as one application.
+    -->
+    <style>
+        :root {
+            --bg: #f4f6f9;
+            --line: #dde3ec;
+            --edge: #ccd4e0;
+            --text: #0f1729;
+            --muted: #667085;
+            --accent: #1f6f4f;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 18px 20px;
+            background: var(--bg);
+            color: var(--text);
+            font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+        }
+
+        .page {
+            max-width: 620px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            margin: 0 0 4px 2px;
+            font-size: 24px;
+            line-height: 1.2;
+            letter-spacing: -.015em;
+        }
+
+        .sub {
+            margin: 0 0 14px 2px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px 24px;
+            padding: 20px 24px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: #fff;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 10px 30px -20px rgba(15, 23, 42, .25);
+        }
+
+        .field {
+            display: grid;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        label {
+            color: #334155;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        input, select {
+            width: 100%;
+            min-height: 40px;
+            padding: 9px 11px;
+            border: 1px solid var(--edge);
+            border-radius: 9px;
+            background: #fff;
+            font: inherit;
+            color: inherit;
+        }
+
+        select {
+            appearance: none;
+            background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23667085' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 12px center;
+        }
+
+        input:focus, select:focus {
+            outline: 0;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(31, 111, 79, .13);
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+    <h1>New customer</h1>
+    <p class="sub">Contact details, as the billing team needs them.</p>
+    <form id="form">
+        <div class="field">
+            <label for="name">Full name</label>
+            <input id="name" name="fullName" type="text" autocomplete="off" required>
+        </div>
+        <div class="field">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" autocomplete="off" required>
+        </div>
+        <div class="field">
+            <label for="city">City</label>
+            <input id="city" name="city" type="text" autocomplete="off">
+        </div>
+        <div class="field">
+            <label for="zip">ZIP code</label>
+            <input id="zip" name="postalCode" type="text" autocomplete="off">
+        </div>
+        <div class="field">
+            <label for="contactNumber">Contact number</label>
+            <input id="contactNumber" name="contactNumber" type="tel" autocomplete="off">
+        </div>
+        <div class="field">
+            <label for="country">Country</label>
+            <select id="country" name="country">
+                <option value="">Please select</option>
+                <option>Canada</option>
+                <option>Germany</option>
+                <option>United Kingdom</option>
+                <option>United States</option>
+            </select>
+        </div>
+    </form>
+</div>
+</body>
+</html>

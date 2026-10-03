@@ -21,7 +21,7 @@ cpSync(join(root, 'site'), out, {recursive: true});
 mkdirSync(join(out, 'demo'), {recursive: true});
 mkdirSync(join(out, 'img'), {recursive: true});
 copyFileSync(join(root, 'test/demo-form.html'), join(out, 'demo/index.html'));
-copyFileSync(join(root, 'docs/demo.gif'), join(out, 'img/demo.gif'));
+copyFileSync(join(root, 'docs/video/fillsmith-demo.gif'), join(out, 'img/demo.gif'));
 for (const f of readdirSync(join(root, 'docs/store')).filter(f => f.endsWith('.png'))) {
     copyFileSync(join(root, 'docs/store', f), join(out, 'img', f));
 }
