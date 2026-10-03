@@ -308,8 +308,9 @@ kbd {
     margin: 16px 0 64px;
 }
 
+/* As wide as the recording itself and no wider: stretched, a GIF goes soft. */
 .hero-shot {
-    max-width: 1040px;
+    max-width: 902px;
     margin: 0 auto;
     padding: 10px;
     border-radius: 20px;
