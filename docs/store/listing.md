@@ -141,9 +141,42 @@ whole screen. `--dark` renders the same set in the dark theme.
 |-----------------------------------|----------|------------------------------------------------------------------------------------------------|
 | `docs/store/1-filled-form.png`    | 1280×800 | The claim across the top, the form's first rows filled, and the card saying what one press did |
 | `docs/store/2-features.png`       | 1280×800 | The case at a glance: four claims, a title and one line each                                   |
-| `docs/store/3-one-person.png`     | 1280×800 | The popup's list of every field and where its value came from                                  |
+| `docs/store/3-one-person.png`     | 1280×800 | One person's values agreeing: the name to the email, the city to its ZIP and its phone         |
 | `docs/store/4-debug.png`          | 1280×800 | The decision trail: the seed, where the time went, what the model answered                     |
 | `docs/store/5-ai-free.png`        | 1280×800 | The model ready on the device, the API key optional                                            |
 | `docs/store/promo-440x280.png`    | 440×280  | The small promo tile: the mark and the one line                                                |
 | `docs/store/marquee-1400x560.png` | 1400×560 | The marquee, shown when the store features it: the claim beside the form                       |
 | `docs/store-icon128.png`          | 128×128  | The listing icon — the mark inside the store's 16 px of padding                                |
+
+## Promo video
+
+`npm run video` renders it: `docs/video/fillsmith-promo-4k.mp4` is the upload (YouTube encodes a 4K upload better
+at every size, 1080p included), `docs/video/poster.png` the thumbnail. The store's "Promo video" field takes the
+YouTube link; the store shows it as the first slide, not playing until clicked, with YouTube's thumbnail under a
+centred play button. Upload it public or unlisted, with embedding allowed.
+
+**Title**
+
+```text
+Fillsmith — fill any web form with realistic test data (free Chrome extension)
+```
+
+**Description.** The link comes first, because it is all most people read. Chapters need at least three, each ten
+seconds or longer, so the film's seven scenes are four here. They move with the scenes in `tools/video/script.mjs`. The film has no speech, so the text on screen is
+written out below for anyone who cannot see it.
+
+```text
+Add to Chrome, free: https://chromewebstore.google.com/detail/amhpkgalagghaabpdnkjclkkjcellabm
+Website and live demo: https://vlad-artyomov.github.io/fillsmith/
+
+One press fills the whole form with one believable person — custom dropdowns, date pickers, uploads and rich-text editors included. AI built into Chrome: no API key, no account.
+
+0:00 Fill any form in one click
+0:11 Even the custom ones
+0:19 One believable person · AI built into Chrome
+0:31 Reproduce any bug
+
+On screen: Still typing test data? · Fill any form in one click. (Alt + Shift + F) · Even the custom ones: dropdowns, date pickers, file uploads, rich text · One believable person: email from the name, ZIP and phone from the city · AI built into Chrome. No key. No bill. · Reproduce any bug: same seed, same person · Fillsmith, free AI form filler. Add to Chrome — it's free. Search “Fillsmith” in the Chrome Web Store.
+
+Open source (MIT): https://github.com/vlad-artyomov/fillsmith
+```
