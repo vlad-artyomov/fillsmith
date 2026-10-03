@@ -5,3 +5,9 @@ node_modules/
 
 # local browser profiles, harness output and saved sessions
 .ff-*
+
+# the film's working files: the 4K master is uploaded, not kept; the rest are for review
+docs/video/*-4k.mp4
+docs/video/test.mp4
+docs/video/probe.png
+docs/video/stills/

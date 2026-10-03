@@ -5,9 +5,9 @@
     <title>Fillsmith — film stage</title>
     <!--
       One frame of the film is this page at one value of t. Nothing here moves on
-      its own: render(t) sets every position, opacity and clock, and the recorder
-      screenshots what it set. The form in the window is the real page with the
-      real extension filling it; its clock is stepped by tools/video/film.js.
+      its own: film.frame(t) sets every position, opacity and clock, and the
+      recorder screenshots what it set. The form in the window is the real page
+      with the real extension filling it; its clock is stepped by tools/video/film.js.
     -->
     <style>
         :root {
@@ -41,14 +41,16 @@
             pointer-events: none;
         }
 
-        .abs {
+        /* Everything that belongs to a scene, so a scene can leave as one. */
+        #scene {
             position: absolute;
+            inset: 0;
         }
 
         #lens {
             position: absolute;
             overflow: hidden;
-            border-radius: 18px;
+            border-radius: 24px;
             background: #f4f6f9;
             box-shadow: 0 50px 110px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .10);
         }
@@ -125,22 +127,59 @@
         .title {
             position: absolute;
             left: 120px;
-            width: 640px;
+            width: 660px;
             font-size: 96px;
-            line-height: 1;
+            line-height: 1.02;
             font-weight: 800;
-            letter-spacing: -.04em;
+            letter-spacing: -.035em;
+        }
+
+        /* A line comes up from behind its own edge, as type set on a slide does. */
+        .title .ln {
+            display: block;
+            overflow: hidden;
+            padding-bottom: .1em;
+            margin-bottom: -.1em;
+        }
+
+        .title .ln > span {
+            display: inline-block;
         }
 
         .text {
             position: absolute;
             left: 122px;
-            width: 640px;
-            font-size: 40px;
-            line-height: 1.25;
+            width: 660px;
+            font-size: 52px;
+            line-height: 1.2;
             font-weight: 500;
-            letter-spacing: -.012em;
+            letter-spacing: -.015em;
             color: rgba(255, 255, 255, .92);
+        }
+
+        .list {
+            position: absolute;
+            left: 122px;
+            display: grid;
+            gap: 6px;
+        }
+
+        .list .item {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            font-size: 52px;
+            line-height: 1.2;
+            font-weight: 600;
+            letter-spacing: -.015em;
+        }
+
+        .list .item i {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #9fe3c2;
+            flex: none;
         }
 
         .keys {
@@ -148,31 +187,52 @@
             left: 120px;
             display: flex;
             align-items: center;
-            gap: 18px;
-            font-size: 40px;
-            font-weight: 600;
-            color: rgba(255, 255, 255, .7);
+            gap: 16px;
+            font-size: 44px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, .45);
         }
 
         .key {
-            min-width: 112px;
-            height: 104px;
-            padding: 0 28px;
+            min-width: 104px;
+            height: 92px;
+            padding: 0 26px;
             box-sizing: border-box;
             display: grid;
             place-items: center;
-            border-radius: 20px;
-            background: linear-gradient(#fff, #eef2f0);
+            border-radius: 18px;
+            background: linear-gradient(#fff, #f1f5f3);
             color: var(--ink);
-            font-size: 40px;
-            font-weight: 650;
+            font-size: 44px;
+            font-weight: 600;
             letter-spacing: -.01em;
+        }
+
+        /* The mark and the name, where every store frame has them: from the first
+           press to the last claim, standing still while the scenes move under it. */
+        #brand {
+            position: absolute;
+            left: 120px;
+            top: 64px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-size: 30px;
+            font-weight: 700;
+            letter-spacing: -.02em;
+        }
+
+        #brand .box {
+            padding: 3px;
+            border-radius: 13px;
+            background: rgba(255, 255, 255, .14);
+            display: flex;
         }
 
         .card {
             position: absolute;
             display: block;
-            border-radius: 18px;
+            border-radius: 24px;
             background: #fff;
             box-shadow: 0 40px 90px rgba(0, 0, 0, .42), 0 0 0 1px rgba(255, 255, 255, .10);
         }
@@ -187,16 +247,20 @@
             text-align: center;
         }
 
+        #end[hidden] {
+            display: none;
+        }
+
         #end .name {
             font-size: 120px;
             font-weight: 800;
-            letter-spacing: -.045em;
+            letter-spacing: -.035em;
             line-height: 1;
             margin-top: 40px;
         }
 
         #end .line {
-            font-size: 52px;
+            font-size: 56px;
             font-weight: 500;
             letter-spacing: -.02em;
             color: rgba(255, 255, 255, .92);
@@ -205,81 +269,94 @@
 
         #end .cta {
             margin-top: 64px;
-            padding: 26px 48px;
+            padding: 26px 52px;
             border-radius: 999px;
             background: #fff;
             color: #16553b;
-            font-size: 44px;
+            font-size: 48px;
             font-weight: 750;
             letter-spacing: -.02em;
             box-shadow: 0 30px 70px rgba(0, 0, 0, .35);
         }
 
         #end .url {
-            margin-top: 34px;
-            font-size: 32px;
+            margin-top: 30px;
+            font-size: 44px;
             font-weight: 500;
+            letter-spacing: -.01em;
             color: rgba(255, 255, 255, .78);
-        }
-
-        #end[hidden], #freeze[hidden] {
-            display: none;
-        }
-
-        #freeze {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 1920px;
-            height: 1080px;
         }
     </style>
 </head>
 <body>
 <canvas id="grain" width="1920" height="1080"></canvas>
 
-<div id="lens">
-    <div id="content">
-        <div id="bar">
-            <span class="lights"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i
-                    style="background:#28c840"></i></span>
-            <span class="url" id="url">staging.example.com/releases/new</span>
-            <span class="tool"><canvas id="tool" width="80" height="80" style="width:20px;height:20px"></canvas></span>
+<div id="brand"><span class="box"><canvas id="brandmark" width="88" height="88" style="width:44px;height:44px"></canvas></span>Fillsmith</div>
+
+<div id="scene" data-mv>
+    <div id="lens" data-mv>
+        <div id="content" data-mv>
+            <div id="bar">
+                <span class="lights"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i
+                        style="background:#28c840"></i></span>
+                <span class="url" id="url">staging.example.com/releases/new</span>
+                <span class="tool"><canvas id="tool" width="80" height="80" style="width:20px;height:20px"></canvas></span>
+            </div>
+            <iframe id="app" title="form"></iframe>
+            <svg id="marks" viewBox="0 0 960 826"></svg>
         </div>
-        <iframe id="app" title="form"></iframe>
-        <svg id="marks" viewBox="0 0 960 826"></svg>
+    </div>
+
+    <div id="copy"></div>
+    <div id="cards"></div>
+    <div id="end" hidden>
+        <div data-mv style="padding:6px;border-radius:40px;background:rgba(255,255,255,.14);display:flex">
+            <canvas id="endmark" width="640" height="640" style="width:160px;height:160px"></canvas></div>
+        <div class="name" data-mv></div>
+        <div class="line" data-mv></div>
+        <div class="cta" data-mv></div>
+        <div class="url" data-mv></div>
     </div>
 </div>
 
-<div id="copy"></div>
-<div id="cards"></div>
-<div id="end" hidden>
-    <div style="padding:6px;border-radius:40px;background:rgba(255,255,255,.14);display:flex">
-        <canvas id="endmark" width="640" height="640" style="width:160px;height:160px"></canvas></div>
-    <div class="name"></div>
-    <div class="line"></div>
-    <div class="cta"></div>
-    <div class="url"></div>
-</div>
-<img id="freeze" alt="" hidden>
-
 <script src="/mark.js"></script>
 <script type="module">
-    import {SCENES, FPS, FILL, EPOCH, MODEL_MS, STORE_URL} from '/script.js';
+    import {SCENES, FPS, FILL, EPOCH, MODEL_MS, POPUP_SCALE} from '/script.js';
 
     const $ = (s, r = document) => r.querySelector(s);
     const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
     const lerp = (a, b, k) => a + (b - a) * k;
-    const inOut = (x) => (x = clamp(x), x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
-    const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
-    const outQuint = (x) => 1 - Math.pow(1 - clamp(x), 5);
+
+    /* CSS's cubic-bezier, solved for x. One family for the whole film: a strong
+     * ease-out for anything arriving, the same curve mirrored for anything
+     * leaving, and a steep ease-in-out for the camera crossing the frame. */
+    function bezier(x1, y1, x2, y2) {
+        const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+        const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+        const X = (s) => ((ax * s + bx) * s + cx) * s;
+        const Y = (s) => ((ay * s + by) * s + cy) * s;
+        return (x) => {
+            x = clamp(x);
+            if (x === 0 || x === 1) return x;
+            let a = 0, b = 1, s = x;
+            for (let i = 0; i < 40; i++) {
+                if (X(s) < x) a = s;
+                else b = s;
+                s = (a + b) / 2;
+            }
+            return Y(s);
+        };
+    }
+
+    const out = bezier(0.23, 1, 0.32, 1);
+    const inn = bezier(0.68, 0, 0.77, 0);
+    const move = bezier(0.77, 0, 0.175, 1);
     // 0 → 1 over [a, a + d], eased.
-    const rise = (u, a, d = .6, f = out) => f((u - a) / d);
+    const rise = (u, a, d = .7, f = out) => f((u - a) / d);
 
     const BAR = 46;                       // the window's toolbar, above the page
-    const CONTENT = {w: 960, h: 826};
     const app = /** @type {HTMLIFrameElement} */ ($('#app'));
-    const lens = $('#lens'), content = $('#content'), marks = $('#marks');
+    const stage = $('#scene'), lens = $('#lens'), content = $('#content'), marks = $('#marks');
 
     // ------------------------------------------------------------ the grain ----
     {
@@ -320,6 +397,7 @@
     }
 
     drawMark($('#endmark').getContext('2d'), 640);
+    drawMark($('#brandmark').getContext('2d'), 88);
 
     // ------------------------------------------------------------ the copy ----
     const copy = $('#copy');
@@ -327,20 +405,26 @@
         const d = document.createElement('div');
         d.className = cls;
         d.innerHTML = html;
+        d.setAttribute('data-mv', '');
         parent.appendChild(d);
         return d;
     };
     for (const s of SCENES) {
         s.els = {};
-        if (s.title) s.els.title = el('title', s.title);
+        if (s.title) {
+            s.els.title = el('title', s.title.split('<br>').map(l => `<span class="ln"><span data-mv>${l}</span></span>`).join(''));
+            s.els.lines = [...s.els.title.querySelectorAll('.ln > span')];
+        }
         if (s.text) s.els.text = el('text', s.text);
-        if (s.shots) s.els.shots = s.shots.map(sh => el('text', sh.text));
+        if (s.shots) {
+            s.els.list = el('list', '');
+            s.els.items = s.shots.map(sh => el('item', `<i></i><span>${sh.text}</span>`, s.els.list));
+        }
         if (s.keys) {
             s.els.keys = el('keys', '');
             s.els.caps = s.keys.keys.map((k, i) => {
                 if (i) s.els.keys.appendChild(Object.assign(document.createElement('span'), {textContent: '+'}));
-                const d = el('key', k, s.els.keys);
-                return d;
+                return el('key', k, s.els.keys);
             });
         }
     }
@@ -348,51 +432,79 @@
     $('#end .name').textContent = end.name;
     $('#end .line').textContent = end.line;
     $('#end .cta').textContent = end.cta;
-    $('#end .url').textContent = STORE_URL.replace(/^https:\/\//, '');
+    $('#end .url').textContent = end.find;
+
+    const nextOf = (s) => SCENES[SCENES.indexOf(s) + 1];
 
     /* A block of copy: the title sits so the block is centred on the frame's
-     * middle, the line under it a measured distance below. */
+     * middle, what comes under it a measured distance below. */
     function placeCopy(s, u) {
-        const t = s.els.title, x = s.els.text || (s.els.shots && s.els.shots[0]);
+        const t = s.els.title;
+        const under = s.els.text || s.els.list || s.els.keys;
         const th = t ? t.offsetHeight : 0;
-        const xh = x ? x.offsetHeight + 36 : 0;
-        const kh = s.els.keys ? 104 + 56 : 0;
-        const top = (1080 - th - xh - kh) / 2;
-        const leave = s.dur - u;
-        const gone = clamp(leave / .35);           // every block fades in its last third of a second
+        const uh = under ? under.offsetHeight + 40 : 0;
+        // Every title on the same line, so a push never makes the words jump; the hook alone sits centred.
+        const top = s.index === 0 ? (1080 - th - uh) / 2 : 320;
+        const next = nextOf(s);
+        // A scene the camera carries on from takes its words away itself; one that is pushed out takes them along.
+        const lift = next && next.enter === 'camera' ? inn((u - (s.dur - .3)) / .3) : 0;
         if (t) {
-            const k = rise(u, s.id === 'fill' ? .15 : .25, .7);
-            t.style.top = `${top + (1 - k) * 28}px`;
-            t.style.opacity = String(k * gone);
+            t.style.top = `${top}px`;
+            t.style.opacity = '1';
+            // The first words of the film are there almost at once; later titles wait for their scene to arrive.
+            const at = s.index === 0 ? .02 : s.id === 'fill' ? .3 : .15;
+            s.els.lines.forEach((ln, i) => {
+                const k = rise(u, at + i * .09, .75);
+                ln.style.transform = `translateY(${(1 - k) * 108 - lift * 108}%)`;
+            });
         }
-        const below = top + th + 36;
+        const below = top + th + 40;
         if (s.els.text) {
-            const k = rise(u, .55, .7);
-            s.els.text.style.top = `${below + (1 - k) * 20}px`;
-            s.els.text.style.opacity = String(k * gone);
+            const k = rise(u, .5, .7);
+            Object.assign(s.els.text.style, {
+                top: `${below}px`, opacity: String(k * (1 - lift)),
+                transform: `translateY(${(1 - k) * 14}px)`, filter: k < 1 ? `blur(${(1 - k) * 10}px)` : 'none'
+            });
         }
-        if (s.els.shots) {
+        if (s.els.list) {
+            s.els.list.style.top = `${below}px`;
+            s.els.list.style.opacity = '1';
             s.shots.forEach((sh, i) => {
+                const k = rise(u, sh.at + .1, .6);
                 const next = s.shots[i + 1];
-                const k = rise(u, sh.at + .35, .55) * (next ? 1 - rise(u, next.at, .3, inOut) : gone);
-                s.els.shots[i].style.top = `${below + (1 - rise(u, sh.at + .35, .55)) * 20}px`;
-                s.els.shots[i].style.opacity = String(k);
+                // The one being shown is lit; the ones already shown stay, dimmed, so each can still be read.
+                const dim = next ? rise(u, next.at, .4) : 0;
+                const item = s.els.items[i];
+                item.style.opacity = String(k * (1 - .55 * dim));
+                item.style.transform = `translateX(${(1 - k) * 24}px)`;
             });
         }
         if (s.els.keys) {
             s.els.keys.style.top = `${below}px`;
             const k = rise(u, s.keys.at, .5);
-            s.els.keys.style.opacity = String(k * gone);
+            s.els.keys.style.opacity = String(k * (1 - lift));
             s.els.caps.forEach((cap, i) => {
-                const down = rise(u, s.keys.press + i * .06, .08) * (1 - rise(u, s.keys.press + .38, .14));
-                cap.style.transform = `translateY(${down * 6 + (1 - k) * 16}px)`;
-                cap.style.boxShadow = `0 ${10 - down * 7}px 0 #b9c7c0, 0 ${24 - down * 14}px 40px rgba(0,0,0,${.35 - down * .15})`;
+                const down = rise(u, s.keys.press + i * .05, .07) * (1 - rise(u, s.keys.press + .34, .14));
+                cap.style.transform = `translateY(${down * 3 + (1 - k) * 18}px)`;
+                cap.style.boxShadow = `0 ${3 - down * 2}px 0 #c6d2cc, 0 ${14 - down * 8}px 30px rgba(0,0,0,${.25 - down * .1})`;
             });
         }
     }
 
     function hideCopy(s) {
-        for (const e of [s.els.title, s.els.text, s.els.keys, ...(s.els.shots || [])]) if (e) e.style.opacity = '0';
+        for (const e of [s.els.title, s.els.text, s.els.list, s.els.keys]) if (e) e.style.opacity = '0';
+    }
+
+    /* Scenes change by pushing: the old one speeds away to the left, the cut
+     * falls while it is still moving, and the new one arrives from the right at
+     * the same speed and settles. The camera's own moves keep the same axis. */
+    const PUSH = 260, PUSH_OUT = .3, PUSH_IN = .42;
+
+    function pushOf(s, u) {
+        const next = nextOf(s);
+        if (s.enter === 'push' && u < PUSH_IN) return PUSH * (1 - out(u / PUSH_IN));
+        if (next && next.enter === 'push' && u > s.dur - PUSH_OUT) return -PUSH * inn((u - (s.dur - PUSH_OUT)) / PUSH_OUT);
+        return 0;
     }
 
     // ------------------------------------------------------------ the takes ----
@@ -408,6 +520,9 @@
     SCENES.forEach(s => {
         if (s.take) takes[s.takeNo] = {page: s.take.page, scene: s, fillAt: s.start + (s.take.fillAt ?? Infinity)};
         else if (s.takeNo >= 0 && s.fillAt != null) takes[s.takeNo].fillAt = s.start + s.fillAt;
+    });
+    takes.forEach((tk, i) => {
+        tk.until = Math.max(...SCENES.filter(s => s.takeNo === i).map(s => s.start + s.dur));
     });
 
     const sceneAt = (t) => SCENES.find(s => t < s.start + s.dur) || SCENES[SCENES.length - 1];
@@ -493,12 +608,15 @@
                     return lerp(v0, v1, (t - t0) / (t1 - t0));
                 }
             }
+            /* After the last beat the fill runs at its own speed, but only so far:
+             * the card takes itself away 3.2 s after its verdict, and a scene that
+             * is still looking at it must not see it go. */
             const [tl, vl] = pts[pts.length - 1];
-            return vl + (t - tl) * 1000;
+            return vl + Math.min(t - tl, 2.5) * 1000;
         };
     }
 
-    // Fill time back to film time, for marks drawn where the fill pressed.
+    // Fill time back to film time, for marks drawn where the fill pressed and sounds where it wrote.
     function inverse(map, v, from, to) {
         let a = from, b = to;
         for (let i = 0; i < 40; i++) {
@@ -512,7 +630,8 @@
     // ------------------------------------------------------------ the camera ----
     /* A shot is a part of the window (content coordinates) shown in a rect of
      * the frame. The lens is the rounded card the page is seen through. */
-    const WHOLE = {lens: [860, 127, 960, 826], focus: [0, 0, 960, 826]};
+    const COLUMN = 840;                   // every lens starts here and is 960 wide; only its height changes
+    const WHOLE = {lens: [COLUMN, 127, 960, 826], focus: [0, 0, 960, 826]};
     const box = (id, pad = [20, 20, 20, 20], page = doc) => {
         const n = page && page.getElementById(id);
         if (!n) return [0, 0, 960, 826];
@@ -541,15 +660,22 @@
         return n;
     }
 
+    // The presses a take shows, once each: a press the filler repeats on the same target is one gesture.
+    function pressesOf(take) {
+        const kept = [];
+        for (const e of logs[take.page] || []) {
+            if (e.kind !== 'press') continue;
+            const last = kept[kept.length - 1];
+            if (last && e.v - last.v < 5 && e.target === last.target) continue;
+            kept.push(e);
+        }
+        return kept;
+    }
+
     // A ring where the fill pressed, starting a moment before the press lands.
     function ripples(t, map, take) {
-        const log = logs[take.page] || [];
-        let last = null;
-        for (const e of log) {
-            if (e.kind !== 'press') continue;
-            if (last && e.v - last.v < 5 && e.target === last.target) continue;
-            last = e;
-            const at = inverse(map, e.v, take.fillAt, take.fillAt + 40);
+        for (const e of pressesOf(take)) {
+            const at = inverse(map, e.v, take.fillAt, take.until);
             // Grows into the press, and is gone a moment after it: a list that closes takes its ring with it.
             const grow = (t - (at - .28)) / .28, fade = 1 - clamp((t - at) / .05);
             if (grow < 0 || fade <= 0) continue;
@@ -561,22 +687,26 @@
         }
     }
 
-    function caret(t, s) {
+    // What the hook's field holds at time u, and when its last key went down.
+    function typed(ty, u) {
+        const n = ty.text.length;
+        const down = clamp(Math.floor((u - ty.at) / ty.every) + 1, 0, n);
+        const back = clamp(Math.floor((u - ty.erase) / (ty.every / 2)) + 1, 0, n);
+        const last = u >= ty.erase ? ty.erase + (back - 1) * ty.every / 2 : ty.at + (down - 1) * ty.every;
+        return {text: ty.text.slice(0, down - back), last};
+    }
+
+    function caret(u, s) {
         const ty = s.typing;
         const input = doc.getElementById(ty.field);
-        // Typed a key at a time, then taken back a key at a time, twice as fast.
-        const n = ty.text.length;
-        const typed = clamp(Math.floor((t - ty.at) / ty.every) + 1, 0, n);
-        const erased = clamp(Math.floor((t - ty.erase) / (ty.every / 2)) + 1, 0, n);
-        const text = ty.text.slice(0, typed - erased);
-        const typedAt = t >= ty.erase ? ty.erase + (erased - 1) * ty.every / 2 : ty.at + (typed - 1) * ty.every;
+        const {text, last} = typed(ty, u);
         input.value = text;
         const cs = getComputedStyle(input);
         const g = document.createElement('canvas').getContext('2d');
         g.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
         const r = input.getBoundingClientRect();
         const x = r.left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth) + g.measureText(text).width + 1;
-        const on = typedAt >= 0 && t - typedAt < .5 ? true : Math.floor((t - Math.max(typedAt, 0)) / .53) % 2 === 0;
+        const on = last >= 0 && u - last < .5 ? true : Math.floor((u - Math.max(last, 0)) / .53) % 2 === 0;
         input.style.borderColor = '#1f6f4f';
         input.style.boxShadow = '0 0 0 3px rgba(31,111,79,.13)';
         if (on) svg('rect', {x, y: r.top + BAR + r.height / 2 - 10, width: 1.6, height: 20, fill: '#0f1729'});
@@ -597,7 +727,7 @@
             return {x: x0, w: g.measureText(v.slice(Math.max(0, i), Math.max(0, i) + part.length)).width, y: r.top + BAR + r.height / 2, h: r.height};
         };
         const a = span(pair.from), b = span(pair.to);
-        const k1 = rise(t, u0, .35), k2 = rise(t, u0 + .25, .55, inOut), k3 = rise(t, u0 + .7, .35);
+        const k1 = rise(t, u0, .35), k2 = rise(t, u0 + .25, .55, move), k3 = rise(t, u0 + .7, .35);
         const hl = (s, k) => svg('rect', {
             x: s.x - 4, y: s.y - 13, width: (s.w + 8) * k, height: 26, rx: 6,
             fill: 'rgba(47,158,111,.16)', stroke: 'rgba(31,111,79,.55)', 'stroke-width': 1.2
@@ -605,12 +735,13 @@
         if (k1 > 0) hl(a, k1);
         if (k3 > 0) hl(b, k3);
         if (k2 <= 0) return;
-        // Down out of the first box, across, and into the second: a calm S, never a diagonal.
-        const p0 = [a.x + a.w / 2, a.y + 14], p1 = [b.x + b.w / 2, b.y - 14];
+        /* Side by side: an arc over the gap between them. One above the other: a
+         * bracket in the left margin, so the line never crosses the label between. */
         const same = Math.abs(a.y - b.y) < 2;
+        const edge = Math.min(a.x, b.x) - 22;
         const d = same
-            ? `M ${a.x + a.w + 4} ${a.y} C ${a.x + a.w + 60} ${a.y - 70}, ${b.x - 60} ${b.y - 70}, ${b.x - 4} ${b.y}`
-            : `M ${p0[0]} ${p0[1]} C ${p0[0]} ${p0[1] + 50}, ${p1[0]} ${p1[1] - 50}, ${p1[0]} ${p1[1]}`;
+            ? `M ${a.x + a.w + 4} ${a.y} C ${a.x + a.w + 60} ${a.y - 70}, ${b.x - 60} ${b.y - 70}, ${b.x - 10} ${b.y}`
+            : `M ${a.x - 10} ${a.y} C ${edge} ${a.y}, ${edge} ${b.y}, ${b.x - 10} ${b.y}`;
         const path = svg('path', {d, fill: 'none', stroke: '#1f6f4f', 'stroke-width': 2.5, 'stroke-linecap': 'round'});
         const len = path.getTotalLength();
         path.setAttribute('stroke-dasharray', `${len}`);
@@ -647,34 +778,56 @@
             img.className = 'card';
             img.src = `/cap/${name}.png`;
             img.style.opacity = '0';
+            img.setAttribute('data-mv', '');
             cards.appendChild(img);
             caps[name] = img;
         }
         return caps[name];
     }
 
-    // Size a capture by its own pixels: they are taken at three times their CSS size.
+    // Size a capture by its own pixels: they are taken at POPUP_SCALE times their CSS size.
     // Cut tight to what it shows; the card's own padding is the margin, not the popup's neighbours.
-    function placeCard(img, x, y, zoom, k, pad = 0, dy = 24) {
-        const w = img.naturalWidth / 3 * zoom;
+    function placeCard(img, x, y, zoom, k, pad = 0, dy = 24, bare = false) {
+        const w = img.naturalWidth / POPUP_SCALE * zoom, h = img.naturalHeight / POPUP_SCALE * zoom + pad * 2;
         Object.assign(img.style, {
-            left: `${x}px`, top: `${y + (1 - k) * dy}px`, width: `${w}px`, opacity: String(k), padding: `${pad}px`
+            left: `${x}px`, top: `${y + (1 - k) * dy}px`, width: `${w}px`, opacity: String(k), padding: `${pad}px`,
+            // A cut-out casts its shadow from its own outline, not from a box around it.
+            background: bare ? 'transparent' : '', borderRadius: bare ? '0' : '',
+            boxShadow: bare ? 'none' : h < 200 ? '0 18px 40px rgba(0,0,0,.30), 0 0 0 1px rgba(255,255,255,.10)' : '',
+            filter: bare ? 'drop-shadow(0 12px 22px rgba(0,0,0,.28))' : ''
         });
-        return {w: w + pad * 2, h: img.naturalHeight / 3 * zoom + pad * 2};
+        return {w: w + pad * 2, h};
     }
 
     function hideCards() {
         for (const img of Object.values(caps)) img.style.opacity = '0';
     }
 
-    let freezeFor = -1;
+    /* Everything that moves, as one string: two frames with the same one show
+     * nothing moving between them, so the recorder takes the frame once rather
+     * than blurring it from several. */
+    const signature = () => [...document.querySelectorAll('[data-mv]')]
+        .map(e => `${e.style.transform}|${e.style.left}|${e.style.top}|${e.style.width}|${e.style.height}`).join(';');
+
+    // Lay out the words and cards of a scene at u, without its window.
+    function still(s, u) {
+        const fill = SCENES.find(x => x.id === 'fill'), last = SCENES.find(x => x.id === 'end');
+        const t = s.start + u;
+        $('#brand').style.opacity = String(rise(t, fill.start + .1, .6) * (1 - rise(t, last.start - .3, .3, inn)));
+        for (const x of SCENES) if (x !== s) hideCopy(x);
+        hideCards();
+        $('#end').hidden = s.id !== 'end';
+        stage.style.transform = `translateX(${pushOf(s, u)}px)`;
+        placeCopy(s, u);
+        if (STILL[s.id]) STILL[s.id](u, s);
+    }
 
     window.film = {
-        takes: takes.map(tk => ({page: tk.page, at: tk.scene.start, fillAt: tk.fillAt})),
+        takes: takes.map(tk => ({page: tk.page, at: tk.scene.start, fillAt: tk.fillAt, until: tk.until})),
         duration: SCENES.reduce((a, s) => a + s.dur, 0),
         fps: FPS,
         fill: FILL,
-        scenes: SCENES.map(s => ({id: s.id, start: s.start, dur: s.dur, dissolve: s.dissolve || 0})),
+        scenes: SCENES.map(s => ({id: s.id, start: s.start, dur: s.dur, enter: s.enter || '', take: s.takeNo})),
         load,
         takeOf: (t) => sceneAt(t).takeNo,
         async rehearse(to, step) {
@@ -686,90 +839,172 @@
         },
         log: logOf,
         preload: (names) => Promise.all(names.map(n => capture(n).decode())),
-        async frame(t) {
-            const s = sceneAt(t);
+        /* `t` is the instant exposed; `at` the frame it belongs to. The page holds
+         * at the frame across its exposures and only the camera and the words move
+         * between them: a form that reflowed mid-exposure came out double. */
+        async frame(t, at = t) {
+            const s = sceneAt(at);
             const u = t - s.start;
             marks.textContent = '';
-            for (const x of SCENES) if (x !== s) hideCopy(x);
-            hideCards();
-            $('#end').hidden = s.id !== 'end';
-
-            // Leaving a scene: the last frame of the one before, fading over the new one.
-            const fz = /** @type {HTMLImageElement} */ ($('#freeze'));
-            if (s.dissolve && u < s.dissolve) {
-                if (freezeFor !== s.index) {
-                    freezeFor = s.index;
-                    fz.src = `/freeze.jpg?scene=${s.index}`;
-                    await fz.decode().catch(() => 0);
-                }
-                fz.hidden = false;
-                fz.style.opacity = String(1 - inOut(u / s.dissolve));
-            } else fz.hidden = true;
-
             const take = s.takeNo >= 0 ? takes[s.takeNo] : null;
             lens.style.display = take ? '' : 'none';
             if (take) {
                 const map = remap(take);
-                await advance(map(t));
-                setAnimations(t);
-                const filling = t >= take.fillAt && !(named(logOf())).toast;
-                paintTool(filling ? ((t - take.fillAt) / 1.4) % 1 : null);
-                ripples(t, map, take);
+                await advance(map(at));
+                setAnimations(at);
+                const filling = at >= take.fillAt && !(named(logOf())).toast;
+                paintTool(filling ? ((at - take.fillAt) / 1.4) % 1 : null);
+                if (s.rings !== false) ripples(at, map, take);
                 SHOTS[s.id](u, s, t);
                 await imagesReady();
             }
-            placeCopy(s, u);
-            if (STILL[s.id]) STILL[s.id](u, s);
-            return s.id;
+            still(s, u);
+            return {id: s.id, sig: signature()};
+        },
+
+        /* How long every piece of copy is readable, against how long it needs:
+         * a second per thirteen characters and half a second more, and how big
+         * it is. Walks the whole film at 30 steps a second, without the window. */
+        audit() {
+            const seen = new Map();
+            const lens0 = lens.style.display;
+            lens.style.display = 'none';
+            for (let t = 0; t < this.duration; t += 1 / 30) {
+                const s = sceneAt(t);
+                still(s, t - s.start);
+                const pieces = [s.els.title, s.els.text, ...(s.els.items || []), s.els.keys,
+                    ...(s.id === 'end' ? [...$('#end').children].slice(1) : [])].filter(Boolean);
+                for (const e of pieces) {
+                    const r = e.getBoundingClientRect();
+                    const cs = getComputedStyle(e);
+                    const op = Number(cs.opacity) * Number(getComputedStyle(e.parentElement).opacity);
+                    // A title is readable once its lines have come up; a dimmed list item still is.
+                    const settled = [...e.querySelectorAll('.ln > span')]
+                        .every(l => Math.abs(parseFloat(l.style.transform.slice('translateY('.length)) || 0) < 2);
+                    const ok = op > .4 && settled && r.left >= 0 && r.right <= 1920;
+                    const key = e;
+                    if (!seen.has(key)) seen.set(key, {text: e.innerText.replace(/\s+/g, ' ').trim(), px: parseFloat(cs.fontSize), quiet: e.hasAttribute('data-quiet'), runs: [], run: 0});
+                    const rec = seen.get(key);
+                    if (ok) rec.run += 1 / 30;
+                    else if (rec.run) {
+                        rec.runs.push(rec.run);
+                        rec.run = 0;
+                    }
+                }
+            }
+            lens.style.display = lens0;
+            return [...seen.values()].map(r => {
+                if (r.run) r.runs.push(r.run);
+                const shown = r.runs.length ? Math.max(...r.runs) : 0;
+                return {text: r.text, px: r.px, quiet: r.quiet, shown: Math.round(shown * 100) / 100, needs: Math.round((r.text.length / 13 + .5) * 100) / 100};
+            });
+        },
+
+        /* Where the sound goes: every key, press, field written and scene change,
+         * in film seconds, from the same logs and remaps the pictures use. */
+        cues() {
+            const cues = [];
+            const add = (t, kind) => cues.push({t: Math.round(t * 1000) / 1000, kind});
+            for (const s of SCENES) {
+                if (s.typing) {
+                    const ty = s.typing;
+                    for (let i = 0; i < ty.text.length; i++) add(s.start + ty.at + i * ty.every, 'key');
+                    for (let i = 0; i < ty.text.length; i++) add(s.start + ty.erase + i * ty.every / 2, 'key');
+                }
+                if (s.keys) s.keys.keys.forEach((_, i) => add(s.start + s.keys.press + i * .05, 'cap'));
+                if (s.enter === 'push') add(s.start, 'whoosh');
+                if (s.cardAt != null) add(s.start + s.cardAt, 'swell');
+                if (s.ties) s.ties.forEach(tk => add(s.start + tk.at + .25, 'tie'));
+                if (s.seed) for (let i = 0; i < FILL.seed.length; i++) add(s.start + s.seed.at + i * s.seed.every, 'key');
+                if (s.debug) add(s.start + s.debug.at, 'tie');
+                if (s.pill) add(s.start + s.pill.at, 'tie');
+            }
+            takes.forEach(take => {
+                const map = remap(take);
+                const at = (v) => inverse(map, v, take.fillAt, take.until);
+                let improving = false, last = -1;
+                for (const e of logs[take.page] || []) {
+                    let kind = null;
+                    if (e.kind === 'progress' && e.stage === 'improve') improving = true;
+                    else if (e.kind === 'progress' && e.stage === 'fill' && e.label) kind = improving ? 'ai' : 'field';
+                    else if (e.kind === 'file') kind = 'pop';
+                    else if (e.kind === 'paste' && !improving) kind = 'field';
+                    else if (e.kind === 'toast') kind = 'done';
+                    if (!kind) continue;
+                    const t = at(e.v);
+                    if (t >= take.until) continue;
+                    // A burst of writes in one instant is one sound, not a buzz.
+                    if (kind === 'field' && t - last < .06) continue;
+                    if (kind === 'field') last = t;
+                    add(t, kind);
+                }
+                for (const e of pressesOf(take)) {
+                    const t = at(e.v);
+                    if (t < take.until) add(t, 'press');
+                }
+            });
+            return cues.sort((a, b) => a.t - b.t);
         }
     };
 
     // ---------------------------------------------------------- the scenes ----
-    const HOOK_LENS = [780, 150, 1020, 780];
-    // The on-page card and the end of the form it sits over, in the window's bottom right.
-    const CARD = [550, 474, 410, 352];
-    const SIDE = [800, 110, 1000, 860];
+    const HOOK_LENS = [COLUMN, 165, 960, 750];
+    const SIDE = [COLUMN, 110, 960, 860];
+    // A lens of the focus's own shape, centred: nothing shown that the shot did not ask for.
+    const fitted = (focus) => {
+        const h = Math.round(960 * focus[3] / focus[2]);
+        return {lens: [COLUMN, (1080 - h) / 2, 960, h], focus};
+    };
+    const topOf = (sel) => doc.querySelector(sel).getBoundingClientRect().top + BAR;
+    // The on-page card and a margin, the window closing round it: the verdict and nothing else.
+    const card = () => {
+        const n = doc.getElementById('fillsmith-hud');
+        if (!n) return fitted([500, 590, 450, 200]);
+        const r = n.getBoundingClientRect();
+        return fitted([r.left - 28, r.top + BAR - 28, r.width + 56, r.height + 56]);
+    };
 
     const SHOTS = {
-        hook(u, s, t) {
+        hook(u, s) {
             caret(u, s);
-            const near = {lens: HOOK_LENS, focus: [40, BAR + 6, 563, 430]};
-            shoot(mixShot(near, WHOLE, rise(u, 3.1, .9, inOut)));
+            // The left column, cut in its gutters: the field being typed into and nothing sliced.
+            const near = {lens: HOOK_LENS, focus: [24, 50, 456, 356]};
+            shoot(mixShot(near, WHOLE, rise(u, s.dur - .95, .95, move)));
         },
         fill(u, s) {
             const input = doc.getElementById('requester');
             input.style.borderColor = '';
             input.style.boxShadow = '';
             // The card is twelve-pixel type at this size: when it has its verdict, the camera goes to it.
-            shoot(mixShot(WHOLE, {lens: WHOLE.lens, focus: CARD}, rise(u, s.cardAt, 1.1, inOut)));
+            shoot(mixShot(WHOLE, card(), rise(u, s.cardAt, .9, move)));
         },
         controls(u, s) {
-            /* Fixed rectangles, not the boxes of what is in them: the preview has no
-             * size until its file arrives, and the editor grows when the paste lands. */
-            const date = box('golive', [24, 0, 24, 0]), notes = box('notes', [24, 24, 0, 0]);
+            /* A column each, from the gap above the label down, at the lens's own
+             * shape: the cut falls between controls, never through one. */
+            const L = 40, R = 480, W = 440, H = 394;
             const frames = {
-                country: box('country', [24, 70, 230, 440]),
-                golive: box('golive', [24, 70, 24, 280]),
-                screenshot: [date[0], date[1] + 40, date[2], 200],
-                // Its first two thirds: the lines run on past the lens, which reads as a long text.
-                notes: [notes[0], notes[1] - 60, 600, 300]
+                country: [L, topOf('#lbl-country') - 10, W, H],
+                golive: [R, topOf('#lbl-date') - 10, W, H],
+                screenshot: [R, topOf('label[for="screenshot"]') - 10, W, H],
+                notes: [L, topOf('#notes') - 10, W, H]
             };
             // Each move runs to its end, however soon the next caption arrives.
             let shot = {lens: SIDE, focus: frames[s.shots[0].on]};
             for (const sh of s.shots.slice(1)) {
-                shot = mixShot(shot, {lens: SIDE, focus: frames[sh.on]}, rise(u, sh.at - .15, .6, inOut));
+                shot = mixShot(shot, {lens: SIDE, focus: frames[sh.on]}, rise(u, sh.at - .2, .7, move));
             }
             shoot(shot);
         },
         person(u, s) {
-            const f = box('form', [24, 70, 24, 24]);
-            const w = 1040, h = Math.round(w * f[3] / f[2]);
-            shoot({lens: [800, (1080 - h) / 2, w, h], focus: f});
+            // The fields alone, no page header: the values are the scene.
+            const a = doc.querySelector('label[for="name"]').getBoundingClientRect();
+            const b = doc.getElementById('country').getBoundingClientRect();
+            shoot(fitted([a.left - 18, a.top + BAR - 14, b.right - a.left + 36, b.bottom - a.top + 30]));
             for (const tk of s.ties) tie(u, tk, tk.at);
         },
-        ai(u, s) {
-            const near = {lens: SIDE, focus: [40, 330, 600, 330]};
-            shoot(mixShot(near, {lens: SIDE, focus: CARD}, rise(u, s.cardAt, 1.1, inOut)));
+        ai(u) {
+            // The ticket and the first lines of the notes: the two the model rewrites, large enough to watch change.
+            shoot(fitted([24, topOf('label[for="ticket"]') - 10, 456, 285]));
         }
     };
 
@@ -777,28 +1012,29 @@
         ai(u, s) {
             const t = s.els.text;
             const img = capture('pill');
-            placeCard(img, 120, t.offsetTop + t.offsetHeight + 56, 2.6, rise(u, s.pill.at, .6) * clamp((s.dur - u) / .35), 14);
+            placeCard(img, 120, parseFloat(t.style.top) + t.offsetHeight + 48, 3, rise(u, s.pill.at, .6), 0, 24, true);
         },
         repeat(u, s) {
             const n = clamp(Math.floor((u - s.seed.at) / s.seed.every) + 1, 0, FILL.seed.length);
-            const gone = clamp((s.dur - u) / .35);
             const seed = capture(`seed-${n}`), dbg = capture('debug');
-            const Z = 2.4, gap = 40, pad = 30;
-            const h = (seed.naturalHeight + dbg.naturalHeight) / 3 * Z + gap + pad * 4;
-            const top = (1080 - h) / 2;
-            const r = placeCard(seed, 840, top, Z, rise(u, .3, .7) * gone, pad);
-            placeCard(dbg, 840, top + r.h + gap, Z, rise(u, s.debug.at, .7) * gone, pad);
+            // As wide as the window in every other scene, whatever width the popup draws them at.
+            const gap = 36, pad = 30, Z = (960 - pad * 2) / (dbg.naturalWidth / POPUP_SCALE);
+            const sh = seed.naturalHeight / POPUP_SCALE * Z + pad * 2, h = sh + gap + dbg.naturalHeight / POPUP_SCALE * Z + pad * 2;
+            // Centred on what is there: the seed alone, then the pair, the stack easing up as the second arrives.
+            const top = lerp((1080 - sh) / 2, (1080 - h) / 2, rise(u, s.debug.at, .7, move));
+            const r = placeCard(seed, COLUMN, top, Z, rise(u, .15, .6), pad);
+            placeCard(dbg, COLUMN, top + r.h + gap, Z, rise(u, s.debug.at, .7), pad);
             // The lower card over the upper one's shadow, or the shadow lies across it like a smudge.
             seed.style.zIndex = '1';
             dbg.style.zIndex = '2';
         },
-        end(u, s) {
+        end(u) {
             const e = $('#end');
-            const k = rise(u, .1, .9);
             [...e.children].forEach((c, i) => {
-                const ki = rise(u, .1 + i * .12, .8);
-                c.style.opacity = String(ki);
-                c.style.transform = `translateY(${(1 - ki) * 26}px)`;
+                // Arriving with the push, not after it: an end card that comes in empty reads as a gap.
+                const k = rise(u, .05 + i * .1, .8);
+                c.style.opacity = String(k);
+                c.style.transform = `translateY(${(1 - k) * 26}px)`;
             });
         }
     };

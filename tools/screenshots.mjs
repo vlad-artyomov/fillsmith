@@ -29,6 +29,7 @@ import {createServer} from 'node:http';
 import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {SCENES} from './video/script.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(root, 'docs', 'store');
@@ -43,9 +44,11 @@ const SHOT_WIDTH = 440;           // how wide a popup sits in a frame
 const SHOT_MAX = Math.round(730 * 360 / SHOT_WIDTH);   // and how much of it fits at that width
 
 const body = readFileSync(join(root, 'test/demo-form.html'));
+// The film's second page, for the frame that shows one person's values agreeing.
+const pages = {'/person.html': readFileSync(join(root, 'tools/video/person.html'))};
 const server = createServer((q, r) => {
     r.writeHead(200, {'content-type': 'text/html; charset=utf-8'});
-    r.end(body);
+    r.end(pages[q.url.split('?')[0]] || body);
 });
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const origin = `http://127.0.0.1:${server.address().port}`;
@@ -175,6 +178,12 @@ const columnCrop = await page.screenshot({type: 'png', clip: await boxOf(page,
 await worker.evaluate(() => chrome.storage.local.set({debugTab: true}));
 const pop = await ctx.newPage();
 await pop.setViewportSize({width: 360, height: 900});
+/* The crops a store frame magnifies are taken at four times, through the
+ * protocol: Playwright's own screenshot draws at the context's 2x whatever the
+ * page is told, and a 2x crop magnified 1.7 times came out soft. */
+const POP_SCALE = 4;
+const popCdp = await ctx.newCDPSession(pop);
+await popCdp.send('Emulation.setDeviceMetricsOverride', {width: 360, height: 900, deviceScaleFactor: POP_SCALE, mobile: false});
 await pop.goto(`chrome-extension://${id}/src/popup.html`);
 await pop.waitForTimeout(700);
 
@@ -234,7 +243,7 @@ const widthOf = async (png) => (await scaler.evaluate(async (d) => {
     i.src = 'data:image/png;base64,' + d;
     await i.decode();
     return i.naturalWidth;
-}, png.toString('base64'))) / 2;      // the captures are 2x
+}, png.toString('base64'))) / (png.scale || 2);      // page captures are 2x; popup crops say their own
 
 /* One or more crops on one white card, in order, each at the popup zoom. A crop
  * taken tight to its content gets the card's padding instead of the page's
@@ -260,7 +269,10 @@ const frame = async (name, caption, pngs, pad = 0, zoom = POP_ZOOM) => {
 const popCrop = async (pick, pad = 10, full = false) => {
     const box = await boxOf(pop, pick, pad);
     if (full) Object.assign(box, {x: 0, width: 360});
-    return pop.screenshot({type: 'png', clip: box});
+    const png = Buffer.from((await popCdp.send('Page.captureScreenshot',
+        {format: 'png', clip: Object.assign({scale: 1}, box)})).data, 'base64');
+    png.scale = POP_SCALE;
+    return png;
 };
 
 /* The first frame is the only one most people see: the claim across the top,
@@ -298,7 +310,7 @@ const popCrop = async (pick, pad = 10, full = false) => {
         <svg viewBox="0 0 24 24" style="width:56px;height:56px;padding:12px;border-radius:14px;background:#e7f3ed;
              stroke:#1f6f4f;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;box-sizing:border-box">${ICONS[icon]}</svg>
         <div style="font-size:27px;line-height:1.15;font-weight:800;letter-spacing:-.02em;margin:22px 0 12px">${title}</div>
-        <div style="font-size:23px;line-height:1.35;color:#3d4653">${text}</div></div>`).join('');
+        <div style="font-size:23px;line-height:1.35;color:#3d4653;text-wrap:balance">${text}</div></div>`).join('');
     await stage.setContent(greenFrame(`
       <div style="position:absolute;left:64px;right:64px;top:150px;text-align:center">
         <div style="font-size:56px;line-height:1.05;font-weight:800;letter-spacing:-.035em">What one click does</div>
@@ -310,10 +322,6 @@ const popCrop = async (pick, pad = 10, full = false) => {
 }
 
 const fillPane = keep('popup-fill.png', await pane());
-await frame('3-one-person.png', {
-    title: 'One believable<br>person.',
-    text: 'The email follows the name. Every value says where it came from.'
-}, await popCrop([{css: '#result'}]));
 
 await pop.click('#tabDebug');
 await pop.waitForTimeout(400);
@@ -332,6 +340,77 @@ await frame('5-ai-free.png', {
     await popCrop([{css: '#paneSettings .opt', from: 0, to: 1}], 8, true),
     await popCrop([{css: '#advanced > summary'}], 12, true)
 ]), 0, 1.8);
+
+/* The third frame proves the claim rather than listing values: the film's
+ * person form, filled with the same seed, and a line from each value to the
+ * ones it decided — the name to the email, the city to its ZIP and its phone.
+ * Laid out as the first frame is, the fields across the frame: beside the
+ * claim they were 15-pixel type in a carousel that halves it. */
+{
+    const scene = SCENES.find(s => s.id === 'person');
+    const person = await ctx.newPage();
+    await person.goto(`${origin}/person.html`);
+    await person.waitForTimeout(300);
+    await worker.evaluate(async ({url}) => {
+        const tab = (await chrome.tabs.query({})).find(t => t.url === url);
+        await self.askPage(tab.id, {
+            kind: 'fill',
+            settings: {locale: 'en-US', seed: 'STORE1', useAI: true, overwrite: true, emailDomain: 'example.com'}
+        });
+    }, {url: `${origin}/person.html`});
+    await person.waitForFunction(() => document.getElementById('contactNumber').value !== '', null, {timeout: 10000});
+    await person.waitForTimeout(2300);      // the ring round each field just written fades in two seconds
+    const geo = await person.evaluate((ties) => {
+        const g = document.createElement('canvas').getContext('2d');
+        const span = ([id, part]) => {
+            const el = document.getElementById(id);
+            const cs = getComputedStyle(el);
+            g.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+            const r = el.getBoundingClientRect();
+            const i = Math.max(0, el.value.toLowerCase().indexOf(part.toLowerCase()));
+            const x = r.left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth) + g.measureText(el.value.slice(0, i)).width;
+            return {x, w: g.measureText(el.value.slice(i, i + part.length)).width, y: r.top + r.height / 2};
+        };
+        const a = document.querySelector('label[for="name"]').getBoundingClientRect();
+        const b = document.getElementById('country').getBoundingClientRect();
+        return {
+            crop: {x: a.left - 18, y: a.top - 14, width: b.right - a.left + 36, height: b.bottom - a.top + 30},
+            ties: ties.map(t => ({a: span(t.from), b: span(t.to)}))
+        };
+    }, scene.ties);
+    const shot = await person.screenshot({type: 'png', clip: geo.crop});
+    await person.close();
+    // The same marks the film draws: each value boxed, and an arc over the gap or a bracket down the margin.
+    const {x: ox, y: oy} = geo.crop;
+    const marks = geo.ties.map(({a, b}) => {
+        const A = {x: a.x - ox, y: a.y - oy, w: a.w}, B = {x: b.x - ox, y: b.y - oy, w: b.w};
+        const chip = (s) => `<rect x="${s.x - 4}" y="${s.y - 13}" width="${s.w + 8}" height="26" rx="6"
+            fill="rgba(47,158,111,.16)" stroke="rgba(31,111,79,.55)" stroke-width="1.2"/>`;
+        const edge = Math.min(A.x, B.x) - 22;
+        const d = Math.abs(A.y - B.y) < 2
+            ? `M ${A.x + A.w + 4} ${A.y} C ${A.x + A.w + 60} ${A.y - 70}, ${B.x - 60} ${B.y - 70}, ${B.x - 10} ${B.y}`
+            : `M ${A.x - 10} ${A.y} C ${edge} ${A.y}, ${edge} ${B.y}, ${B.x - 10} ${B.y}`;
+        return `${chip(A)}${chip(B)}<path d="${d}" fill="none" stroke="#1f6f4f" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="${B.x - 10}" cy="${B.y}" r="4" fill="#1f6f4f"/>`;
+    }).join('');
+    // As wide as the frame allows with the whole form above the bottom margin, the way the first frame sits.
+    const TOP = 300, BOTTOM = 44;
+    const W = Math.min(1152, Math.round((800 - TOP - BOTTOM) * geo.crop.width / geo.crop.height));
+    const H = Math.round(W * geo.crop.height / geo.crop.width);
+    const plain = (html) => html.replace(/<br>/g, ' ');
+    await stage.setContent(greenFrame(`
+      <div style="position:absolute;left:64px;top:128px;right:64px">
+        <div style="font-size:64px;line-height:1;font-weight:800;letter-spacing:-.035em">${plain(scene.title)}</div>
+        <div style="font-size:32px;line-height:1.25;font-weight:500;letter-spacing:-.01em;color:rgba(255,255,255,.93);margin-top:16px">${plain(scene.text)}</div>
+      </div>
+      <div style="position:absolute;left:64px;top:${TOP}px;width:${W}px;height:${H}px;border-radius:18px;overflow:hidden;
+                  background:#fff;box-shadow:0 40px 90px rgba(0,0,0,.42),0 0 0 1px rgba(255,255,255,.10)">
+        <img src="data:image/png;base64,${shot.toString('base64')}" alt="" style="display:block;width:${W}px">
+        <svg viewBox="0 0 ${geo.crop.width} ${geo.crop.height}" style="position:absolute;inset:0;width:100%;height:100%">${marks}</svg>
+      </div>`));
+    await stage.waitForTimeout(150);
+    await save('3-one-person.png', await stage.screenshot({type: 'png'}));
+}
 
 /* The tile is what a search result shows, beside a dozen others: the brand's
  * green, the mark, and the claim set as large as 440 pixels allow. On white it
@@ -360,7 +439,8 @@ await stage.setContent(`<!doctype html><html><body style="margin:0;width:${MARQU
   background:radial-gradient(120% 140% at 30% 0%, #2a8a62, #16553b 60%, #0f3a29)">
   <div style="position:absolute;left:84px;top:0;bottom:0;width:560px;display:flex;flex-direction:column;justify-content:center">
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:30px">
-      <canvas id="m" width="112" height="112" style="width:56px;height:56px"></canvas>
+      <div style="padding:4px;border-radius:16px;background:rgba(255,255,255,.14);display:flex">
+        <canvas id="m" width="112" height="112" style="width:56px;height:56px"></canvas></div>
       <span style="font-size:30px;font-weight:700;letter-spacing:-.02em">Fillsmith</span>
     </div>
     <div style="font-size:52px;line-height:1.05;font-weight:800;letter-spacing:-.035em;margin-bottom:22px">Fill any form with<br>realistic test data.<br><span style="color:#9fe3c2">In one click.</span></div>
@@ -385,7 +465,8 @@ await stage.setContent(`<!doctype html><html><body style="margin:0;width:${SOCIA
   background:radial-gradient(120% 140% at 30% 0%, #2a8a62, #16553b 60%, #0f3a29)">
   <div style="position:absolute;left:72px;top:0;bottom:0;width:540px;display:flex;flex-direction:column;justify-content:center">
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:34px">
-      <canvas id="m" width="112" height="112" style="width:56px;height:56px"></canvas>
+      <div style="padding:4px;border-radius:16px;background:rgba(255,255,255,.14);display:flex">
+        <canvas id="m" width="112" height="112" style="width:56px;height:56px"></canvas></div>
       <span style="font-size:32px;font-weight:700;letter-spacing:-.02em">Fillsmith</span>
     </div>
     <div style="font-size:52px;line-height:1.06;font-weight:700;letter-spacing:-.03em;margin-bottom:24px">Fill any form with<br>realistic test data.<br><span style="color:#9fe3c2">In one click.</span></div>
