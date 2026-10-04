@@ -9,15 +9,15 @@ For QA engineers who fill the same create-form forty times a day.
 **[Add to Chrome — it's free](https://chromewebstore.google.com/detail/amhpkgalagghaabpdnkjclkkjcellabm)** ·
 **[Website and live demo](https://vlad-artyomov.github.io/fillsmith/)**
 
-[![Chrome Web Store](https://img.shields.io/chrome-web-store/v/amhpkgalagghaabpdnkjclkkjcellabm?color=1f6f4f&label=chrome%20web%20store)](https://chromewebstore.google.com/detail/amhpkgalagghaabpdnkjclkkjcellabm)
+[![Chrome Web Store: free](https://img.shields.io/badge/Chrome%20Web%20Store-free-1f6f4f?logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/amhpkgalagghaabpdnkjclkkjcellabm)
 [![YouTube: demo video](https://img.shields.io/badge/YouTube-demo%20video-1f6f4f?logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=iMCCoZ3luHU)
-[![tests](https://github.com/vlad-artyomov/fillsmith/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/vlad-artyomov/fillsmith/actions/workflows/test.yml)
-[![latest release](https://img.shields.io/github/v/release/vlad-artyomov/fillsmith?color=1f6f4f&label=release)](https://github.com/vlad-artyomov/fillsmith/releases/latest)
-[![Chrome Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-1f6f4f)](manifest.json)
-[![Runtime dependencies: 0](https://img.shields.io/badge/runtime%20dependencies-0-1f6f4f)](package.json)
-[![No build step](https://img.shields.io/badge/build%20step-none-1f6f4f)](#-development)
 [![AI: on-device](https://img.shields.io/badge/AI-on--device-1f6f4f)](#-the-model-is-optional-and-never-in-the-way)
-[![License: MIT](https://img.shields.io/badge/license-MIT-1f6f4f)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-1f6f4f)](LICENSE)<br>
+[![latest release](https://img.shields.io/github/v/release/vlad-artyomov/fillsmith?color=1f6f4f&label=release)](https://github.com/vlad-artyomov/fillsmith/releases/latest)
+[![tests](https://github.com/vlad-artyomov/fillsmith/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/vlad-artyomov/fillsmith/actions/workflows/test.yml)
+[![Chrome Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-1f6f4f)](manifest.json)
+[![No build step](https://img.shields.io/badge/build%20step-none-1f6f4f)](#-development)
+[![Runtime dependencies: 0](https://img.shields.io/badge/runtime%20dependencies-0-1f6f4f)](package.json)
 
 <img src="docs/filled-form.png" alt="A form filled in one press: a name and a matching email, a country picked from the dropdown's own options, a date chosen in the calendar, a generated PNG attached and previewed, and a rich-text editor holding real markup — with a card in the corner reporting what came from where">
 
