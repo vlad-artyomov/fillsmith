@@ -2053,6 +2053,41 @@ check('and it answers one question, not two — no widget count among the source
     !!demo.card && demo.card.aside.length === 0 && !demo.card.sources.some(t => /widget/.test(t)),
     (demo.card ? demo.card.sources.concat(demo.card.aside).join(' · ') : '(no card)'));
 
+/* The site's demo promises "valid on the first submit", and a visitor tests it
+ * the obvious way: press Create on the empty form, fill, press it again. The page
+ * validates its model, so this is also the fill reaching the model by real events. */
+await loadPage('test/demo-form.html');
+const submit = await page.evaluate(async () => {
+    const shown = () => [...document.querySelectorAll('.error:not([hidden])')].map(e => e.textContent);
+    const form = document.getElementById('form');
+    form.requestSubmit();
+    const before = shown();
+    await window.__fillsmith.run({seed: 'DEMO01', locale: 'en-US', useAI: false, overwrite: true});
+    const after = shown();
+    form.requestSubmit();
+    const dialog = document.getElementById('created');
+    const result = {before, after, open: dialog.open, sent: dialog.open && JSON.parse(document.getElementById('payload').textContent),
+        snap: window.__snapshot()};
+    dialog.close();
+    document.getElementById('clear').click();
+    await new Promise(r => setTimeout(r, 50));
+    const s = window.__snapshot();
+    result.cleared = [s.requester, s.email, s.country, s.golive, s.ticket, s.notes, ...s.screenshot,
+        document.querySelector('#golive input').value, document.getElementById('screenshot').files.length || '',
+        s.signoff ? 'signoff' : ''].filter(Boolean);
+    return result;
+});
+check('pressing Create on the empty form names the three required fields',
+    submit.before.length === 3, submit.before.join(' · ') || '(no errors)');
+check('one fill clears every error it was shown',
+    submit.after.length === 0, submit.after.join(' · ') || 'none left');
+check('and the next press is accepted, sending what the page holds',
+    submit.open && submit.sent.contactPerson === submit.snap.requester && submit.sent.workEmail === submit.snap.email
+    && submit.sent.officeCountry === submit.snap.country && !!submit.sent.screenshot && !!submit.sent.releaseNotes,
+    submit.open ? JSON.stringify(submit.sent).slice(0, 160) : 'the form refused it');
+check('and Clear leaves the form as blank as it started, to run the demo again',
+    submit.cleared.length === 0, submit.cleared.join(' · ') || 'blank');
+
 await browser.close();
 console.log(`\n${failures === 0 ? 'All widget checks passed.' : failures + ' check(s) failed.'}`);
 process.exit(failures === 0 ? 0 : 1);
