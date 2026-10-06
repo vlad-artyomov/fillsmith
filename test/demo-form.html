@@ -24,6 +24,7 @@
             --text: #0f1729;
             --muted: #667085;
             --accent: #1f6f4f;
+            --bad: #b42318;
         }
 
         * {
@@ -415,29 +416,198 @@
             border-top: 1px solid var(--line);
         }
 
-        .primary {
+        .primary, .ghost {
             padding: 9px 17px;
-            border: 0;
             border-radius: 9px;
+            font: inherit;
+            cursor: pointer;
+            transition: background-color .15s, border-color .15s, box-shadow .15s, transform .12s cubic-bezier(.23, 1, .32, 1);
+        }
+
+        .primary {
+            border: 0;
             background: var(--accent);
             color: #fff;
-            font: inherit;
             font-weight: 600;
-            cursor: pointer;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, .12);
+        }
+
+        .primary:hover {
+            background: #195c41;
+            box-shadow: 0 6px 16px -8px rgba(31, 111, 79, .7);
         }
 
         .ghost {
             padding: 9px 15px;
             border: 1px solid var(--edge);
-            border-radius: 9px;
             background: #fff;
-            font: inherit;
-            cursor: pointer;
+            color: var(--text);
+        }
+
+        .ghost:hover {
+            border-color: #aeb9c9;
+            background: #f8fafc;
+        }
+
+        .primary:active, .ghost:active {
+            transform: scale(.97);
+        }
+
+        .primary:focus-visible, .ghost:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
         }
 
         .hint {
             color: var(--muted);
             font-size: 12.5px;
+        }
+
+        /* Validation, shown only once "Create request" has been pressed, so the
+           page looks the same as ever until somebody tries it. */
+        .error {
+            margin: 0;
+            color: var(--bad);
+            font-size: 12.5px;
+            animation: rise .2s cubic-bezier(.23, 1, .32, 1);
+        }
+
+        .error[hidden], .status[hidden] {
+            display: none;
+        }
+
+        input[aria-invalid="true"], input[aria-invalid="true"]:focus, .p-select:has([aria-invalid="true"]) {
+            border-color: var(--bad);
+        }
+
+        input[aria-invalid="true"]:focus {
+            box-shadow: 0 0 0 3px rgba(180, 35, 24, .12);
+        }
+
+        .status {
+            margin-left: auto;
+            color: var(--bad);
+            font-size: 12.5px;
+            font-weight: 500;
+            animation: rise .2s cubic-bezier(.23, 1, .32, 1);
+        }
+
+        .refused {
+            animation: shake .32s cubic-bezier(.36, .07, .19, .97);
+        }
+
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(-3px); }
+        }
+
+        @keyframes shake {
+            20%, 60% { transform: translateX(-4px); }
+            40%, 80% { transform: translateX(4px); }
+        }
+
+        dialog {
+            width: min(580px, calc(100vw - 32px));
+            padding: 22px 24px 20px;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            color: var(--text);
+            box-shadow: 0 30px 70px -24px rgba(15, 23, 42, .5);
+        }
+
+        dialog[open] {
+            animation: pop .28s cubic-bezier(.23, 1, .32, 1);
+        }
+
+        /* Not faded in: a blur under a changing opacity is computed again on every
+           frame, and that is where the opening stuttered. */
+        dialog[open]::backdrop {
+            background: rgba(15, 23, 42, .4);
+            backdrop-filter: blur(2px);
+        }
+
+        @keyframes pop {
+            from { opacity: 0; transform: translateY(10px) scale(.97); }
+        }
+
+        .done {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .done svg {
+            flex: none;
+            width: 34px;
+            height: 34px;
+        }
+
+        .done circle {
+            fill: #e7f3ec;
+        }
+
+        .done path {
+            fill: none;
+            stroke: var(--accent);
+            stroke-width: 2.4;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-dasharray: 16;
+            stroke-dashoffset: 16;
+        }
+
+        dialog[open] .done path {
+            animation: draw .35s .15s cubic-bezier(.65, 0, .35, 1) forwards;
+        }
+
+        @keyframes draw {
+            to { stroke-dashoffset: 0; }
+        }
+
+        dialog h2 {
+            margin: 0;
+            font-size: 18px;
+            line-height: 1.25;
+        }
+
+        dialog .sub {
+            margin-top: 2px;
+        }
+
+        /* The payload, in the colours of a code editor, so the shapes read at a glance:
+           names, text, numbers, and the values that are none of those. */
+        dialog pre {
+            max-height: 46vh;
+            overflow: auto;
+            margin: 16px 0 18px;
+            padding: 14px 16px;
+            border-radius: 10px;
+            background: #0f1729;
+            color: #cbd5e1;
+            font: 12.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        pre .k { color: #7dd3a8; }
+        pre .s { color: #fcd29f; }
+        pre .n { color: #93c5fd; }
+        pre .l { color: #c4b5fd; }
+
+        .dialog-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation: none !important;
+                transition: none !important;
+            }
+
+            .done path {
+                stroke-dashoffset: 0;
+            }
         }
     </style>
 </head>
@@ -451,18 +621,22 @@
         <div class="crumb">Releases / New</div>
     </header>
 
-    <form id="form">
+    <form id="form" novalidate>
         <!-- 1 · rule. A label the rules know, answered with the persona's own name. -->
         <div class="field">
             <label for="requester">Contact person <span class="req" aria-hidden="true">*</span></label>
-            <input id="requester" name="contactPerson" type="text" autocomplete="off" required>
+            <input id="requester" name="contactPerson" type="text" autocomplete="off" required
+                   aria-describedby="requester-error">
+            <p class="error" id="requester-error" hidden></p>
         </div>
 
         <!-- 2 · rule, and the reason a persona exists: this address belongs to
              the name above rather than to nobody. -->
         <div class="field">
             <label for="email">Work email <span class="req" aria-hidden="true">*</span></label>
-            <input id="email" name="workEmail" type="email" autocomplete="off" required>
+            <input id="email" name="workEmail" type="email" autocomplete="off" required
+                   aria-describedby="email-error">
+            <p class="error" id="email-error" hidden></p>
         </div>
 
         <!-- 3 · rule, matched against a dropdown's real options. The persona's
@@ -475,8 +649,9 @@
                 <span class="p-select-label p-placeholder">Please select</span>
                 <div class="p-select-dropdown" data-pc-section="dropdown">▾</div>
                 <input class="p-hidden-accessible" role="combobox" aria-haspopup="listbox" aria-expanded="false"
-                       readonly style="position:absolute;width:1px;height:1px;opacity:0">
+                       aria-describedby="country-error" readonly style="position:absolute;width:1px;height:1px;opacity:0">
             </div>
+            <p class="error" id="country-error" hidden></p>
         </div>
 
         <!-- 4 · type. No rule answers a go-live date, so the control's own kind
@@ -542,19 +717,45 @@
         </div>
 
         <div class="actions">
-            <button type="button" class="primary">Create request</button>
-            <button type="button" class="ghost">Cancel</button>
+            <button type="submit" class="primary">Create request</button>
+            <button type="button" class="ghost" id="clear">Clear</button>
             <span class="hint">Press <b>Alt+Shift+F</b> to fill</span>
+            <span class="status" id="status" role="status" hidden></span>
         </div>
     </form>
 </div>
+
+<!-- What a valid form would have sent, so pressing "Create request" after a fill
+     shows the values the page itself holds, not what any filler reported. -->
+<dialog id="created" aria-labelledby="created-title">
+    <div class="done">
+        <svg viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="17"/><path d="M11 17.5l4 4 8-8.5"/></svg>
+        <div>
+            <h2 id="created-title">Request created</h2>
+            <p class="sub">Every required field passed. This is what the form would send:</p>
+        </div>
+    </div>
+    <pre id="payload"></pre>
+    <div class="dialog-actions">
+        <button type="button" class="ghost" id="copy">Copy JSON</button>
+        <button type="button" class="primary" id="created-close">Close</button>
+    </div>
+</dialog>
 
 <script>
     /* A PrimeVue-shaped stand-in with no latency anywhere: every list is in the
      * page from the start, every overlay opens on the click that asked for it.
      * The model object is only ever written by real events, so a filler that
      * assigns `.value` without dispatching is caught here as well. */
-    const model = {};
+    // Once a submit has failed, every write re-checks the form, so an error goes as soon as its field is put right.
+    let tried = false;
+    const model = new Proxy({}, {
+        set(t, k, v) {
+            t[k] = v;
+            if (tried) validate();
+            return true;
+        }
+    });
 
     const COUNTRIES = ['Germany', 'Austria', 'Switzerland', 'Netherlands', 'United States',
         'United Kingdom', 'France', 'Spain', 'Deutschland', 'Vereinigte Staaten'];
@@ -748,6 +949,117 @@
             };
             thumb.src = url;
             box.hidden = false;
+        });
+    })();
+
+    // ---- Submit ---------------------------------------------------------------
+    /* Checked against the model, as the framework this stands in for would: a
+     * value written without the events that reach the model is still missing. */
+    const RULES = {
+        requester: () => model.requester?.trim() ? '' : 'Enter a contact person.',
+        email: () => !model.email?.trim() ? 'Enter a work email.'
+            : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(model.email) ? '' : 'Enter a valid email address.',
+        country: () => model.country ? '' : 'Select an office country.'
+    };
+
+    function validate() {
+        const failed = Object.entries(RULES).filter(([id, rule]) => {
+            const message = rule();
+            const el = document.getElementById(id);
+            const input = el.matches('input') ? el : el.querySelector('[role="combobox"]');
+            const error = document.getElementById(`${id}-error`);
+            error.textContent = message;
+            error.hidden = !message;
+            if (message) input.setAttribute('aria-invalid', 'true');
+            else input.removeAttribute('aria-invalid');
+            return !!message;
+        });
+        const status = document.getElementById('status');
+        status.textContent = `${failed.length} field${failed.length === 1 ? '' : 's'} need${failed.length === 1 ? 's' : ''} attention`;
+        status.hidden = !failed.length;
+        return failed.length === 0;
+    }
+
+    function payload() {
+        const file = document.getElementById('screenshot').files[0];
+        const [d, m, y] = (model.golive || '').split('.');
+        return {
+            contactPerson: model.requester,
+            workEmail: model.email,
+            officeCountry: model.country,
+            goLiveDate: model.golive ? `${y}-${m}-${d}` : null,
+            internalTicket: model.ticket || null,
+            screenshot: file ? {
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                ...(model.screenshotPreview && {dimensions: model.screenshotPreview})
+            } : null,
+            needsSignOff: model.signoff,
+            releaseNotes: model.notesHtml && model.notes ? model.notesHtml : null
+        };
+    }
+
+    // The JSON, escaped and then wrapped token by token; a string is matched whole, so a digit inside one stays text.
+    function highlight(json) {
+        const safe = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return safe.replace(/("(?:\\.|[^"\\])*")(\s*:)?|\b(?:true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g,
+            (m, str, colon) => str
+                ? (colon ? `<span class="k">${str}</span>${colon}` : `<span class="s">${str}</span>`)
+                : `<span class="${/^[tfn]/.test(m) ? 'l' : 'n'}">${m}</span>`);
+    }
+
+    (() => {
+        const form = document.getElementById('form');
+        const dialog = document.getElementById('created');
+        const button = form.querySelector('.primary');
+        const copy = document.getElementById('copy');
+        let json = '';
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            tried = true;
+            if (!validate()) {
+                // Restarted on every refusal, so a second press shakes too.
+                button.classList.remove('refused');
+                void button.offsetWidth;
+                button.classList.add('refused');
+                return document.querySelector('[aria-invalid="true"]').focus();
+            }
+            json = JSON.stringify(payload(), null, 2);
+            document.getElementById('payload').innerHTML = highlight(json);
+            copy.textContent = 'Copy JSON';
+            dialog.showModal();
+        });
+        button.addEventListener('animationend', () => button.classList.remove('refused'));
+        document.getElementById('created-close').addEventListener('click', () => dialog.close());
+        copy.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(json);
+                copy.textContent = 'Copied ✓';
+            } catch {
+                copy.textContent = 'Copy failed';
+            }
+        });
+
+        // Back to a blank form, the way each control would be emptied by hand, so the demo can be run again.
+        document.getElementById('clear').addEventListener('click', () => {
+            closeOverlays();
+            for (const id of ['requester', 'email', 'ticket']) document.getElementById(id).value = '';
+            const label = document.querySelector('#country .p-select-label');
+            label.textContent = 'Please select';
+            label.classList.add('p-placeholder');
+            document.querySelector('#golive input').value = '';
+            const file = document.getElementById('screenshot');
+            file.value = '';
+            file.dispatchEvent(new Event('change', {bubbles: true}));
+            const check = document.querySelector('#signoff input');
+            if (check.checked) document.getElementById('signoff').click();
+            document.querySelector('.ql-editor').innerHTML = '';
+            tried = false;
+            for (const k of Object.keys(model)) if (k !== 'signoff') delete model[k];
+            document.querySelectorAll('.error').forEach(e => (e.hidden = true));
+            document.querySelectorAll('[aria-invalid]').forEach(e => e.removeAttribute('aria-invalid'));
+            document.getElementById('status').hidden = true;
         });
     })();
 
